@@ -12,5 +12,5 @@
     "@sda/engine-core": "workspace:*",
     "@sda/engine-solve": "workspace:*"
   },
-  "devDependencies": { "fast-check": "^3.23.1", "typescript": "^5.6.3" }
+  "devDependencies": { "fast-check": "^3.23.1", "typescript": "^7.0.2" }
 }
