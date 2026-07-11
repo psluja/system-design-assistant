@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Readiness Audit — the professional's path from empty canvas to defended document</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:960px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:780px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:9px 12px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:9px 12px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout.good{border-left-color:var(--ok)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:700;padding:3px 7px;border-radius:5px;vertical-align:middle;white-space:nowrap}
+  .b-block{background:#fbe3e3;color:#8a1f1f}
+  .b-major{background:#fde7cf;color:#8a4b00}
+  .b-paper{background:#eef1f5;color:#3a4a5e}
+  .s-closed{background:#dcefe1;color:#176b37}
+  .s-partial{background:#fdf2e2;color:#8a5a00}
+  .s-open{background:#fbe3e3;color:#8a1f1f}
+  .good{color:var(--ok);font-weight:700}
+  .bad{color:var(--warn);font-weight:700}
+  .small{font-size:13px;color:var(--ink2)}
+  td.term{white-space:nowrap;font-weight:600}
+  .rank{font-weight:700;color:var(--accent2)}
+  .legend span{margin-right:14px;font:12px "Segoe UI",sans-serif}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Readiness Audit — from empty canvas to a defended document</h1>
+  <div class="sub">A read-only walk of the full professional architect's path through System Design Assistant, both surfaces: the <b>canvas</b> a human drives and the <b>MCP tool surface</b> an AI agent drives. Measured against the owner's bar &mdash; &ldquo;a professional, with no instructions, goes from a blank canvas to a defended document in one session, and every number along the way is computed, honest, and points to the next move.&rdquo; This report is findings-table-heavy by design.</div>
+  <div class="meta">SDA audit · 2026-07-04 · committed HEAD 31f7709 (&ldquo;assumption model R1 — the envelope, named worlds, schema 7&rdquo;) · read-only · no commits</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design &mdash; load, latency, availability, durability, cost, feasibility &mdash; against declared requirements, live on every edit, and can run <em>backwards</em> to size or repair the design. Under the canvas is a <b>domain-agnostic engine</b> (a typed-property graph plus a family of solvers); all cloud meaning is layered on top as <b>content</b> (components as data). SDA has two front doors onto the same engine: the <b>canvas</b> (this is what a human uses) and an <b>MCP tool surface</b> (this is what an external AI agent uses, e.g. GitHub Copilot over a bridge). This audit walks both, as a first-time senior AWS architect who has read no documentation, and records where the path is smooth, where it is honest, and where it snags.</p>
+<table style="margin:10px 0 2px">
+  <tr><td class="term">the bar</td><td>the owner's single acceptance test, quoted above: <em>blank canvas → defended document, one session, every number computed &amp; honest &amp; actionable</em>. Every finding below is scored against it.</td></tr>
+  <tr><td class="term">the two paths</td><td><b>canvas path</b> = the web app a human drives with a mouse; <b>agent path</b> = the MCP tools an AI drives with no UI. A readiness gap on one is not automatically a gap on the other; several findings are asymmetric.</td></tr>
+  <tr><td class="term">SLO · verdict · &rho;</td><td>an <b>SLO</b> is a declared requirement on one property of one place (a throughput floor, a latency ceiling). A <b>verdict</b> is the honest read-back: <code>ok</code> / <code>warning</code> / <code>violation</code> / <code>unknown</code>. <b>&rho;</b> (utilisation) = offered load &divide; capacity; &rho; &ge; 1 means a tier is saturated and its queue grows without bound.</td></tr>
+  <tr><td class="term">the envelope</td><td>the computed <em>boundary</em> of a design: the maximum sustained demand it can carry with every SLO still green, plus which promise breaks first. HEAD 31f7709's headline feature &mdash; the &ldquo;default answer&rdquo; that needs no declared demand.</td></tr>
+  <tr><td class="term">provenance</td><td>where a number came from, shown as a badge: <code>documented</code> (sourced) · <code>estimate</code> (credible catalog default) · <code>architect</code> (set by hand) · <code>default</code> (untouched). The tool's honesty axis: it never invents infra numbers.</td></tr>
+  <tr><td class="term">severity</td><td><span class="tag b-block">blocker</span> stops the path · <span class="tag b-major">major</span> a professional stalls or is misled · <span class="tag b-paper">paper-cut</span> friction that annoys but does not block.</td></tr>
+  <tr><td class="term">CLOSED / PARTIAL / OPEN</td><td>used in the doc-10 delta (&sect;7): a prior-evaluation gap now fully addressed / substantially but not fully / untouched.</td></tr>
+</table>
+</div>
+
+<div class="callout warn"><b>Audit conditions — the tree shifted underfoot, as expected.</b> Two other agents were editing <span class="path">content/*</span>, <span class="path">app/*</span> and <span class="path">engine/solver-contract</span> live during this audit. My own dev server (an isolated port, 5188, so as not to disturb any server another process owns) compiles the live working tree, which briefly broke mid-audit when a concurrent edit left <span class="path">app/web/src/app.tsx</span> importing an export (<code>refreshDerivedScenarios</code>) that <span class="path">content/sda/src/index.ts</span> did not yet provide. The tree recovered and the walk completed. <b>All findings are grounded in committed HEAD 31f7709</b> &mdash; verified with <code>git grep</code>/<code>git show</code> against the commit, not the dirty tree &mdash; and one generated-document consistency nit (F9) is flagged with an explicit caveat because the content layer that produces it was under concurrent edit. The concurrent work is itself telling: an <span class="path">app/presenter/src/envelope-view.ts</span> and a <span class="path">content/sda/src/derived-scenarios.ts</span> are being written <em>right now</em> &mdash; i.e. the envelope's web surface (F4 below) is mid-construction.</p></div>
+
+<h2><span class="no">1</span>Verdict, up front and honest</h2>
+<p class="lead">The engine has crossed a line since the last evaluation. A professional on the <b>canvas path</b> can, in one session with no instructions, build a real system, watch every number compute honestly, size it backwards to meet an SLO, declare an uncertainty range and get a distribution, and press one button to get a genuine, defensible <b>design document</b> &mdash; C4 diagram, capacity table, tail latency, sourced reliability, an assumptions register with provenance, a cost breakdown with per-component derivation, and risks with remediations. Two years of &ldquo;a fast calculator that authors nothing&rdquo; is over: <b>SDA now authors the deliverable, and it is good.</b></p>
+<p>Where the bar is <em>not</em> yet met, the gaps cluster in three honest places. <b>(a) The agent path is more fragile than the canvas path</b> &mdash; the same journey that flows on the canvas can strand an AI on step one (an ambiguous wire aborts the whole build; an empty design returns a green with no hint), which is exactly the &ldquo;Copilot wandered&rdquo; behaviour the owner saw. <b>(b) This week's headline feature, the envelope, is not yet reachable</b> &mdash; it has no web surface, and the committed MCP build predates it. <b>(c) Two polish snags</b> &mdash; there is no &ldquo;New / blank design&rdquo; affordance (the literal &ldquo;empty canvas&rdquo; start), and the deliverable ships titled <em>Untitled</em>. None of these is a deep design flaw; all have cheap, honest fixes. The single highest-leverage move is to make the agent path as guided-and-guarded as the canvas already is.</p>
+
+<h2><span class="no">2</span>Method — the walk, both surfaces</h2>
+<p>Persona: a senior AWS architect, first session, no docs. Storage cleared (IndexedDB <code>sda</code> deleted). <b>Canvas path</b>: driven with the Playwright/Edge browser tools against my own dev server at <code>localhost:5188</code> &mdash; discover how to add components, read the live verdicts, set an SLO, run Improve, declare a &plusmn; range, watch uncertainty, generate the design doc, export &amp; reload. <b>Agent path</b>: a headless JSON-RPC harness driving the committed built server <span class="path">app/vscode/dist/mcp-server.cjs</span> over stdio &mdash; the same journey via tools only (<code>list_components</code> &rarr; <code>apply_design</code> &rarr; <code>evaluate</code> &rarr; <code>set_slo</code> &rarr; <code>simulate</code> &rarr; <code>repair</code> &rarr; <code>generate_doc</code>), plus deliberate probes of the failure surfaces. Findings cross-checked against committed source and against backlog <b>doc-10</b> (the June 30 brutal architect evaluation).</p>
+
+<div class="callout"><b>First surprise: the &ldquo;empty canvas&rdquo; is not empty.</b> With storage cleared and the page reloaded, SDA does not open blank &mdash; it seeds a working <em>checkout</em> demo (Web client &rarr; NGINX &rarr; Checkout API &rarr; Postgres) with a throughput SLO already set and Postgres already saturated (&rho; 250%, dropping 3,000 req/s), overlaid by a &ldquo;Getting started&rdquo; card. This is a reasonable onboarding choice &mdash; a professional has something real to react to in the first second &mdash; but it is in tension with the literal bar (&ldquo;from a blank canvas&rdquo;), and there is <b>no one-click way back to blank</b> (F7). The seed is intentional: <span class="path">app/web/src/onboarding.ts</span> treats <em>untouched-seed OR empty</em> as first-run material.</div>
+
+<h2><span class="no">3</span>The canvas path — what a professional sees</h2>
+<p>The walk on the canvas is, frankly, the strong story. Every screenshot referenced here is in the evidence inventory (&sect;9). Building on the seed, I selected the Checkout API node, opened the &plusmn; range popover, applied a range, ran Improve, and generated the document; each surface computed honestly and pointed to a next move.</p>
+<table>
+  <tr><th>Step</th><th>What the tool showed (real, computed, quoted)</th></tr>
+  <tr><td class="term">Discover &amp; build</td><td>Adding a component is over-served: a searchable palette (45 components), a click-<code>+</code> on any node port (&ldquo;Add a component to <em>out</em>&rdquo;), an <code>N</code> quick-add, the <code>&#8984;K</code> command palette, and drop-a-wire-on-empty-canvas &rarr; &ldquo;what fits&rdquo; picker. Ports carry the real protocol vocabulary with spec tooltips.</td></tr>
+  <tr><td class="term">Read the verdicts</td><td>Per tier: <code>&rho;</code> with a saturation glyph (NGINX 10%, Checkout API 20%, <b>Postgres 250% &#9888;</b>), a latency decomposition <code>base + queue + downstream</code> (Postgres <code>50 + &infin; = &infin; ms</code>), per-node cost (<code>$280/mo &middot; &#9888; overloaded &middot; 3,000 rps dropped</code>). The status bar rolls it up honestly: <code>Latency &infin; &#9888; &middot; ideal 71 ms</code> &mdash; the real, queueing-aware number, with the no-queue ideal demoted to a parenthetical.</td></tr>
+  <tr><td class="term">Tail latency</td><td>Resolves from a transient <code>measuring&hellip;</code> to a real DES tail in three places at once: on the node (<code>&#8635; 10,636 ms &middot; p99 17,949 ms</code>), in the Inspector (<code>p50 10,742 &middot; p95 17,405 &middot; p99 17,949 (8,192 samples)</code>), and in the System panel (<code>p50 / p95 / p99</code>). A saturated design honestly yields an ~18-second tail.</td></tr>
+  <tr><td class="term">Set an SLO</td><td>The System panel's <b>Requirements (end-to-end)</b> block has inline inputs for Throughput / Latency / <b>p99 (tail)</b> / Availability / Durability / Cost / Overflow, each with a live <code>now &hellip; &#10007;/&#10003;</code> read-back, plus a <code>+ Guarantee</code> dropdown (consistency / ordering / delivery). Discoverable, and every metric is settable &mdash; not just after you know to ask.</td></tr>
+  <tr><td class="term">Improve (backwards)</td><td>A dedicated tab: pick a goal (<em>Meet SLOs / Cheapest / Fastest</em>), it names the knobs it will change and the binding constraint (<code>Throughput &ge; 5000 @ Postgres</code>), then shows the exact <b>before&rarr;after</b> (<code>Postgres &middot; concurrency 100 &rarr; 313</code>) with an <b>Apply</b> button. Proposes <em>then</em> applies &mdash; the honest backward solve.</td></tr>
+  <tr><td class="term">Range &amp; uncertainty</td><td>The &plusmn; button opens a clean popover: &ldquo;Declare this soft input as a &plusmn; RANGE, not a point&hellip; A Monte-Carlo run samples it; the base evaluation keeps the point value,&rdquo; with lo / mode / hi (triangular vs uniform). Applying it <b>immediately</b> lit an ambient <b>UNCERTAINTY &middot; MONTE CARLO</b> surface: <code>seed 24301 &middot; 500 scenarios &middot; cost 440.41 (397.35&ndash;498.03) USD/month</code>, per-node overflow confidence. Reachable with zero source-reading.</td></tr>
+  <tr><td class="term">The deliverable</td><td>One button downloads a self-contained HTML <b>Design Document</b>: Summary with an honest verdict, Requirements table, an <b>Assumptions &amp; parameters register</b> with provenance badges, a <b>C4 container</b> SVG, a capacity/&rho; table + charts, DES tail, sourced Reliability, a cost table with per-component derivation (<code>100 conc &times; $1.4 &times; 2 (Multi-AZ) = $280</code>), and Risks with remediations. This is the headline win.</td></tr>
+  <tr><td class="term">Persist</td><td>Autosave (<code>&#9679; Saved</code>, IndexedDB). A full reload preserved the design <em>and</em> the declared range chip <code>&plusmn;(300&ndash;500&ndash;900)</code>. Export writes a portable <b>schema-7</b> <code>.sda.json</code> (instances / wires / components / guaranteeSlos / lagSlos / requestClasses / scenarios) with the range captured.</td></tr>
+</table>
+
+<h2><span class="no">4</span>The agent path — where an AI stalls</h2>
+<p>The headless harness against the committed <span class="path">mcp-server.cjs</span> tells a rougher story, and it maps precisely onto &ldquo;Copilot wandered.&rdquo; The tool <em>ergonomics</em> are excellent &mdash; guided errors name the nodes, ports and types, and even rewrite the single most common malformed call &mdash; but three silent-wrong or hard-abort behaviours can end a session on the first move.</p>
+<table>
+  <tr><th>Probe (what the agent did)</th><th>What happened (verbatim)</th></tr>
+  <tr><td>Build the target in one <code>apply_design</code> (client &rarr; ALB &rarr; service &rarr; DB, and service &rarr; queue &rarr; worker), letting ports default</td><td><code>error: wire from "svc" is ambiguous — it has out ports [db, out, cache]; name which</code>. The error is <em>good</em> &mdash; but because <code>replace:true</code> is atomic, <b>the entire design failed to build (0 nodes)</b>, and it surfaces only <em>one</em> ambiguity at a time.</td></tr>
+  <tr><td><code>evaluate</code> on the (now empty) design</td><td><code>{ "feasible": true, "violations": 0, "system": { "flows": [] }, "verdicts": [] }</code> &mdash; a <b>green board with zero nodes and no hint</b> that anything is wrong. An agent could report success here.</td></tr>
+  <tr><td>Every follow-up (<code>set_slo</code>, <code>set_config</code>, <code>simulate</code>, <code>compare_options</code>&hellip;)</td><td>cascaded into <code>node "svc" not found</code> &mdash; the whole session dead-ended off that first atomic abort.</td></tr>
+  <tr><td><code>envelope</code> and <code>run_uncertainty</code> (this week's headline tools)</td><td><code>unknown tool: envelope</code> · <code>unknown tool: run_uncertainty</code>. The built server exposes <b>43 tools</b> and lacks envelope, uncertainty, and all scenario tools &mdash; see F3.</td></tr>
+  <tr><td><code>reliability</code>, <code>generate_doc</code> (the closures that <em>did</em> ship in this build)</td><td>Both worked well: <code>reliability</code> returned AWS-sourced availability tiers (0.99&ndash;0.99999) and DR tiers (Backup&amp;Restore &rarr; Multi-site, with RPO/RTO seconds); <code>generate_doc</code> produced an honest, well-structured doc even on the empty design (see &sect;8).</td></tr>
+</table>
+
+<h2><span class="no">5</span>Top-10 frictions, ranked</h2>
+<p class="small legend"><span><span class="tag b-block">blocker</span></span><span><span class="tag b-major">major</span></span><span><span class="tag b-paper">paper-cut</span></span> — &ldquo;where&rdquo; names the surface + step; &ldquo;fix&rdquo; is the cheapest honest one.</p>
+<table>
+  <tr><th style="width:26px">#</th><th>Sev</th><th>Where</th><th>A professional expects</th><th>What actually happens</th><th>Cheapest honest fix</th><th>Shot</th></tr>
+  <tr>
+    <td class="rank">1</td><td><span class="tag b-major">major</span></td>
+    <td>Agent path · <code>apply_design</code> build</td>
+    <td>A whole design to build in one call; if a wire is under-specified, the tool resolves or asks &mdash; without discarding the rest.</td>
+    <td>One ambiguous out-port (<code>svc</code> has <code>[db, out, cache]</code>) <b>aborts the entire atomic build to 0 nodes</b>, reporting one ambiguity at a time; the session then dead-ends on &ldquo;node not found.&rdquo; This is the literal &ldquo;wandering&rdquo; mechanism.</td>
+    <td>Resolve a bare wire to the port whose accept-set matches the target (queue &rarr; the async <code>out</code>); when truly ambiguous, report <em>all</em> ambiguities at once with the exact fix line, and/or apply the unambiguous nodes and return the residual.</td>
+    <td>mcp-journey</td>
+  </tr>
+  <tr>
+    <td class="rank">2</td><td><span class="tag b-major">major</span></td>
+    <td>Agent path · <code>evaluate</code></td>
+    <td>A design with no traffic origin to be flagged, not blessed.</td>
+    <td>Empty / no-origin design returns <code>feasible:true, violations:0, flows:[]</code> with <b>no note</b> &mdash; a false green an agent can mistake for done. (The <b>canvas</b> guards this: it shows &ldquo;no traffic origin&rdquo; instead of a silent blank &mdash; <span class="path">app/web/src/app.tsx</span>:2168.)</td>
+    <td>When <code>system.flows.length === 0</code>, add a <code>note</code>: &ldquo;no traffic origin — add a client or set originRps; nothing to compute.&rdquo; Pure output-string change, no engine touch.</td>
+    <td>mcp-journey</td>
+  </tr>
+  <tr>
+    <td class="rank">3</td><td><span class="tag b-major">major</span></td>
+    <td>Release hygiene · <span class="path">app/vscode/dist/mcp-server.cjs</span></td>
+    <td>The MCP artifact an agent runs to reflect the committed feature set.</td>
+    <td>The built server (mtime <b>13:39</b>) predates HEAD commit (<b>13:51</b>) by ~13 min: <b>43 tools</b>, missing <code>envelope</code>, <code>run_uncertainty</code>, and every scenario tool. This week's headline capabilities are <b>unreachable via the named MCP path</b>, though they exist in HEAD source (<span class="path">app/mcp/src/assumptions.ts</span>, <span class="path">content/sda/src/envelope.ts</span>).</td>
+    <td>Rebuild the extension bundle on commit (a CI/pre-commit step); treat the built <code>.cjs</code> as a release artifact, not a hand-refreshed file.</td>
+    <td>mcp-journey</td>
+  </tr>
+  <tr>
+    <td class="rank">4</td><td><span class="tag b-major">major</span></td>
+    <td>Canvas path · System panel (the envelope)</td>
+    <td>HEAD's headline (&ldquo;no demanded demand &mdash; the envelope is the default answer&rdquo;) to be visible: how far can this design be pushed before it breaks, and what breaks first.</td>
+    <td>The web app has <b>zero</b> <code>envelope</code> references (<code>git grep</code> at 31f7709) and no envelope panel. The envelope is computed in content and appears (partially) only inside the generated doc's capacity section. A professional cannot <em>see</em> the boundary live. (Mid-construction: <span class="path">app/presenter/src/envelope-view.ts</span> is being written now.)</td>
+    <td>Surface the envelope in the System panel as the default answer when no demand is declared (the in-progress <code>envelope-view</code>); it is the feature that makes &ldquo;empty is not mute&rdquo; true.</td>
+    <td>04 (absence)</td>
+  </tr>
+  <tr>
+    <td class="rank">5</td><td><span class="tag b-major">major</span></td>
+    <td>Agent path · <code>set_slo</code> / <code>set_config</code></td>
+    <td>A typo'd metric or knob to be rejected with the valid vocabulary.</td>
+    <td>Unknown keys are <b>silently accepted</b> (no metric/knob validation): <code>set_slo{key:'latncy'}</code> stores a phantom SLO that changes nothing, and the unchanged <code>evaluate</code> is inexplicable. (<code>set_range</code> already validates and lists valid keys &mdash; the model to copy.)</td>
+    <td>Validate the key against the node's SLO-able metrics / config knobs; on miss, return the same guided &ldquo;its values are […]&rdquo; error <code>set_range</code> uses.</td>
+    <td>&mdash;</td>
+  </tr>
+  <tr>
+    <td class="rank">6</td><td><span class="tag b-major">major</span></td>
+    <td>Agent path · <code>connect</code></td>
+    <td>A wire to a non-existent port to be refused (doc-10's swallow bug).</td>
+    <td>Fixed on <code>apply_design</code> (test-covered) but <b>still live on <code>connect</code></b>: <code>illegalWire</code> returns &ldquo;legal&rdquo; when a port name doesn't exist, so a typo'd port makes a phantom wire and downstream throughput silently reads 0. (Couldn't reproduce at runtime this run &mdash; the empty design failed the node check first &mdash; confirmed in source.)</td>
+    <td>In <code>connect</code>, check each named port exists on the node's manifest (reuse the lookup <code>set_transform</code> already has) and return the &ldquo;its ports are […]&rdquo; guided error.</td>
+    <td>&mdash;</td>
+  </tr>
+  <tr>
+    <td class="rank">7</td><td><span class="tag b-paper">paper-cut</span></td>
+    <td>Canvas path · New / blank design</td>
+    <td>A one-click &ldquo;New&rdquo; to start from the literal empty canvas the bar names.</td>
+    <td>No &ldquo;New&rdquo; in the header <em>or</em> the command palette; the fresh state is the seeded checkout demo, and reaching blank means manually deleting every node. (Softened by an empty-canvas ghost CTA once cleared.)</td>
+    <td>Add a &ldquo;New design&rdquo; command (the VS Code extension already has <code>sda.newDesign</code>; the web lacks the equivalent).</td>
+    <td>01</td>
+  </tr>
+  <tr>
+    <td class="rank">8</td><td><span class="tag b-paper">paper-cut</span></td>
+    <td>Both paths · the deliverable's name</td>
+    <td>A deliverable and a backup file named for the system.</td>
+    <td>Project name defaults to <em>Untitled</em> with no nudge; the generated doc's headline reads <b>&ldquo;Design Document — Untitled&rdquo;</b> and the backup is <code>Untitled.sda.json</code> &mdash; an unpolished first impression for a document meant to be defended.</td>
+    <td>Prompt (or placeholder-nudge) for a name on first meaningful edit, or derive a working title from the origin&rarr;sink path (&ldquo;Web client → Postgres&rdquo; is already computed).</td>
+    <td>06</td>
+  </tr>
+  <tr>
+    <td class="rank">9</td><td><span class="tag b-paper">paper-cut</span></td>
+    <td>Deliverable · Capacity table <span class="tag b-paper">caveat</span></td>
+    <td>The doc's &rho; to agree with the canvas and with its own glossary.</td>
+    <td>The generated doc labels non-bottleneck tiers at <b>&rho;=1.00 &ldquo;has headroom&rdquo;</b> (nginx, app) &mdash; contradicting the doc's own glossary (&ldquo;&rho; &ge; 1 means saturated&rdquo;) and the live canvas (nginx &rho; 10%, app &rho; 20%). A reviewer cross-checking doc vs tool is confused. <b>Caveat:</b> the content layer producing this was under concurrent edit &mdash; verify against a clean HEAD before fixing.</td>
+    <td>Report the true per-tier capacity/&rho; the canvas already computes; never print &rho;=1 as &ldquo;headroom.&rdquo;</td>
+    <td>06</td>
+  </tr>
+  <tr>
+    <td class="rank">10</td><td><span class="tag b-paper">paper-cut</span></td>
+    <td>Agent path · <code>repair</code> / <code>optimize</code></td>
+    <td>Backward solve to apply its result, like the canvas Improve does.</td>
+    <td><code>repair</code> only <em>proposes</em> (&ldquo;does NOT apply them — apply each with set_config, round whole-unit knobs UP&rdquo;), so the agent must parse, round, fire N calls, re-evaluate; and with no SLOs set it returns <code>already within SLOs — no change needed</code> &mdash; a confusing no-op. (The canvas Improve proposes <em>then</em> Applies &mdash; better.)</td>
+    <td>Add an <code>apply</code> flag to <code>repair</code>/<code>optimize</code> that dispatches the rounded knobs in one batch, mirroring the canvas.</td>
+    <td>05</td>
+  </tr>
+</table>
+
+<h2><span class="no">6</span>What works well (fair credit)</h2>
+<div class="callout good"><b>The deliverable is real.</b> The generated Design Document is the single biggest change since doc-10. On a design with declared demand it produces, from the verified model: an honest Summary verdict, a Requirements table, an <b>assumptions register with provenance</b>, a <b>C4 container SVG</b>, a capacity/&rho; table with charts, a <b>DES tail</b> (p50/p95/p99), a <b>sourced Reliability</b> section (AWS Well-Architected links), a cost table with <b>per-component derivation</b> including Multi-AZ billing, and <b>Risks with remediations</b>. On an empty/no-demand design it degrades honestly (&ldquo;a 0-component design&hellip;at an unstated load&hellip;No SLOs declared&hellip;an empty register is an honest register&rdquo;) and flags the author-required sections (security, resilience narrative, alternatives, rollout) rather than faking them.</div>
+<ul>
+  <li><b>Numbers are computed and honest, everywhere.</b> Saturation yields <code>&infin;</code>, not a soothing average; the real queueing-aware latency is primary and the ideal is a parenthetical; &rho;, drops, and per-node cost are on every tier; the tail is a DES percentile, not the mean.</li>
+  <li><b>Backward solve that points to the next move.</b> The Improve panel names the binding constraint and shows the exact <code>before&rarr;after</code> sizing with Apply &mdash; the bar's &ldquo;every number points to the next move&rdquo; made literal.</li>
+  <li><b>Uncertainty is ambient and reachable.</b> Declaring a range instantly produced a Monte-Carlo distribution with a seed and a confidence interval &mdash; no source-reading, no separate &ldquo;run&rdquo; ritual.</li>
+  <li><b>Guided MCP errors are best-in-class.</b> Unknown node lists the nodes; unknown type suggests near matches; an omitted-but-ambiguous port lists the options; the fused <code>"node,port"</code> mistake is detected and rewritten. This is real anti-wander ergonomics &mdash; the abort scope (F1) is the flaw, not the messaging.</li>
+  <li><b>Empty states are honest, not blank.</b> The tail panel with no origin says <em>&ldquo;set a client throughput to simulate the tail&rdquo;</em> (<span class="path">app.tsx</span>:2022); the flow footer says <em>&ldquo;no traffic origin&rdquo;</em> and explains any node can originate via <code>originRps</code>.</li>
+  <li><b>Persistence you can trust.</b> Autosave round-trips a full reload including declared ranges; the schema-7 export is the real, diffable backup.</li>
+  <li><b>The MCP <code>reliability</code> tool</b> returns AWS-sourced availability &amp; DR tiers with RPO/RTO &mdash; a genuine reliability-pillar contribution, on the agent path.</li>
+</ul>
+
+<h2><span class="no">7</span>The doc-10 delta — closed vs open <span class="tag s-closed">refresh</span></h2>
+<p>doc-10 (2026-06-30) rated SDA a &ldquo;strong, fast, honest capacity &amp; flow verifier&rdquo; that <em>authored nothing</em> and covered ~1.5 of 6 Well-Architected pillars, and proposed 11 tasks (P0 #1&ndash;4, P1 #5&ndash;7, P2 #8&ndash;11) plus two tool defects. Cross-checking each against HEAD 31f7709 (code evidence, and confirmed on both paths where reachable):</p>
+<table>
+  <tr><th>doc-10 item</th><th>Status</th><th>Evidence at HEAD</th></tr>
+  <tr><td><b>P0 #1</b> Tail latency (p50/95/99) on the engine/MCP path; percentile SLO uses the tail, not the scalar mean</td><td><span class="tag s-closed">CLOSED</span></td><td>MCP <code>simulate</code> (<span class="path">app/mcp/src/simulate.ts</span>) resolves tail bands; a <code>tailLatency</code> SLO reads <code>unknown</code> on the scalar pass, never a false green. Confirmed on canvas (p50/95/99 in 3 places) and in the doc.</td></tr>
+  <tr><td><b>P0 #2</b> <code>evaluate</code> surfaces latency/availability/cost + system roll-up by default</td><td><span class="tag s-closed">CLOSED</span></td><td><code>evaluateResult</code> returns <code>system</code> + <code>responseLatencyMs</code> + full verdicts with no SLO precondition (empirically: the roll-up + <code>CostBreakdown</code> appear unconditionally).</td></tr>
+  <tr><td><b>P0 #3</b> <code>apply_design</code> validates ports; no ok+empty on a bad wire</td><td><span class="tag s-closed">CLOSED</span></td><td><code>resolvePort</code> rejects a non-existent port and names the real ones; atomic rollback; <span class="path">apply-design-validation.test.ts</span>. (The atomicity is now over-eager &mdash; F1.)</td></tr>
+  <tr><td><b>P0 #4</b> <code>compare_options</code> offers same-family alternatives (Fargate/Lambda/ASG)</td><td><span class="tag s-closed">CLOSED</span></td><td><span class="path">app/mcp/src/compare-options.test.ts</span> asserts <code>faas/fargate/asg</code> returned incl. the queue-fed-worker accept-set fix (the 3/3-fail defect).</td></tr>
+  <tr><td><b>P1 #5</b> Reliability: redundancy / multi-AZ / RTO-RPO / DR tiers; solver proposes the fix</td><td><span class="tag s-partial">PARTIAL</span></td><td>Multi-AZ availability math is real &amp; <em>billed</em> (<code>&times;2 (Multi-AZ)</code> in the cost derivation); <code>reliability</code> tool gives DR tiers + weakest link + sourced remedy. Missing: <b>blast-radius</b>, and the backward search does not flip <code>deploymentMode</code> &mdash; &ldquo;add an AZ&rdquo; is advisory, not solver-applied.</td></tr>
+  <tr><td><b>P1 #6</b> Cost depth: e2e total, egress, on-demand vs committed</td><td><span class="tag s-closed">CLOSED</span></td><td><code>CostBreakdown</code>: compute + egress + total + 1-yr/3-yr committed. Seen live (<code>$425 &middot; egress $0 &middot; 1-yr $265 &middot; 3-yr $185</code>) and in the doc.</td></tr>
+  <tr><td><b>P1 #7</b> Capacity estimation: peak factor, headroom/utilisation, bandwidth, storage-over-retention, node count</td><td><span class="tag s-partial">PARTIAL</span></td><td>&rho; utilisation + &rho;&le;0.8 headroom + &rho;&ge;1 hard-violation + derived unit/replica counts landed. Missing: <b>peak factor</b>, <b>storage-over-retention</b>, bandwidth-as-capacity, a sub-saturation warning band.</td></tr>
+  <tr><td><b>P2 #8</b> Streaming: ordering / partitioning / delivery / consumer-lag as first-class keys+SLOs</td><td><span class="tag s-partial">PARTIAL</span></td><td>Ordering / delivery / consistency are sourced, checkable guarantee SLOs; consumer/replication <b>lag</b> is a measured SLO (async-inclusive DES). Missing: partition <b>count</b> as a key; consumer-lag as a broker-offset metric.</td></tr>
+  <tr><td><b>P2 #9</b> Multi-tenancy: tenant multiplier + per-tenant cost + isolation</td><td><span class="tag s-open">OPEN</span></td><td><code>grep tenant content/sda/src</code> (non-test) = 0. Untouched. One of the two domains doc-10 rated weakest.</td></tr>
+  <tr><td><b>P2 #10</b> Security: STRIDE / trust-boundary + Well-Architected checklist</td><td><span class="tag s-open">OPEN</span></td><td>Not modelled; the doc honestly emits &ldquo;Security &amp; privacy | &#9888; author required &hellip; not yet modelled by SDA.&rdquo; A whole pillar still manual.</td></tr>
+  <tr><td><b>P2 #11</b> Doc generation: doc-7 sections, C4, capacity &amp; cost tables from the model</td><td><span class="tag s-closed">CLOSED</span><span class="small"> (ADR residual)</span></td><td><code>generate_doc</code> (markdown + html) authors §4 capacity, §5 C4, cost, reliability, bottleneck, assumptions register &mdash; verified on both paths. Residual: <b>ADRs</b> are not auto-emitted.</td></tr>
+  <tr><td><b>Defect a</b> NFR metrics hidden by default</td><td><span class="tag s-closed">CLOSED</span></td><td>Same as P0 #2 &mdash; no SLO precondition.</td></tr>
+  <tr><td><b>Defect b</b> latency SLO silently checked against the scalar mean</td><td><span class="tag s-closed">CLOSED</span></td><td><code>realAwareVerdicts</code> re-judges a scalar latency SLO against the queueing-aware response (<code>&infin;</code> at &rho;&ge;1); a percentile SLO reads <code>unknown</code> until the DES.</td></tr>
+</table>
+<div class="callout"><b>Scoreboard: P0 = 4/4 CLOSED · P1 = #6 CLOSED, #5 &amp; #7 PARTIAL · P2 = #11 CLOSED, #8 PARTIAL, #9 &amp; #10 OPEN · both tool defects CLOSED.</b> The needle was moved most by the <b>doc/deliverable generator</b> (turns &ldquo;authors nothing&rdquo; into an authored C4+capacity+cost+reliability document) and by <b>latency-semantics-v2 + wiring the DES into MCP <code>simulate</code></b> (closed P0 #1 and defect b, and made lag a measured SLO). The biggest remaining holes are <b>multi-tenancy (#9)</b> and <b>security/STRIDE (#10)</b> &mdash; both entirely OPEN &mdash; then the PARTIAL residuals (blast-radius + solver-proposed AZ; peak-factor + storage; partitioning; auto-ADRs). Note: this week's <em>own</em> headline work &mdash; the envelope, uncertainty, scenarios &mdash; is largely <b>orthogonal</b> to doc-10 (it adds an honesty axis doc-10 never asked for), which is why its reachability gaps (F3, F4) sit outside this table.</div>
+
+<h2><span class="no">8</span>The fresh-sore probes</h2>
+<h3>Empty-section guidance &mdash; does anything say WHY / what next?</h3>
+<p><b>Canvas: yes, honestly.</b> The tail-latency panel without an origin reads <em>&ldquo;set a client throughput to simulate the tail&rdquo;</em>; the flow footer reads <em>&ldquo;no traffic origin&rdquo;</em> and explains any node can originate via <code>originRps</code> (the source comment: &ldquo;the flow figures above are vacuous &mdash; say WHY&rdquo;). No silent blanks. <b>Agent: no.</b> The same empty state on <code>evaluate</code> returns a false green with no note (F2). The guidance exists as UI copy but not as tool output &mdash; the asymmetry is the fix target.</p>
+<h3>Discoverability of SLO entry</h3>
+<p><b>Good.</b> SLOs live in the System panel's <b>Requirements (end-to-end)</b> block as inline, always-visible inputs with live read-backs &mdash; a professional finds them by reading the panel, not by knowing a command. (The seed even ships one set, modelling the interaction.)</p>
+<h3>Is the envelope / uncertainty story reachable without reading source?</h3>
+<p><b>Uncertainty: yes.</b> The &plusmn; popover is self-explaining and applying a range lights the ambient Monte-Carlo surface immediately (seed, sample count, confidence interval). <b>Envelope: no</b> &mdash; it has no web surface (F4) and is absent from the committed MCP build (F3). The one place it partially surfaces is inside the generated document's capacity section. For a feature billed as &ldquo;the default answer that needs no demand,&rdquo; it is currently the <em>least</em> reachable of the three views &mdash; and, tellingly, is the thing being built right now.</p>
+<h3>Doc generation on a design with no declared demand</h3>
+<p><b>Honest and graceful.</b> <code>generate_doc</code> on the empty design produced: &ldquo;<em>a 0-component design carrying 0 request flow(s) at an unstated load at about $0/month. No SLOs are declared yet&hellip;</em>&rdquo;, an empty-but-honest assumptions register, and a completeness table marking security/resilience/alternatives/rollout as <em>&#9888; author required</em>. It never invents a demand or a number. The one thing it does <em>not</em> do on a no-demand design is offer the envelope (&ldquo;how far could this go?&rdquo;) in place of the absent demand &mdash; which is exactly the envelope's reason to exist, and the F4 gap seen from the document side.</p>
+
+<h2><span class="no">9</span>Evidence inventory</h2>
+<p class="small">All artifacts are in the audit scratchpad: <span class="path">&hellip;/06bc5046-&hellip;/scratchpad/audit/</span>. Screenshots are viewport captures at 1600&times;1000 unless noted.</p>
+<table>
+  <tr><th>File</th><th>What it shows</th></tr>
+  <tr><td class="path">audit-01-fresh-load-seeded-design.png</td><td>The &ldquo;fresh&rdquo; first-run state: the seeded checkout demo (not blank), Getting-started card, Postgres &rho; 250% saturated, full System panel. (F7 context.)</td></tr>
+  <tr><td class="path">audit-02-working-node-selected.png</td><td>Recovered working canvas, Checkout API selected, tail chip on the node, Inspector config with &plusmn; buttons.</td></tr>
+  <tr><td class="path">audit-03-range-popover.png</td><td>The &plusmn; Uncertainty-range popover (lo/mode/hi, triangular-vs-uniform copy).</td></tr>
+  <tr><td class="path">audit-04-uncertainty-montecarlo.png</td><td>The ambient UNCERTAINTY &middot; MONTE CARLO surface after applying a range (seed 24301, 500 scenarios, cost CI).</td></tr>
+  <tr><td class="path">audit-05-improve-panel.png</td><td>The Improve (backward-solve) panel: goal, binding constraint, before&rarr;after sizing, Apply.</td></tr>
+  <tr><td class="path">audit-06-web-generated-design-doc.png</td><td>Full-page render of the generated Design Document (the deliverable) &mdash; F8 &amp; F9 visible.</td></tr>
+  <tr><td class="path">web-generated-doc.html</td><td>The web-button deliverable on the real (demand + SLO) design.</td></tr>
+  <tr><td class="path">mcp-generated-doc.html / .md</td><td>The agent-path deliverable on the empty design (honest degradation; §8).</td></tr>
+  <tr><td class="path">mcp-journey-result.json</td><td>The full headless MCP journey transcript (F1&ndash;F3, F10 evidence; verbatim errors).</td></tr>
+  <tr><td class="path">web-export.sda.json</td><td>The portable schema-7 export (persistence round-trip, range captured).</td></tr>
+  <tr><td class="path">mcp-journey.mjs</td><td>The stdio harness used to drive the built server (re-runnable).</td></tr>
+</table>
+
+<footer style="margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+Read-only audit of committed HEAD 31f7709. No product files were edited; no commits were made; the owner's <span class="path">examples/*</span> were untouched; no dev server owned by another process was disturbed (this audit ran its own on port 5188). Where the working tree was mid-change under concurrent agents, findings were re-verified against the commit and the one affected item (F9) is caveated. The bar &mdash; blank canvas to defended document, every number computed, honest, and pointing to the next move &mdash; is <b>met on the canvas path</b> for a design with declared demand, and <b>not yet met on the agent path</b> (fragile first move) or for the <b>no-demand / envelope</b> case (no live surface).
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Assumption Model — one assumption space, three views: envelope · scenarios · ranges · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:740px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{background:#1d2330;color:#e7e4da;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:18px 0;font:13px/1.62 "Cascadia Code",Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  pre .c{color:#7f8ba3;font-style:italic}
+  pre .k{color:#6fb3ff}
+  pre .t{color:#8fe3c0}
+  pre .s{color:#e0b070}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14.5px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:10px 13px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center;overflow-x:auto}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.now{background:#e9f5f2;color:#0b6e6e}
+  .tag.p0{background:#fbe7e7;color:#a33}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:13px}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>The Assumption Model</h1>
+  <div class="sub">One assumption space, three views. The owner rejected a tool that <em>demands</em> a demand &mdash; &ldquo;what counts is what I <b>CAN</b> do, what I <b>WANT</b>, and the <b>RESULT</b> of the simulation.&rdquo; Then he found the missing shape himself: <b>scenarios</b> &mdash; named worlds (typically <em>pessimistic / real / optimistic</em>) that hold <em>every</em> assumption across every node, authored scenario-first, and <b>created for you by default</b> with values derived from the design's own capacity. This document unifies three answers over one set of parameters: the <b>envelope</b> (the boundary &mdash; the default answer, no assumptions needed), a <b>scenario</b> (a named point &mdash; absolute bill, utilization, verdicts), and a <b>range / Monte&nbsp;Carlo</b> (a distribution around a point &mdash; confidence). Same space, three views.</div>
+  <div class="meta">SDA design document · 2026-07-04 · the assumption model (envelope · scenarios · ranges) · status: for owner review — not started</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design &mdash; load, latency, availability, cost, feasibility &mdash; against declared requirements, live on every edit. Underneath, SDA is a <b>domain-agnostic engine</b> that turns the drawing into a typed-property graph and a family of solvers; a <b>content pack</b> layers all cloud meaning on top as data. Every number the tool computes rests on some <em>input</em> the architect (or a catalog default) supplied. This document is about those inputs that are genuinely <b>uncertain about the world</b> &mdash; how much traffic will arrive, what fraction of reads hit the cache, how long a query really takes &mdash; and how the tool answers <em>without</em> forcing the architect to invent numbers, then <em>sharpens</em> the answer as real numbers arrive. It defines a single <b>assumption space</b> and the three views that read it.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>assumption</b></td><td>an input that expresses a belief about the <em>outside world</em>, not a fact about the design: the offered traffic, a cache-hit ratio, a per-request duration. Formally, a config value whose <b>role</b> is <code>fact-assumption</code> (below). Distinct from a <em>limit</em> (a ceiling the design commits to) and a <em>promise</em> (an SLO the design must meet).</td></tr>
+  <tr><td style="white-space:nowrap"><b>the role axis</b></td><td>the shared axis on which every node quantity is classified (one-form-per-kind): <b>fact-assumption</b> (a belief about the world) · <b>resource-limit</b> (a ceiling this design sets) · <b>computed</b> (a derived result) · <b>promise</b> (a declared SLO). The role decides <em>how</em> a quantity is presented &mdash; and, here, <em>whether</em> a scenario may override it.</td></tr>
+  <tr><td style="white-space:nowrap"><b>capacity envelope</b></td><td>the computed <em>boundary</em> of the assumption space: the maximum sustained demand at each origin under which <b>all</b> declared SLOs still hold, plus the <em>breaking order</em> (which node/promise fails first as load grows) and the latency <em>knee</em>. Needs <b>no</b> declared demand &mdash; it is the default answer (doc: this document &sect;3; TASK-85).</td></tr>
+  <tr><td style="white-space:nowrap"><b>scenario (named world)</b></td><td>a named <em>point</em> in the assumption space: a name plus a set of overrides <code>node.key &rarr; value</code> on the fact-assumption inputs. Because the point is concrete, the answers become <b>absolute</b>: a monthly bill, an actual utilization, a per-scenario verdict. Typically authored as a trio: pessimistic / real / optimistic.</td></tr>
+  <tr><td style="white-space:nowrap"><b>range · Monte&nbsp;Carlo</b></td><td>an assumption declared as an interval, not a point (<code>{lo,&nbsp;hi}</code> uniform or <code>{lo,&nbsp;mode,&nbsp;hi}</code> triangular). Sampling many draws turns every conclusion into a <em>distribution</em> &mdash; a <b>confidence</b> (&ldquo;the latency SLO holds in 97% of scenarios&rdquo;). Shipped today as content's uncertainty module.</td></tr>
+  <tr><td style="white-space:nowrap"><b>provenance</b></td><td>where a number came from, derived mechanically and shown as a badge: <code>documented</code> (a sourced quota/SLA), <code>estimate</code> (a credible catalog default), <code>architect</code> (set by hand), <code>default</code> (an untouched default). This document adds one value: <code>derived</code> &mdash; computed from the design's own envelope, awaiting a measured replacement.</td></tr>
+  <tr><td style="white-space:nowrap"><b>SLO / band · verdict · &rho;</b></td><td>an <b>SLO</b> is a declared requirement on one property of one place, internally a <em>band</em>. A <b>verdict</b> is the honest read-back: <code>ok</code>&nbsp;/&nbsp;<code>warning</code>&nbsp;/&nbsp;<code>violation</code>&nbsp;/&nbsp;<code>unknown</code>. <b>&rho;</b> = offered load &divide; capacity; the tool sizes to <b>&rho;&nbsp;&le;&nbsp;0.8</b> (the headroom convention) so a queue never runs to the &rho;&rarr;1 knife-edge. Uncertainty is a value, never a guess.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The workflow this serves — no demanded demand, then scenarios</h2>
+<p class="lead">This design has one origin and it is the owner's, stated on 2026-07-04. First the rejection: a tool must not open by <em>demanding</em> a load before it will say anything &mdash; &ldquo;what counts is what I <b>CAN</b> do, what I <b>WANT</b>, and the <b>RESULT</b> of the simulation &mdash; where in that is there room for assumptions?&rdquo; Then, from the same conversation, the shape that <em>does</em> belong: not a single mandatory number but <b>named worlds</b>. An architect thinks in a pessimistic case, a realistic case, and an optimistic case; each world is not just a traffic figure but a full set of beliefs &mdash; demand, cache-hit ratio, per-request durations &mdash; held together and named. The tool should let him <em>author those worlds</em>, and, because &ldquo;architects are lazy &mdash; let&rsquo;s do everything for them,&rdquo; it should <b>create the trio by default</b> with sensible values already filled in. His verdict on that last idea: &ldquo;this could be a hit.&rdquo;</p>
+<p>Two requirements fall out immediately, and the rest of this document is their reconciliation:</p>
+<ul>
+  <li><b>The default answer needs no assumption.</b> With nothing declared, the primary computed answer is the <em>capacity envelope</em> &mdash; how far this design can be pushed before an SLO breaks, and what breaks first. The simulated surfaces are never empty-and-mute (TASK-85).</li>
+  <li><b>Assumptions, when wanted, are named worlds &mdash; and pre-filled.</b> A scenario is an optional refinement lens: declare a world (or accept the auto-created trio) and the curves collapse to absolutes for that world. The tool authors the trio itself, from the envelope, with honest provenance &mdash; never invented market numbers.</li>
+</ul>
+<div class="callout"><b>The one-sentence thesis.</b> The fact-assumption inputs of a design span an <em>assumption space</em>; the tool reads that space three ways &mdash; the <b>envelope</b> is its computed boundary (the default, no point needed), a <b>scenario</b> is a named point in it (absolute answers), and a <b>range / Monte&nbsp;Carlo</b> is a distribution around a point (confidence). One space; three views; each honest about what it needs.</div>
+
+<figure>
+  <div class="svgc">
+  <svg width="840" height="360" viewBox="0 0 840 360" font-family="Segoe UI,system-ui,sans-serif">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker>
+      <radialGradient id="cloud" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#8b5ca6" stop-opacity=".55"/><stop offset="100%" stop-color="#8b5ca6" stop-opacity="0"/></radialGradient>
+    </defs>
+    <text x="30" y="26" font-size="13.5" font-weight="700" fill="#183a56">ONE assumption space (the fact-assumption inputs) — read THREE ways</text>
+    <!-- axes -->
+    <line x1="90" y1="300" x2="560" y2="300" stroke="#4b5263" stroke-width="1.5" marker-end="url(#ar)"/>
+    <line x1="90" y1="300" x2="90" y2="60" stroke="#4b5263" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="560" y="322" text-anchor="end" font-size="11.5" fill="#4b5263">demand at origin (req/s) →</text>
+    <text x="82" y="56" text-anchor="end" font-size="11.5" fill="#4b5263" transform="rotate(-90 82 56)">cache-hit ratio →</text>
+    <!-- feasible region shading under the envelope -->
+    <path d="M90 300 L90 110 Q300 130 430 210 Q500 255 520 300 Z" fill="#e9f5f2" stroke="none"/>
+    <!-- envelope boundary -->
+    <path d="M90 110 Q300 130 430 210 Q500 255 520 300" fill="none" stroke="#0b6e6e" stroke-width="2.6"/>
+    <text x="300" y="118" font-size="11.5" font-weight="700" fill="#0b6e6e">ENVELOPE = boundary (all SLOs hold up to here)</text>
+    <text x="120" y="250" font-size="11" fill="#0b6e6e">feasible: every SLO holds</text>
+    <text x="470" y="150" font-size="11" fill="#a33">infeasible: an SLO breaks</text>
+    <!-- three scenario points -->
+    <circle cx="180" cy="245" r="6" fill="#0b6e6e"/><text x="190" y="242" font-size="10.5" fill="#0b6e6e">optimistic (~30% of envelope)</text>
+    <circle cx="300" cy="222" r="6" fill="#3b6fd4"/><text x="310" y="219" font-size="10.5" fill="#3b6fd4">real (~60%)</text>
+    <circle cx="452" cy="205" r="6.5" fill="#a33"/><text x="360" y="196" font-size="10.5" fill="#a33">pessimistic (~110% — past the edge)</text>
+    <!-- monte carlo cloud around 'real' -->
+    <ellipse cx="300" cy="222" rx="46" ry="30" fill="url(#cloud)"/>
+    <text x="300" y="286" text-anchor="middle" font-size="10" fill="#7a4f96">RANGE / Monte Carlo = a cloud around a point</text>
+    <!-- right column: the three views as answers -->
+    <line x1="600" y1="60" x2="600" y2="320" stroke="#e5e1d8" stroke-width="1"/>
+    <text x="620" y="86" font-size="12" font-weight="700" fill="#0b6e6e">ENVELOPE</text>
+    <text x="620" y="104" font-size="10.5" fill="#4b5263">holds to X req/s;</text>
+    <text x="620" y="119" font-size="10.5" fill="#4b5263">first break: loader; knee at…</text>
+    <text x="620" y="122" font-size="10.5" fill="#4b5263"> </text>
+    <text x="620" y="160" font-size="12" font-weight="700" fill="#3b6fd4">SCENARIO (point)</text>
+    <text x="620" y="178" font-size="10.5" fill="#4b5263">bill $2,140/mo · &rho;=0.55 ·</text>
+    <text x="620" y="193" font-size="10.5" fill="#4b5263">all SLOs ok (this world)</text>
+    <text x="620" y="234" font-size="12" font-weight="700" fill="#7a4f96">RANGE (cloud)</text>
+    <text x="620" y="252" font-size="10.5" fill="#4b5263">latency SLO holds in</text>
+    <text x="620" y="267" font-size="10.5" fill="#4b5263">97% of drawn worlds</text>
+    <text x="620" y="300" font-size="9.5" fill="#4b5263" font-style="italic">boundary · point · distribution —</text>
+    <text x="620" y="314" font-size="9.5" fill="#4b5263" font-style="italic">three reads of the same axes</text>
+  </svg>
+  </div>
+  <figcaption>The assumption space (two fact-assumption axes shown; a real design has many). The <b>envelope</b> is its feasible boundary &mdash; the default answer, needing no point. A <b>scenario</b> is a named point that yields absolutes. A <b>range</b> is a Monte-Carlo cloud around a point that yields confidence. The auto-created trio sits at proposed fractions of the envelope (&sect;5): optimistic below, real in the headroom band, pessimistic past the edge.</figcaption>
+</figure>
+
+<h2><span class="no">2</span>The role axis — the boundary drawn mechanically <span class="tag new">meta-model addition</span></h2>
+<p class="lead">Before the three views, one structural decision governs the whole model: <em>which</em> inputs a scenario may touch. The answer is not a hand-picked list &mdash; it is read off a single classification the project already needs for a deeper reason, and this is where the &ldquo;<code>originRps</code> confusion&rdquo; that started this work gets fixed at the root.</p>
+
+<h3>2.1 One form per kind: every node quantity carries a role</h3>
+<p>The owner's consistency law (memory <code>one-form-per-kind</code>) is that same-<em>kind</em> things must share one form of naming, description and presentation, so their <em>differences</em> stand out as values on a shared axis &mdash; &ldquo;you don't describe a dog biologically and a cat as a companion; then you can't see the difference.&rdquo; Applied to node quantities, the shared axis is a <b>role</b>: every quantity is one of four kinds.</p>
+<table>
+  <tr><th>Role</th><th>What it is (positive)</th><th>Examples today</th><th>Scenario-overridable?</th></tr>
+  <tr><td><b>fact-assumption</b><br><span class="tag new">the space</span></td><td>A belief about the outside world the design does not control. The design's numbers <em>rest on</em> it; a different world changes it.</td><td><code>originRps</code> (offered load), a cache-hit ratio, a measured <code>perRequestDuration</code>, a per-attempt <code>timeoutMs</code> assumed of a caller.</td><td><b>Yes</b> &mdash; these <em>are</em> the assumption space.</td></tr>
+  <tr><td><b>resource-limit</b></td><td>A ceiling <em>this</em> design commits to &mdash; a sizing choice or a documented quota. Changing it is a different <em>design</em>, not a different world.</td><td><code>concurrency</code>, <code>connectionPool</code>, <code>maxUnits</code>, <code>accountConcurrency</code>, <code>replicas</code>.</td><td><b>No</b> &mdash; belongs to a design variant / the Improve search.</td></tr>
+  <tr><td><b>computed</b></td><td>A value the engine derives; never authored. Reading it back is the whole point of the tool.</td><td><code>throughput</code> (served), <code>latency</code>, <code>availability</code>, <code>cost</code>, <code>overflow</code>, <code>backlog</code>.</td><td><b>No</b> &mdash; it is an output, not an input.</td></tr>
+  <tr><td><b>promise</b></td><td>A declared SLO &mdash; what the design must achieve. A requirement, not a belief.</td><td>a latency band, an availability floor, a <code>goodputRps</code> target.</td><td><b>No</b> &mdash; belongs to the SLO surface.</td></tr>
+</table>
+<div class="callout warn"><b>The root cause of the <code>originRps</code> confusion, named.</b> The owner hit it directly (memory <code>one-form-per-kind</code>): a <em>fact-assumption</em> (offered load) was rendered in the visual and naming <em>form of a limit</em> &mdash; so a belief about the world looked like a ceiling the design sets, and the difference that matters (this is uncertain about reality; that is a design commitment) became invisible. The role axis is the fix: it makes the <b>kind</b> a first-class value every surface renders <em>by</em>, and it is the same axis that mechanically answers &ldquo;what may a scenario override?&rdquo; &mdash; only role <code>fact-assumption</code>.</div>
+
+<h3>2.2 Status of the role axis, honestly <span class="tag p0">not yet in code</span></h3>
+<p>The role axis is <b>proposed, not built</b>. Today the registry (<span class="path">content/sda/src/registry.ts</span>) tags each key with an <code>aggregate</code> algebra and a <code>kind</code> of <code>'input'</code>&nbsp;|&nbsp;<code>'derived'</code> &mdash; a coarse computed-vs-authored split, not the four-way role. The richer classification exists so far only as data in two places: the design-doc's <b>assumptions register</b> already derives a <em>provenance</em> per input mechanically (<span class="path">content/sda/src/doc-model.ts</span> line&nbsp;139, <code>configProvenance</code> 535&ndash;540), and the sensitivity matrix already declares each knob's <em>expected direction</em> as reviewable data (<span class="path">content/sda/src/sensitivity-matrix.test.ts</span> line&nbsp;80). Introducing <code>role</code> as an explicit registry field &mdash; the &ldquo;<code>role</code> on registry keys that surfaces render by&rdquo; the memory calls for &mdash; is the meta-model step this design assumes and TASK-85 AC#4 commissions (&ldquo;one-form-per-kind role axis applied to all node quantities&rdquo;). Everything below is written to that axis; where a claim depends on it, it is flagged.</p>
+
+<h2><span class="no">3</span>View one — the envelope (the default answer) <span class="tag new">TASK-85</span></h2>
+<p class="lead">With no scenario declared, the tool answers with the <em>boundary</em> of the assumption space along the demand axes: the maximum sustained load each origin can carry with every SLO still green, which promise breaks first as load grows, and where the latency knee sits. This is a computed answer that needs <b>no</b> assumption &mdash; so the simulated surfaces are never empty.</p>
+
+<h3>3.1 What the envelope is, and how it is computed</h3>
+<p>The envelope is a <em>maximisation</em>: free the origin demand, hold the design fixed, and push demand as high as the SLOs permit. The machinery exists. The native solver evaluates in ~1&nbsp;ms and finds optima by <b>per-knob inversion</b> on the monotone capacity/flow class (<span class="path">engine/solver-contract/src/native/search.ts</span> §&ldquo;the optimum is found by per-knob inversion&rdquo;), driven by an <code>Objective&nbsp;{&nbsp;node,&nbsp;key,&nbsp;direction:&nbsp;'min'&nbsp;|&nbsp;'max'&nbsp;}</code> (<span class="path">.../conformance/corpus.ts</span> line&nbsp;27). Max-demand-subject-to-SLOs is exactly <code>optimize</code> with the demand key freed and <code>direction:&nbsp;'max'</code>. The <em>breaking order</em> is a by-product: as demand rises, the first SLO whose inversion binds is the first break, the next is second, and so on. The <em>knee</em> is read from the load sweep, which already scales the design's origins and reads the queueing-aware end-to-end latency &mdash; today over <code>[0.5,&nbsp;0.75,&nbsp;1.0,&nbsp;1.25,&nbsp;1.5]&times;</code> nominal (<span class="path">content/sda/src/sweep.ts</span> line&nbsp;27, <code>SWEEP_FACTORS</code>), generalised here to sweep up to the envelope edge. The DES confirms the envelope edge (percentiles at the critical point), as it confirms every other queue-dynamics quantity.</p>
+
+<div class="callout warn"><b>Tension resolved — the envelope inverts the &ldquo;no-cheating&rdquo; rule, and that is correct.</b> The backward-search discipline (memory <code>search-tunables-no-cheating</code>) <em>fixes</em> the workload on a source and makes throughput raise-only, because <code>optimize(cost,&nbsp;min)</code> with a free workload would &ldquo;minimise cost&rdquo; by serving no traffic (set the load to ~1). The envelope does the opposite: it <em>frees</em> the demand and <b>maximises</b> it. There is no cheating to prevent &mdash; a maximiser cannot game the objective downward, and the design (limits, sizing) stays fixed. So the two coexist cleanly: the no-cheating rule governs <code>optimize(cost)</code> where demand is a fixed requirement; the envelope is the distinct inverse problem where demand is the free objective. This is <em>why</em> demand carries role <code>fact-assumption</code> and not <code>resource-limit</code>: only a fact-assumption is legitimately free-and-maximised here.</div>
+
+<h3>3.2 The honest boundary the envelope draws</h3>
+<p>The envelope answers <em>relative</em> questions with no assumption: <em>how far</em> can this design be pushed, and <em>what</em> gives first. It cannot answer <em>absolute</em> questions &mdash; a monthly bill for pay-per-use compute, an actual utilization, a %-of-worlds confidence &mdash; because those require knowing <em>where in the envelope you actually sit</em>. That is the honest line stated everywhere (TASK-85 AC#2): <b>absolute cost / utilization / confidence require a declared demand; envelope answers never do.</b> This is not a limitation to apologise for; it is the two-view split made visible, and it is exactly what motivates view two.</p>
+
+<h2><span class="no">4</span>View two — a scenario is a named point <span class="tag new">the owner's discovery</span></h2>
+<p class="lead">A scenario names a concrete world: pick a point in the assumption space and every curve collapses to a number for that world. This is the refinement lens the owner described &mdash; and its model is small, because the contract already has the shape.</p>
+
+<h3>4.1 The model — a named world over the existing <code>Scenario</code> seam</h3>
+<p>The solver contract already defines a <code>Scenario</code>: a set of numeric <em>overrides</em> keyed by the <code>"node|key"</code> coordinate, evaluated in a batch by the <code>EvaluateBatch</code> capability (<span class="path">engine/solver-contract/src/capability/evaluate-batch.ts</span> lines&nbsp;22&ndash;24, 44). It is how Monte&nbsp;Carlo already substitutes drawn values onto a fixed design at ~1&nbsp;ms per evaluation (<span class="path">content/sda/src/uncertainty.ts</span>). A <b>named world is precisely that contract <code>Scenario</code>, promoted to a first-class authored object</b>: a name, plus overrides restricted (at authoring time) to role <code>fact-assumption</code> keys.</p>
+<pre><span class="c">// A named world — pure DATA on the project document (export schema 6 → 7, additive).</span>
+<span class="k">interface</span> <span class="t">AssumptionScenario</span> {
+  <span class="k">readonly</span> id: string;                       <span class="c">// "pessimistic" | "real" | "optimistic" | any name — the canvas label</span>
+  <span class="k">readonly</span> name?: string;                     <span class="c">// optional friendly name (mirrors RequestClassDecl.name)</span>
+  <span class="k">readonly</span> overrides: <span class="k">readonly</span> <span class="t">ScenarioOverride</span>[]; <span class="c">// only role=fact-assumption keys; DELTAS over the base layer</span>
+}
+<span class="k">interface</span> <span class="t">ScenarioOverride</span> {
+  <span class="k">readonly</span> node: <span class="t">NodeId</span>;
+  <span class="k">readonly</span> key: string;                       <span class="c">// a fact-assumption registry key (originRps, cache-hit, …)</span>
+  <span class="k">readonly</span> value: number;
+  <span class="k">readonly</span> provenance: <span class="s">'derived'</span> | <span class="s">'architect'</span>; <span class="c">// derived-from-envelope vs replaced by a measured value (§5)</span>
+}
+<span class="c">// Absent everywhere ⇒ no named worlds: the base layer IS the design, evaluated once — today, bit-for-bit.</span>
+<span class="c">// The ambient batch lowers each AssumptionScenario to a contract Scenario: overrides → { "node|key": value }.</span></pre>
+<p>Two structural properties keep this small and honest:</p>
+<ul>
+  <li><b>Deltas over a shared base, never full copies.</b> A scenario stores only the fact-assumption values it <em>changes</em> from the base layer (the design's own config). Three scenarios must not mean 3&times; the maintenance: edit a service time on the base and all three worlds inherit it; a scenario overrides only where its world genuinely differs. This mirrors how a range rides <em>inside</em> an instance (<code>Instance.ranges</code>) rather than duplicating the design.</li>
+  <li><b>Only fact-assumption keys.</b> The authoring surface offers a scenario override <em>only</em> for role <code>fact-assumption</code> quantities (&sect;2). A limit or an SLO is not a &ldquo;world&rdquo; &mdash; changing it is a design variant or a requirement change, which have their own surfaces. The role axis draws this boundary mechanically, so it can never drift.</li>
+</ul>
+
+<h3>4.2 Serialization — additive, following the lag-SLO discipline</h3>
+<p>The project document is at <b>schema&nbsp;6</b> today (<span class="path">app/core/src/document.ts</span> line&nbsp;23), the request-classes container added as R2 lands. Named scenarios are the <b>schema-7</b> addition, following the exact discipline of the additive containers before them &mdash; <code>guaranteeSlos</code>, <code>lagSlos</code> (the schema-4 addition, <span class="path">app/core/src/document.ts</span> line&nbsp;47), and <code>requestClasses</code> (schema&nbsp;6): a new top-level container, plain arrays (no <code>Map</code>), <b>absent&nbsp;&rArr;&nbsp;empty&nbsp;&rArr;&nbsp;today bit-for-bit</b>, and every older export loads unchanged (the migration chain 1..6 extends to 7). One decision to make deliberately: an override naming a node/key the design no longer contains. A request class is <em>structural</em> (it defines a commodity), so a dangling ref is a hard load error; a <em>scenario override is a value substitution</em> (the same shape Monte&nbsp;Carlo's <code>applyOverrides</code> tolerates by ignoring overrides on absent/non-fixed cells, <span class="path">content/sda/src/uncertainty.ts</span> 463&ndash;479). The lean is to match that: a stale override is reported and skipped, not fatal &mdash; a scenario is a soft lens, not a structural claim.</p>
+
+<h2><span class="no">5</span>The hit — honest auto-created defaults <span class="tag new">&ldquo;this could be a hit&rdquo;</span></h2>
+<p class="lead">This is the move the owner flagged as the payoff: don't ask a lazy architect to invent three worlds &mdash; <b>create the trio for him</b>, pessimistic / real / optimistic, with values already filled in. The entire credibility of the feature rests on <em>where those values come from</em>: never invented, always derived from the design's own computed capacity, and badged as such.</p>
+
+<h3>5.1 Demand keys — fractions of the envelope</h3>
+<p>The envelope (&sect;3) already computes the maximum sustainable demand at each origin. The trio's demand values are proposed fractions of it, so they are grounded in <em>this design's</em> capacity rather than any market figure:</p>
+<table>
+  <tr><th>World</th><th>Proposed demand</th><th>Why (the honest rationale)</th></tr>
+  <tr><td><b>real</b></td><td>&asymp;&nbsp;60% of envelope</td><td>Comfortably inside the <b>&rho;&nbsp;&le;&nbsp;0.8</b> headroom band the tool already sizes to (<code>TARGET_UTILIZATION&nbsp;=&nbsp;0.8</code>, <span class="path">content/sda/src/behaviors.ts</span> line&nbsp;23) &mdash; a plausible steady-state that leaves burst headroom.</td></tr>
+  <tr><td><b>optimistic</b></td><td>&asymp;&nbsp;30% of envelope</td><td>A quiet-launch / early-adoption world &mdash; low utilization, everything green with wide margin.</td></tr>
+  <tr><td><b>pessimistic</b></td><td>&asymp;&nbsp;110% of envelope</td><td>Deliberately <em>past</em> the edge: a stress world that <b>should</b> break something, so the architect sees which promise fails first under overload before it happens in production.</td></tr>
+</table>
+<div class="callout"><b>The exact fractions are a proposal, not a law.</b> 30&nbsp;/&nbsp;60&nbsp;/&nbsp;110% are defensible anchors (real inside headroom, pessimistic past the edge), but they are a policy choice the owner should ratify (&sect;9). What is <em>not</em> negotiable is the principle: every derived demand is a fraction of a number the tool computed for this specific design &mdash; there is no hard-coded &ldquo;1,000 req/s&rdquo; anywhere.</div>
+
+<h3>5.2 Ranged / non-demand keys — the polarity problem, honestly</h3>
+<p>A world is more than demand: pessimistic should also mean the <em>unfavourable</em> end of every soft assumption (a worse cache-hit ratio, a slower query), optimistic the favourable end, real the mode. Where an assumption is already declared as a <em>range</em> (<code>{lo,&nbsp;hi}</code> or <code>{lo,&nbsp;mode,&nbsp;hi}</code>, <span class="path">content/sda/src/manifest.ts</span> 82&ndash;106), the trio picks its ends: pessimistic&nbsp;=&nbsp;the unfavourable bound, real&nbsp;=&nbsp;the mode (or midpoint), optimistic&nbsp;=&nbsp;the favourable bound. That requires knowing each key's <em>polarity</em> &mdash; which direction is &ldquo;worse&rdquo;.</p>
+<div class="callout warn"><b>Tension &mdash; the registry does NOT declare polarity today.</b> There is no <code>polarity</code> flag on a key. A band's shape (<code>minTargetMax</code>) and an objective's <code>direction</code> encode a <em>requirement's</em> or a <em>search's</em> direction, but not the intrinsic &ldquo;higher is worse&rdquo; of a fact-assumption. Polarity is currently captured in two indirect places: the sensitivity matrix's declared expected-direction data (<span class="path">.../sensitivity-matrix.test.ts</span> line&nbsp;80), and empirically by the native solver's own per-knob sign probing (<span class="path">.../native/search.ts</span> ~351&ndash;355 &mdash; it measures which way a metric moves with a knob). <b>Resolution:</b> derive the favourable/unfavourable end from that same sign the solver already computes against the design's SLOs (a key whose increase pushes a promise toward violation is &ldquo;worse&rdquo;), <em>or</em> add polarity to the role-axis metadata as an explicit field. Crucially: <b>where polarity is genuinely undefined, the key stays at base in every world &mdash; no guessing.</b> A world only diverges on an assumption whose direction is known. This is an open question for the owner (&sect;9).</p></div>
+
+<h3>5.3 Provenance — <code>derived</code>, rendered distinctly, flipped on edit</h3>
+<p>Every auto-filled value carries provenance <code>derived</code> &mdash; a <b>new fifth value</b> on the existing provenance axis (<code>documented</code>&nbsp;|&nbsp;<code>estimate</code>&nbsp;|&nbsp;<code>architect</code>&nbsp;|&nbsp;<code>default</code>, <span class="path">content/sda/src/doc-model.ts</span> line&nbsp;139). This is one-form-per-kind at work: rather than invent a new badge form, the derived-default reuses the assumptions register's existing badge axis and adds one member. It renders distinctly &mdash; proposed wording: <em>&ldquo;wyprowadzone z pojemności projektu &mdash; podmień na zmierzone&rdquo;</em> (&ldquo;derived from the design's capacity &mdash; replace with a measured value&rdquo;). The moment the architect types a real number over a derived one, provenance flips <code>derived&nbsp;&rarr;&nbsp;architect</code> &mdash; which is exactly what the existing mechanical derivation already does for any value that diverges from its default (<code>configProvenance</code>: an instance value &ne; the default reads <code>architect</code>, <span class="path">.../doc-model.ts</span> 536&ndash;537). No new mechanism; one new starting badge.</p>
+<div class="callout"><b>The honesty rule, stated once and plainly.</b> SDA must not invent infrastructure numbers (project invariant: <em>the tool must not lie</em>). The auto-created trio contains <b>no market data, no fabricated traffic figures, no guessed prices</b> &mdash; only values <em>derived from this design's own computed envelope and its declared ranges</em>, each badged <code>derived</code> and openly labelled as a placeholder for a measurement. A world with no envelope to derive from (no origin, no SLOs) gets no demand override &mdash; the feature stays silent rather than fabricate one.</div>
+
+<h2><span class="no">6</span>View three — ranges &amp; Monte Carlo (the cloud around a point)</h2>
+<p class="lead">The third view is already shipped. A scenario is a point; a <em>range</em> makes an assumption an interval, and sampling turns every conclusion into a distribution &mdash; a confidence. It composes with scenarios rather than competing with them.</p>
+<p>Content's uncertainty module (<span class="path">content/sda/src/uncertainty.ts</span>) draws N seeded samples from every declared <code>Instance.ranges</code>, evaluates each through the same <code>EvaluateBatch</code> a named world uses, and rolls the results into percentiles, histograms, per-SLO confidence (judged by the same queueing-aware verdict every surface reads), and a tornado. The relationship to scenarios is compositional: a <b>range is a cloud around a point</b>. In the assumption space, a scenario fixes the point; ranges declared on that scenario's inputs blur it into a distribution, and the Monte-Carlo run reports how often the SLOs survive the blur. The auto-created trio and Monte&nbsp;Carlo are two honesties that stack: the trio says &ldquo;here are three worlds I sized for you&rdquo;; Monte&nbsp;Carlo says &ldquo;and here is how confident the <em>real</em> world's verdict is, given what you told me is uncertain about it.&rdquo;</p>
+
+<h2><span class="no">7</span>Scenario-first authoring &amp; ambient evaluation</h2>
+<p class="lead">The owner named the gesture: <em>&ldquo;I create scenarios in System, and on the nodes I assign parameters under that name.&rdquo;</em> The scenario is chosen first, in one place; editing an assumption on a node then writes into whichever world is active. Every world is evaluated continuously, so the comparison is always on screen.</p>
+
+<h3>7.1 The active-world lens &mdash; the same form as the class lens</h3>
+<p>The System panel (the whole-design roll-up every shell already shows, <span class="path">app/presenter/src/summary.ts</span>) owns the <b>scenario list + an ACTIVE selector</b>. This is deliberately the <em>same form</em> as the planned request-class lens (docs/design/request-classes.html §7 &mdash; a filter that scopes what the canvas shows): one-form-per-kind says a &ldquo;named overlay you select to scope the view&rdquo; is one kind, so scenarios and classes share it. The rule while authoring:</p>
+<ul>
+  <li><b>A world is active</b> &rArr; editing a fact-assumption parameter on a node writes the override into that world (and flips its provenance to <code>architect</code>, &sect;5.3). The canvas shows that world's computed results.</li>
+  <li><b>No world is active</b> (the base lens) &rArr; editing writes the shared base layer; the canvas shows the base evaluation &mdash; and, with no demand pinned, the envelope (&sect;3).</li>
+</ul>
+
+<h3>7.2 All worlds evaluated ambiently &rarr; a comparison matrix</h3>
+<p>Because a named world lowers to a contract <code>Scenario</code>, evaluating <em>all</em> of them is a single <code>EvaluateBatch</code> call &mdash; the very batch Monte&nbsp;Carlo already runs at ~1&nbsp;ms per evaluation, under the TASK-81 ambient loop (event-driven, debounced, latest-wins, idle&nbsp;=&nbsp;zero work). A three-world design costs three sub-millisecond evaluations after each edit; the result is a <b>matrix view</b> (metrics&nbsp;&times;&nbsp;scenarios) plus a per-scenario verdict column, with the active world highlighted on the canvas. This is the natural home for the north-star guidance loop (TASK-83): the next-move hint can be computed per world, or against the worst world, without new machinery.</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="820" height="300" viewBox="0 0 820 300" font-family="Segoe UI,system-ui,sans-serif">
+    <text x="24" y="24" font-size="13" font-weight="700" fill="#183a56">System panel: pick a world (a lens), edit on nodes, read the matrix</text>
+    <!-- scenario selector -->
+    <rect x="24" y="44" width="250" height="120" rx="9" fill="#fff" stroke="#e5e1d8"/>
+    <text x="38" y="66" font-size="11.5" font-weight="700" fill="#4b5263">Scenarios (active = the lens)</text>
+    <rect x="38" y="76" width="222" height="24" rx="5" fill="#e9f5f2" stroke="#0b6e6e"/><text x="48" y="92" font-size="11" fill="#0b6e6e">● real  ← ACTIVE</text>
+    <rect x="38" y="104" width="222" height="22" rx="5" fill="#faf8f3" stroke="#e5e1d8"/><text x="48" y="119" font-size="11" fill="#4b5263">○ pessimistic</text>
+    <rect x="38" y="130" width="222" height="22" rx="5" fill="#faf8f3" stroke="#e5e1d8"/><text x="48" y="145" font-size="11" fill="#4b5263">○ optimistic</text>
+    <!-- edit-writes-here note -->
+    <text x="24" y="192" font-size="11" fill="#b4530a">edit a fact-assumption on a node → writes into the ACTIVE world (provenance → architect)</text>
+    <text x="24" y="210" font-size="11" fill="#4b5263">no world active → edits the shared base; canvas shows the envelope</text>
+    <!-- matrix -->
+    <rect x="300" y="44" width="496" height="170" rx="9" fill="#fff" stroke="#e5e1d8"/>
+    <text x="316" y="66" font-size="11.5" font-weight="700" fill="#4b5263">Matrix — metrics × worlds (all evaluated ambiently, ~1ms each)</text>
+    <line x1="316" y1="76" x2="780" y2="76" stroke="#e5e1d8"/>
+    <text x="316" y="98" font-size="11" fill="#183a56"> </text>
+    <text x="440" y="94" font-size="10.5" font-weight="700" fill="#a33">pessimistic</text>
+    <text x="560" y="94" font-size="10.5" font-weight="700" fill="#3b6fd4">real</text>
+    <text x="670" y="94" font-size="10.5" font-weight="700" fill="#0b6e6e">optimistic</text>
+    <text x="316" y="120" font-size="10.5" fill="#4b5263">cost $/mo</text><text x="440" y="120" font-size="10.5">3,900</text><text x="560" y="120" font-size="10.5">2,140</text><text x="670" y="120" font-size="10.5">1,080</text>
+    <text x="316" y="142" font-size="10.5" fill="#4b5263">peak ρ</text><text x="440" y="142" font-size="10.5" fill="#a33">1.08</text><text x="560" y="142" font-size="10.5">0.55</text><text x="670" y="142" font-size="10.5">0.27</text>
+    <text x="316" y="164" font-size="10.5" fill="#4b5263">latency p99</text><text x="440" y="164" font-size="10.5" fill="#a33">∞</text><text x="560" y="164" font-size="10.5">180ms</text><text x="670" y="164" font-size="10.5">120ms</text>
+    <text x="316" y="186" font-size="10.5" fill="#4b5263">verdict</text><text x="440" y="186" font-size="10.5" font-weight="700" fill="#a33">violation</text><text x="560" y="186" font-size="10.5" font-weight="700" fill="#176b37">ok</text><text x="670" y="186" font-size="10.5" font-weight="700" fill="#176b37">ok</text>
+    <text x="316" y="206" font-size="9.5" fill="#4b5263" font-style="italic">pessimistic breaks first at the loader — the derived stress world earning its keep</text>
+    <text x="24" y="250" font-size="11" fill="#4b5263">The active world colours the canvas; the matrix is always on screen so the DELTA between worlds is the information (one-form-per-kind).</text>
+    <text x="24" y="272" font-size="11" fill="#4b5263">Same EvaluateBatch seam Monte Carlo rides; same TASK-81 ambient loop (debounced, latest-wins, idle = zero work).</text>
+  </svg>
+  </div>
+  <figcaption>Scenario-first authoring. The System panel carries the world list and the active selector (the same lens form the request-class work introduces); editing a fact-assumption on a node writes into the active world. All worlds evaluate ambiently in one batch, producing a metrics&times;worlds matrix with per-world verdicts &mdash; the active world painted on the canvas.</figcaption>
+</figure>
+
+<h2><span class="no">8</span>Consequences — what the model unlocks</h2>
+<table>
+  <tr><th>Surface</th><th>What scenarios add</th></tr>
+  <tr><td><b>The generated design doc</b><br><span class="tag new">the section we lack</span></td><td>A <b>scenario-comparison section</b> &mdash; the mature-production-doc table SDA does not yet author: per-world cost, verdicts and headroom, side by side. It extends the doc's existing <em>assumptions register</em> (<span class="path">content/sda/src/doc-model.ts</span>, <code>buildAssumptions</code>) rather than inventing a new structure: the register already lists each assumption with its provenance; the scenario table adds a value column per world. Derived rows carry the <code>derived</code> badge (&sect;5.3), so a reader sees at a glance which numbers still await measurement.</td></tr>
+  <tr><td><b>Improve (optimize / repair)</b></td><td>A <b>robust</b> objective becomes expressible: &ldquo;the cheapest configuration that holds all SLOs across the <em>selected</em> worlds&rdquo; &mdash; the worst-case per constraint over the chosen scenarios. Mechanically this is the existing search with each SLO tightened to its worst world; no new solver, the same native binding. A design proven only against &ldquo;real&rdquo; is a fragile design; proven against the trio, it is robust.</td></tr>
+  <tr><td><b>MCP (the AI bridge)</b></td><td>Least-input, self-correcting tools mirroring the human surface (optimize-for-AI-reasoning): <code>create_scenario</code>, <code>set_scenario_value&nbsp;{scenario,&nbsp;node,&nbsp;key,&nbsp;value}</code>, <code>select_scenario</code>, <code>list_scenarios</code>. <code>set_scenario_value</code> refuses a non-fact-assumption key by naming the role and pointing at the right surface (a limit &rarr; the config/Improve path, an SLO &rarr; <code>set_slo</code>) &mdash; the same guided-error style the existing tools use. The AI sees the same worlds and the same matrix a human does.</td></tr>
+  <tr><td><b>The DES (time truth)</b></td><td>Policy: the <b>active world</b> drives the interactive DES (its overrides are the arrival rates and service times simulated); at rest, the ambient loop can run each world's tail so the matrix's percentile row is DES-measured, not just scalar. The envelope edge is DES-confirmed regardless (&sect;3). This mirrors the existing scalar-approximation-plus-DES-truth split.</td></tr>
+  <tr><td><b>The envelope</b></td><td>Stays <b>scenario-free by definition</b> &mdash; it is the boundary of the space, not a point in it. Declaring worlds never changes the envelope; the envelope is what the worlds' derived demands are computed <em>from</em>. The two views cannot contradict because one is the frame of the other.</td></tr>
+</table>
+
+<h2><span class="no">9</span>Tensions &amp; open questions for the owner</h2>
+<p class="lead">The hard reconciliations, stated plainly &mdash; some resolved with a lean, some genuinely for the owner to rule on.</p>
+<table>
+  <tr><th>Question / tension</th><th>Where it comes from</th><th>Proposed lean</th></tr>
+  <tr>
+    <td><b>Migrating <code>originRps</code> into the model</b></td>
+    <td><code>originRps</code> is a node-local input today (<span class="path">content/sda/src/registry.ts</span> line&nbsp;89), folded into throughput by <code>withOrigin</code>. In the assumption model it becomes the archetypal scenario-resident fact-assumption. TASK-85 folds the <code>originRps&rarr;demandRps</code> rename into this role-axis work.</td>
+    <td>The node's <code>originRps</code> is the <b>base-layer</b> value; a world overrides it as a delta. Existing designs (no worlds) are unchanged &mdash; the base layer <em>is</em> the design, evaluated once. Reconcile like request-class origins: a world's overrides refine the base, the base is the default world. Confirm the rename lands here vs. a standalone task.</td>
+  </tr>
+  <tr>
+    <td><b>What &ldquo;pessimistic&rdquo; means beyond demand</b></td>
+    <td>A world should push <em>every</em> soft assumption to its unfavourable end, but polarity is not declared in the registry (&sect;5.2).</td>
+    <td>Diverge a world on a non-demand assumption <b>only where its range and polarity are known</b> (the sensitivity-matrix direction, or the solver's own sign). Where polarity is undefined, the key stays at base in all worlds &mdash; no guessing. Decide: add an explicit <code>polarity</code> to the role-axis metadata, or derive it from the SLO-facing sign each run.</td>
+  </tr>
+  <tr>
+    <td><b>Interplay with request classes</b></td>
+    <td>Request classes give per-class demand (docs/design/request-classes.html); a world also carries demand. Two overlays that both touch <code>originRps</code>.</td>
+    <td>Keep the shapes forward-compatible: a scenario override is keyed <code>node.key</code>; under classes it extends to <code>class.node.key</code> (per-class demand per world). R1 scopes to the single implicit class; the addressing already anticipates the class dimension, so multi-class worlds are additive later. Confirm the composition order (world &times; class).</td>
+  </tr>
+  <tr>
+    <td><b>UI staleness &mdash; which world do the chips show?</b></td>
+    <td>Node chips render one number, but three worlds compute three. A silent mix would lie.</td>
+    <td>Chips show the <b>active</b> world's value, tagged with the world (a small world-colour chip), exactly as the canvas is coloured by the active lens. The matrix is where cross-world numbers live; a single chip never blends worlds. Confirm the tagging affordance.</td>
+  </tr>
+  <tr>
+    <td><b>Do derived defaults refresh, or freeze?</b></td>
+    <td>If the design changes and the envelope moves, should a <code>derived</code> demand track the new envelope, or hold the value it was created with?</td>
+    <td><b>Live-derived until first manual edit, then frozen.</b> While a value is <code>derived</code>, it re-tracks the envelope on every edit (always a true fraction of current capacity). The moment the architect overrides it, provenance flips to <code>architect</code> and it freezes &mdash; his number is never silently overwritten. This reuses the existing provenance flip (&sect;5.3); confirm it is the wanted behaviour.</td>
+  </tr>
+  <tr>
+    <td><b>The trio's exact fractions</b></td>
+    <td>30&nbsp;/&nbsp;60&nbsp;/&nbsp;110% of envelope (&sect;5.1) are proposals.</td>
+    <td>Ship those as defaults, tunable in one place. Confirm the anchors, especially pessimistic&nbsp;&gt;&nbsp;100% (a stress world that <em>should</em> break) vs. a &le;100% &ldquo;busy but surviving&rdquo; reading.</td>
+  </tr>
+  <tr>
+    <td><b>Scenario colours / lens UX</b></td>
+    <td>The active-world lens needs a colour language, shared with the class lens.</td>
+    <td>One palette for &ldquo;named overlay you select&rdquo; (worlds and classes both). Confirm whether worlds and classes share a colour axis or need distinct ones when both are declared.</td>
+  </tr>
+</table>
+
+<h2><span class="no">10</span>Build plan — R1 &rarr; R4, each gate independently green</h2>
+<p class="lead">Sequenced so the additive default is proven byte-identical first, the envelope (the derived-default source) exists before anything derives from it, and the auto-created trio lands only once its inputs are trustworthy.</p>
+<table>
+  <tr><th>Release</th><th>Scope</th><th>Gate (done when)</th></tr>
+  <tr>
+    <td><b>R0 · the role axis</b><br><span class="tag new">prerequisite</span></td>
+    <td>Add <code>role</code> (<code>fact-assumption</code>&nbsp;|&nbsp;<code>resource-limit</code>&nbsp;|&nbsp;<code>computed</code>&nbsp;|&nbsp;<code>promise</code>) to the registry key metadata; surfaces render <em>by</em> it (the <code>originRps</code>-as-limit confusion fixed). No behavioural change &mdash; classification only.</td>
+    <td>every key carries a role; the assumptions register + node chips render by role; a lint asserts every key is classified (one-form-per-kind, mechanical).</td>
+  </tr>
+  <tr>
+    <td><b>R1 · the envelope</b><br><span class="tag new">TASK-85 core</span></td>
+    <td>Compute the capacity envelope (per-origin max-demand-s.t.-SLOs via the native inversion), the breaking order, and the knee (sweep to the edge); DES-confirm the edge. The simulated surfaces show the envelope when no demand is declared.</td>
+    <td>a design with no demand shows &ldquo;holds to X req/s; first break: &lt;node&gt;; knee at &lt;load&gt;&rdquo;; differential + analytic anchors per house rigor; no surface renders empty-with-no-explanation.</td>
+  </tr>
+  <tr>
+    <td><b>R2 · named worlds</b><br><span class="tag now">the model</span></td>
+    <td>Add <code>AssumptionScenario</code> as data (schema&nbsp;6&rarr;7, additive). The System-panel scenario list + active selector; edit-into-active-world; ambient all-world <code>EvaluateBatch</code>; the metrics&times;worlds matrix + per-world verdicts. MCP tools.</td>
+    <td>every existing design (no worlds) evaluates byte-for-byte identical (golden pin); a three-world design shows the matrix; editing writes the active world; old exports load.</td>
+  </tr>
+  <tr>
+    <td><b>R3 · the hit (auto-defaults)</b><br><span class="tag new">&ldquo;this could be a hit&rdquo;</span></td>
+    <td>Auto-create the pessimistic/real/optimistic trio with envelope-derived demand (&sect;5.1) and range-end non-demand values where polarity is known (&sect;5.2); provenance <code>derived</code> with the distinct badge; live-derive-until-edited (&sect;9). No invented numbers anywhere.</td>
+    <td>a fresh design offers the trio pre-filled; every derived value traces to the envelope/a declared range and is badged; editing flips to <code>architect</code> and freezes; the honesty rule holds (grep for hard-coded demand = 0).</td>
+  </tr>
+  <tr>
+    <td><b>R4 · consequences</b><br><span class="tag now">make it pay</span></td>
+    <td>The design-doc scenario-comparison section; robust Improve (worst-world objective); per-world DES tails at rest; next-move guidance per/worst world (TASK-83 seam).</td>
+    <td>the generated doc carries the per-world table; Improve holds SLOs across the selected worlds; both shells + MCP read one composition.</td>
+  </tr>
+</table>
+
+<h2><span class="no">11</span>Non-goals</h2>
+<table>
+  <tr><td><b>No invented world numbers</b></td><td>The auto-created trio derives every value from this design's own envelope and declared ranges &mdash; never a market figure, a fabricated traffic count, or a guessed price. No envelope / no range &rArr; no override (the feature stays silent). This is the invariant, not a nicety.</td></tr>
+  <tr><td><b>No mandatory demand</b></td><td>The tool never demands a demand to answer. The envelope is the default; a scenario is opt-in refinement. The whole design exists to <em>avoid</em> forcing a number.</td></tr>
+  <tr><td><b>Scenarios override only fact-assumptions</b></td><td>A world is a belief about the outside world, not a design variant (that is Improve / limits) or a requirement (that is an SLO). The role axis enforces this mechanically; a scenario can never silently retune a limit or loosen a promise.</td></tr>
+  <tr><td><b>No new solver</b></td><td>Named worlds ride the existing contract <code>Scenario</code>/<code>EvaluateBatch</code> seam and the TASK-81 ambient loop; the envelope rides the native inversion; robust Improve rides the existing search. No MiniZinc/clingo/DES <em>engine</em> change &mdash; the DES gains only per-world routing of already-modelled quantities.</td></tr>
+  <tr><td><b>No engine domain leakage</b></td><td>A scenario is opaque overrides on <code>"node|key"</code> coordinates and a role tag on keys &mdash; the engine still knows nothing of demand, worlds, or AWS. All meaning stays in content; the engine stays domain-agnostic.</td></tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <span class="path">docs/design/assumption-model.html</span> · the assumption model (envelope · scenarios · ranges) · the owner's rejection of demanded demand, resolved into one space read three ways · grounded in <span class="path">content/sda/src/{registry,uncertainty,manifest,doc-model,sweep,behaviors,request-class}.ts</span>, <span class="path">engine/solver-contract/src/{capability/evaluate-batch,native/search,conformance/corpus}.ts</span>, <span class="path">app/core/src/document.ts</span>, <span class="path">app/presenter/src/summary.ts</span> · realises TASK-85 (envelope) + TASK-83 (ambient guidance) under the north-star + one-form-per-kind · one space · three views · never a guess.
+</footer>
+</div>
+</body>
+</html>

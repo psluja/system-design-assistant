@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow Transformations R2 — the surface · SDA Design</title>
+<style>
+  :root{
+    --ink:#1a1d23; --ink2:#4b5263; --paper:#fbfaf7; --card:#ffffff;
+    --accent:#0b6e6e; --accent2:#b4530a; --line:#e5e1d8; --ok:#176b37; --warn:#a33; --code:#f2f0ea;
+    --amp:#b4530a; --red2:#0b6e6e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 "Georgia","Charter",'Times New Roman',serif}
+  header{background:linear-gradient(135deg,#3a2506,#b4530a);color:#fff;padding:56px 24px 44px}
+  .w{max-width:880px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px;letter-spacing:-.01em}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.9;max-width:660px}
+  .meta{font:12px/1.4 "Segoe UI",system-ui,sans-serif;opacity:.7;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#5a3305}
+  h2 .no{color:var(--accent);margin-right:10px;font-variant-numeric:tabular-nums}
+  h3{font:600 17px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:26px 0 8px}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:var(--card)}
+  th{background:#5a3305;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent2);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.teal{border-left-color:var(--accent)}
+  .callout b:first-child{font-family:"Segoe UI",system-ui,sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center}
+  .step{display:flex;gap:14px;margin:14px 0;font-family:"Segoe UI",system-ui,sans-serif;font-size:15px}
+  .step .n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+  footer{margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2)}
+</style>
+</head>
+<body>
+<header>
+  <div class="w">
+    <h1>Flow Transformations — R2: the surface</h1>
+    <div class="sub">Making the engine’s new truth <em>visible and touchable</em>: rates on the wires, transform knobs on every component, in both shells — native-first in VS Code, popover-first on the web.</div>
+    <div class="meta">SDA design document · 2026-07-02 · R1 (engine) shipped in 1f10a05 · status: for owner review</div>
+  </div>
+</header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas — services, databases, queues, connected by wires — and the tool <em>computes</em> that design instead of merely drawing it: it derives each component's load, latency, availability and cost, checks them against the architect's requirements, and can search for better configurations. This document is self-contained; earlier design documents are optional further reading, not prerequisites.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style='white-space:nowrap'><b>the two shells</b></td><td>SDA ships as a web application and as a Visual Studio Code extension; both render the same canvas from shared code.</td></tr>
+  <tr><td style='white-space:nowrap'><b>presenter</b></td><td>a shared library that turns raw engine results into display-ready data, so both shells show identical numbers by construction.</td></tr>
+  <tr><td style='white-space:nowrap'><b>transform</b></td><td>a declared function on a port or wire (introduced in the companion document) that changes the traffic rate an edge carries — e.g. 'this port emits 100 log lines per request'.</td></tr>
+  <tr><td style='white-space:nowrap'><b>pill</b></td><td>the small rounded label this document introduces on a wire, showing the rate the wire actually carries (e.g. '×100 → 100k/s').</td></tr>
+  <tr><td style='white-space:nowrap'><b>Inspector</b></td><td>the side panel showing the selected component's editable properties.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>What R2 must achieve</h2>
+<p class="lead">R1 made the engine compute transformed flows. R2 has one job: an architect glancing at the canvas must <b>see</b> what each wire really carries, and change any transform <b>in two clicks</b> — on every component, exactly as the owner required.</p>
+<table>
+  <tr><th>Outcome</th><th>Where</th></tr>
+  <tr><td><b>Rates on the wires</b> — every edge can show its true carried rate; transformed edges announce themselves</td><td>shared canvas (both shells)</td></tr>
+  <tr><td><b>Transform knobs</b> — view/set/clear per port, per instance</td><td>web Inspector · VS Code native tree</td></tr>
+  <tr><td><b>Sourced catalog defaults</b> — only where AWS documents a fixed behavior</td><td>content</td></tr>
+  <tr><td><b>The deliverable knows</b> — generated design doc lists active transforms</td><td>design-doc generator</td></tr>
+</table>
+
+<h2><span class="no">2</span>One brain, two faces (the anti-drift rule)</h2>
+<p>Per the “web is a dumb renderer” doctrine, <b>all edge-rate math lives in ONE new presenter module</b>, consumed verbatim by both shells:</p>
+<figure>
+  <div class="svgc">
+  <svg width="720" height="180" viewBox="0 0 720 180" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <rect x="10" y="60" width="170" height="60" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/>
+    <text x="95" y="85" text-anchor="middle" font-size="13" font-weight="600">evaluation</text>
+    <text x="95" y="103" text-anchor="middle" font-size="12" fill="#4b5263">served per node</text>
+    <rect x="250" y="60" width="220" height="60" rx="9" fill="#fdf2e2" stroke="#b4530a"/>
+    <text x="360" y="80" text-anchor="middle" font-size="13" font-weight="600">@sda/presenter · edgeRates()</text>
+    <text x="360" y="98" text-anchor="middle" font-size="12" fill="#8a5a00">rate = applyTransform(f_out, served)</text>
+    <text x="360" y="112" text-anchor="middle" font-size="11" fill="#8a5a00">applyTransform imported FROM the engine</text>
+    <rect x="540" y="18" width="170" height="52" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="625" y="40" text-anchor="middle" font-size="13" font-weight="600">web canvas</text>
+    <text x="625" y="57" text-anchor="middle" font-size="12" fill="#4b5263">edge labels + popover</text>
+    <rect x="540" y="110" width="170" height="52" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="625" y="132" text-anchor="middle" font-size="13" font-weight="600">VS Code webview</text>
+    <text x="625" y="149" text-anchor="middle" font-size="12" fill="#4b5263">same labels · native edit</text>
+    <line x1="180" y1="90" x2="245" y2="90" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <line x1="470" y1="78" x2="535" y2="48" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <line x1="470" y1="102" x2="535" y2="132" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+  </svg>
+  </div>
+  <figcaption>New <code>presenter/edge-rates.ts</code>: (document, evaluation, catalog) → per-edge {rate, transform, tone}. The transform arithmetic is <b>imported from the engine</b> (one exported <code>applyTransform</code>), never re-implemented — the number on the wire is the solver’s number by construction.</figcaption>
+</figure>
+<div class="callout teal"><b>Anti-drift invariant:</b> the presenter never re-derives engine math. R1 deliberately placed transforms in the shared expression seam; R2 extends the same discipline to pixels: one function, one import path, zero copies. A unit test pins presenter edge rates against a full engine evaluation.</div>
+
+<h2><span class="no">3</span>The canvas language — rates on wires</h2>
+<figure>
+  <div class="svgc">
+  <svg width="720" height="230" viewBox="0 0 720 230" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8b8fa3"/></marker></defs>
+    <rect x="20" y="85" width="150" height="56" rx="9" fill="#fff" stroke="#3b6fd4"/>
+    <text x="95" y="108" text-anchor="middle" font-size="13" font-weight="600">report generator</text>
+    <text x="95" y="126" text-anchor="middle" font-size="12" fill="#4b5263">1,000 req/s served</text>
+    <rect x="540" y="20" width="150" height="52" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="615" y="42" text-anchor="middle" font-size="13" font-weight="600">events bus</text>
+    <rect x="540" y="150" width="150" height="52" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="615" y="172" text-anchor="middle" font-size="13" font-weight="600">log pipeline</text>
+    <path d="M170 100 C 330 80, 420 55, 535 46" fill="none" stroke="#8b8fa3" stroke-width="1.6" marker-end="url(#b)"/>
+    <path d="M170 126 C 330 150, 420 168, 535 176" fill="none" stroke="#b4530a" stroke-width="2.2" marker-end="url(#b)"/>
+    <!-- plain edge: hover-only rate -->
+    <rect x="305" y="52" width="96" height="24" rx="12" fill="#f4f3ef" stroke="#d8d4c8"/>
+    <text x="353" y="68" text-anchor="middle" font-size="12" fill="#4b5263">1,000 /s</text>
+    <text x="353" y="40" text-anchor="middle" font-size="10.5" fill="#9a978e">(on hover — identity edges stay quiet)</text>
+    <!-- transformed edge: persistent badge -->
+    <rect x="286" y="140" width="150" height="26" rx="13" fill="#fdf2e2" stroke="#b4530a"/>
+    <text x="361" y="157" text-anchor="middle" font-size="12.5" font-weight="700" fill="#8a5a00">×100 → 100,000 /s</text>
+  </svg>
+  </div>
+  <figcaption>The visual grammar: identity edges stay clean (exact rate on hover); a TRANSFORMED edge earns a persistent pill — the function and the resulting rate. Click the pill → edit that port’s transform.</figcaption>
+</figure>
+<table>
+  <tr><th>Rule</th><th>Rationale</th></tr>
+  <tr><td>Identity edges show <b>no persistent label</b>; exact rate appears on edge hover (tooltip-pill)</td><td>50 wires × permanent numbers = noise; the interesting places are the non-1:1 ones</td></tr>
+  <tr><td>A transformed edge gets a <b>persistent pill</b>: function + resulting rate (<code>×100 → 100k/s</code>, <code>÷100 → 10/s</code>, <code>cap 500/s</code>, <code>p=0.01 → 10/s</code>)</td><td>the whole point of the feature — the surprise must be visible at a glance</td></tr>
+  <tr><td>Tone: <b>amber</b> for amplification (k&gt;1), <b>teal</b> for reduction, <b>gray</b> for cap/window, <b>dashed pill</b> for prob</td><td>read the SHAPE of the system without reading numbers</td></tr>
+  <tr><td>IN-side transforms render at the target end of the edge (small chevron pill), OUT-side mid-edge</td><td>mirrors ownership: sender’s emission vs receiver’s consumption</td></tr>
+  <tr><td>Rates come from the LIVE evaluation; with no traffic origin the pills show the function only (no fake numbers)</td><td>the tool must not lie — no rate without a declared load</td></tr>
+</table>
+
+<h2><span class="no">4</span>Editing — two clicks on every component</h2>
+<h3>Web (popover-first)</h3>
+<div class="step"><div class="n">1</div><div>Click the pill on an edge (or the port row in the Inspector) → a small popover: function dropdown (<code>none · ratio · batch · cap · window · prob</code>) + value field with unit hint (× / n / req/s / ms / p).</div></div>
+<div class="step"><div class="n">2</div><div>Apply → <code>studio.dispatch(setTransform)</code> (shipped in R1, undoable). Pills and downstream verdicts update live; a manifest-sourced default shows a “reset to catalog” affordance.</div></div>
+<h3>VS Code (native-first)</h3>
+<div class="step"><div class="n">1</div><div><b>Selected Node</b> tree gains a <b>Ports</b> section: each port row shows direction, protocols and the active transform (override marked <code>modified</code>, GitLens-style). Inline <code>$(edit)</code> → QuickPick (function) → validated InputBox (value); inline <code>$(discard)</code> clears an override.</div></div>
+<div class="step"><div class="n">2</div><div>The edit is a <b>document text edit</b> (new pure <code>setTransformText</code> in document-edits.ts, same pattern as setSloText) → native undo/dirty/save. The canvas pill click posts the existing <code>select</code> and reveals the Ports row — editing stays native (doctrine), the webview never grows its own form.</div></div>
+<div class="callout"><b>Frozen protocol untouched.</b> The webview already receives the document (pills render from it + evaluation); edits flow through existing seams (web: dispatch; vscode: document edit → docExternal). No new host↔webview message types.</div>
+
+<h2><span class="no">5</span>Catalog defaults — sourced or absent</h2>
+<table>
+  <tr><th>Component</th><th>Default</th><th>Source / honesty</th></tr>
+  <tr><td><code>queue.sqs</code> consumer edge</td><td><code>batch(10)</code> <b>documented ceiling as a HINT, not preset</b> — shipped as a describe/tooltip note, default stays identity</td><td>ReceiveMessage returns ≤ 10 messages (AWS docs); the REAL batch size is an app choice → architect sets it per instance</td></tr>
+  <tr><td>everything else</td><td>identity</td><td>fan-outs, log ratios, cache-miss ratios are workload facts, not component facts — inventing defaults would lie; the per-instance knob is the feature</td></tr>
+</table>
+<p>doc-8 gets the coverage row + this honesty rule; the design-doc generator (doc-7 deliverable) lists every ACTIVE transform in the capacity section (“log pipeline receives ×100 of checkout traffic”).</p>
+
+<h2><span class="no">6</span>Build plan &amp; gates</h2>
+<table>
+  <tr><th>Step</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td>1</td><td>engine exports <code>applyTransform</code>; presenter <code>edge-rates.ts</code> (+ unit tests pinning against a full evaluation)</td><td>presenter suite</td></tr>
+  <tr><td>2</td><td>shared canvas: pill rendering + hover rates + click-to-edit hook (flow-nodes/edges)</td><td>web build + vscode webview build</td></tr>
+  <tr><td>3</td><td>web popover editor + Inspector port rows</td><td>web suite + playwright smoke (set ratio 100 → pill ×100 → downstream verdict flips)</td></tr>
+  <tr><td>4</td><td>vscode Ports tree section + <code>setTransformText</code> + e2e (edit via tree → document dirty → diagnostic updates)</td><td>vscode suite + runTest e2e</td></tr>
+  <tr><td>5</td><td>content hints + doc-8 + design-doc generator section</td><td>content suite</td></tr>
+  <tr><td>6</td><td>screenshots both shells, both themes; vsix bump + install</td><td>owner review — this is the UX round, screenshots are the deliverable</td></tr>
+</table>
+<div class="callout teal"><b>Definition of done:</b> the owner reproduces the report-generator story end-to-end by hand in BOTH shells: place three nodes, set ×100 on the log port in two clicks, SEE 100k/s on the wire and the log tier’s violation — without reading any documentation.</div>
+
+<footer>
+  SDA · design doc <code>docs/design/flow-transformations-r2.html</code> · pairs with <code>flow-transformations.html</code> (R1, shipped), doc-7 (deliverable), doc-8 (coverage), doc-14 (UX).<br>
+  R1 engine seam: commit <code>1f10a05</code>. Owner directives honored: full rigor on the UX round; transforms changeable on every component.
+</footer>
+</div>
+</body>
+</html>

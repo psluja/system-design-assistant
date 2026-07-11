@@ -1,0 +1,17 @@
+{
+  "name": "@sda/engine-core",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Domain-agnostic engine core (skeleton). Knows nothing about system design — see Backlog doc-1.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

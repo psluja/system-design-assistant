@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ideal Layout — semantic placement: SDA lays out MEANING, not an abstract graph · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:740px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{background:#1d2330;color:#e7e4da;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:18px 0;font:13px/1.62 "Cascadia Code",Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  pre .c{color:#7f8ba3;font-style:italic}
+  pre .k{color:#6fb3ff}
+  pre .t{color:#8fe3c0}
+  pre .s{color:#e0b070}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14.5px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:10px 13px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center;overflow-x:auto}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.now{background:#e9f5f2;color:#0b6e6e}
+  .tag.p0{background:#fbe7e7;color:#a33}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:13px}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+  .wbar{display:inline-block;height:10px;border-radius:3px;background:var(--accent);vertical-align:middle;margin-right:7px}
+  .num{font-family:"Cascadia Code",Consolas,monospace;text-align:right;white-space:nowrap}
+  .up{color:var(--ok);font-weight:600}
+  .dn{color:var(--warn);font-weight:600}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>The Ideal Layout</h1>
+  <div class="sub">Twenty years of being irritated by layout algorithms, and one question: <em>&ldquo;czy możemy być najlepsi? marzy mi się idealny algorytm&rdquo;</em> &mdash; <b>can we be the best?</b> This document argues we can, and says exactly how. The thesis is one sentence: a generic engine (dagre, ELK, React&nbsp;Flow&nbsp;Pro) lays out an <em>abstract graph</em> &mdash; anonymous nodes and edges; SDA <b>knows the diagram</b> &mdash; its flows, its roles, its sync/async wires, its request classes, its groups &mdash; and so it can lay out <b>meaning</b>. That is an advantage no generic tool can copy, because it has thrown the meaning away before layout begins. Here is the objective it optimises, the search that spends real GPU compute to find the optimum, and the benchmark that makes &ldquo;best&rdquo; a <em>measured</em> claim rather than a felt one.</div>
+  <div class="meta">SDA design document · 2026-07-04 · the ideal layout (semantic placement + GPU-scored search) · status: for owner review — not started · TASK-88</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design &mdash; load, latency, availability, cost, feasibility &mdash; live on every edit. Because the drawing is the primary surface, <b>how it is laid out</b> is not cosmetic garnish: a diagram an architect trusts must read cleanly &mdash; flows left-to-right, tiers aligned, the read path visibly distinct from the write path. Today SDA auto-arranges a diagram with <b>Tidy</b> (a classic layered layout, glossary below) in under 16&nbsp;ms, and routes the wires with a pure-TypeScript orthogonal router. Both are good. This document is about the <em>ceiling</em>: what the best-possible layout would be, why SDA is uniquely positioned to reach it, and a design that spends <b>seconds of background GPU compute</b> to search for it &mdash; without ever making the canvas jump, and without changing a single computed number (a layout is <em>beauty</em>, never <em>truth</em> &mdash; &sect;3.5).</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>Tidy / layered layout</b></td><td>SDA's current auto-arrange (<span class="path">app/presenter/src/layout.ts</span>): the textbook <em>Sugiyama</em> recipe &mdash; put each node in a <b>column</b> = its longest-path depth from the sources (so flow reads left&rarr;right), order rows within a column by the <b>barycenter</b> (average height) of their upstream neighbours to reduce crossings, then centre each column. Fast, deterministic, dependency-free. The <b>seed</b> this design refines, never discards.</td></tr>
+  <tr><td style="white-space:nowrap"><b>the router</b></td><td>SDA's orthogonal edge router (<span class="path">app/presenter/src/edge-routing.ts</span>): draws right-angle wires that avoid node boxes &mdash; canonical straight/Z/L shapes first, a Hanan-grid A* only when blocked. Pure TS, deterministic, ~2&nbsp;ms median. Critically, it produces the <b>real geometry that ships</b>, so bends and crossings can be <em>measured</em> on it, not estimated.</td></tr>
+  <tr><td style="white-space:nowrap"><b>crossing · bend</b></td><td>A <b>crossing</b> is where two wires cross; a <b>bend</b> is a 90&deg; corner in one wire. Fewer of each reads cleaner. These are the metrics every generic layout engine optimises &mdash; and the <em>only</em> ones it can, because they need no knowledge of what the nodes mean.</td></tr>
+  <tr><td style="white-space:nowrap"><b>dagre · ELK (elkjs)</b></td><td>The two dominant graph-layout libraries the industry uses (dagre = the layered layout behind most JS diagram tools; ELK = the Eclipse Layout Kernel, elkjs is its JS port). Both take a bare node/edge graph and optimise crossings/bends/length. They are the benchmark SDA must beat (&sect;6) &mdash; and the proof of the thesis, because they <em>cannot</em> optimise the semantic terms &sect;2 adds.</td></tr>
+  <tr><td style="white-space:nowrap"><b>flow · role · group · class</b></td><td>The <b>meaning</b> SDA has and a generic engine does not. A <b>flow</b> is one request path from a traffic origin to its terminal (<span class="path">content/sda/src/system.ts</span>, <code>requestFlows</code>). A <b>role</b> is a node's tier &mdash; client / edge / compute / store &mdash; read from its type. A <b>group</b> is an explicit visual container (<code>Group</code>, member ids). A <b>request class</b> is a named commodity with its own acyclic wire membership over a shared topology (<span class="path">content/sda/src/request-class.ts</span>). A wire is <b>sync</b> or <b>async</b> (<code>semantics</code> on the edge).</td></tr>
+  <tr><td style="white-space:nowrap"><b>the three-layer discipline</b></td><td>SDA's honesty rule for GPU compute, established by TASK-81: the <b>GPU proposes</b> in fp32 (fast, approximate, preview-grade), the <b>CPU proves</b> in fp64 (exact, verdict-grade), and fp32 is never presented as final truth. This document adds a third proof for geometry: the <b>router arbitrates</b> &mdash; the winner's bends and crossings are measured on real routed wires before it is applied.</td></tr>
+  <tr><td style="white-space:nowrap"><b>annealing / beam · seed</b></td><td>A <b>search</b> over layouts: try a candidate, perturb it (swap two rows, nudge a node onto a guideline), keep it if it scores better, occasionally accept a worse one to escape a local optimum (<em>simulated annealing</em>); or keep the best <em>k</em> at each step (<em>beam</em>). A recorded <b>seed</b> drives the randomness so the same design always yields the same layout (reproducible &mdash; &sect;5.2).</td></tr>
+  <tr><td style="white-space:nowrap"><b>pin / anchor</b></td><td>A node the architect hand-placed. The optimiser must treat it as fixed &mdash; a <b>hard constraint</b> it lays out <em>around</em>, never over (&sect;5.3). The tool polishing a diagram must never undo a deliberate human placement.</td></tr>
+  <tr><td style="white-space:nowrap"><b>resting handshake</b></td><td>TASK-81's UX pattern: while the design is being edited, show a fast preview; when it comes to <b>rest</b>, deliver the confirmed result. Here: Tidy applies instantly; &ldquo;polishing&hellip;&rdquo; refines in the background; the better layout arrives without a canvas jump.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The thesis — SDA lays out meaning, not an abstract graph</h2>
+<p class="lead">Every generic layout engine solves the same problem: given anonymous nodes and anonymous edges, place them to minimise crossings and bends. It is a good problem and these engines solve it well. But they solve it <em>blind</em> &mdash; the moment a diagram is handed to dagre or ELK, everything that made it a <em>system</em> (which node is a client, which path is the write, which hop is asynchronous) has been erased down to circles and lines. SDA never erases it. The design on the canvas is a typed-property graph with flows, roles, sync/async wires, request classes and groups still attached &mdash; so SDA can place a node <em>because it is a store on the read path</em>, not merely because a crossing-count says so. <b>That is the unfair advantage, and it is structural: a generic tool cannot copy it without first becoming SDA.</b></p>
+
+<div class="callout"><b>The one-sentence thesis.</b> A generic engine optimises the <em>graph</em> (crossings, bends, length &mdash; the terms that survive when meaning is thrown away); SDA optimises the <em>diagram</em> (those same terms <b>plus</b> flow lanes, role layering, read/write separation, branch symmetry, async offset, group compactness &mdash; the terms only a tool that kept the meaning can even express). Best-in-industry is therefore not a matter of a cleverer crossing-minimiser; it is a matter of optimising a <b>richer objective nobody else can write down</b>.</p></div>
+
+<figure>
+  <div class="svgc">
+  <svg width="860" height="360" viewBox="0 0 860 360" font-family="Segoe UI,system-ui,sans-serif">
+    <defs>
+      <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7a8394"/></marker>
+      <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2b5f86"/></marker>
+    </defs>
+    <!-- LEFT: generic engine -->
+    <text x="24" y="24" font-size="13" font-weight="700" fill="#4b5263">A generic engine sees an ABSTRACT GRAPH</text>
+    <text x="24" y="41" font-size="10.5" fill="#7a8394">nodes + edges · optimises crossings &amp; bends only</text>
+    <rect x="18" y="52" width="392" height="288" rx="9" fill="#f7f6f2" stroke="#e5e1d8"/>
+    <!-- anonymous scrambled graph -->
+    <g stroke="#9aa3b2" stroke-width="1.4" fill="none">
+      <path d="M70 120 L170 90" marker-end="url(#a1)"/>
+      <path d="M70 120 L170 210" marker-end="url(#a1)"/>
+      <path d="M170 90 L280 150" marker-end="url(#a1)"/>
+      <path d="M170 210 L280 150" marker-end="url(#a1)"/>
+      <path d="M280 150 L360 100" marker-end="url(#a1)"/>
+      <path d="M280 150 L360 250" marker-end="url(#a1)"/>
+      <path d="M170 210 L360 250" marker-end="url(#a1)"/>
+      <path d="M170 90 L280 290" marker-end="url(#a1)"/>
+    </g>
+    <g font-size="10.5" fill="#3a3f4b" text-anchor="middle">
+      <circle cx="70" cy="120" r="15" fill="#fff" stroke="#9aa3b2"/><text x="70" y="124">n1</text>
+      <circle cx="170" cy="90" r="15" fill="#fff" stroke="#9aa3b2"/><text x="170" y="94">n2</text>
+      <circle cx="170" cy="210" r="15" fill="#fff" stroke="#9aa3b2"/><text x="170" y="214">n5</text>
+      <circle cx="280" cy="150" r="15" fill="#fff" stroke="#9aa3b2"/><text x="280" y="154">n3</text>
+      <circle cx="280" cy="290" r="15" fill="#fff" stroke="#9aa3b2"/><text x="280" y="294">n7</text>
+      <circle cx="360" cy="100" r="15" fill="#fff" stroke="#9aa3b2"/><text x="360" y="104">n4</text>
+      <circle cx="360" cy="250" r="15" fill="#fff" stroke="#9aa3b2"/><text x="360" y="254">n6</text>
+    </g>
+    <text x="214" y="326" font-size="10" fill="#a33" text-anchor="middle">2 crossings min'd — but no tier, no lane, no read/write, no async</text>
+
+    <!-- RIGHT: SDA -->
+    <text x="452" y="24" font-size="13" font-weight="700" fill="#183a56">SDA sees the DIAGRAM'S MEANING</text>
+    <text x="452" y="41" font-size="10.5" fill="#0b6e6e">flows · roles · sync/async · classes · groups</text>
+    <rect x="446" y="52" width="396" height="288" rx="9" fill="#fff" stroke="#0b6e6e" stroke-opacity=".35"/>
+    <!-- role columns header -->
+    <g font-size="9" fill="#7a8394" text-anchor="middle">
+      <text x="486" y="70">client</text><text x="566" y="70">edge</text><text x="646" y="70">compute</text><text x="800" y="70">stores</text>
+    </g>
+    <line x1="446" y1="76" x2="842" y2="76" stroke="#eee"/>
+    <!-- write lane band -->
+    <rect x="452" y="150" width="384" height="40" rx="6" fill="#eef4fb"/><text x="828" y="146" font-size="8.5" fill="#3b6fd4" text-anchor="end">WRITE lane</text>
+    <!-- read/index lane -->
+    <rect x="620" y="86" width="216" height="34" rx="6" fill="#eaf6ee"/><text x="828" y="82" font-size="8.5" fill="#176b37" text-anchor="end">READ · index lane</text>
+    <!-- report lane -->
+    <rect x="620" y="230" width="216" height="34" rx="6" fill="#eaf6ee"/><text x="828" y="226" font-size="8.5" fill="#176b37" text-anchor="end">READ · report lane</text>
+    <!-- nodes -->
+    <g font-size="9.5" text-anchor="middle">
+      <rect x="470" y="158" width="34" height="24" rx="4" fill="#fff" stroke="#3b6fd4"/><text x="487" y="174" fill="#274">clt</text>
+      <rect x="550" y="158" width="34" height="24" rx="4" fill="#fff" stroke="#3b6fd4"/><text x="567" y="174">gw</text>
+      <rect x="630" y="158" width="34" height="24" rx="4" fill="#fff" stroke="#3b6fd4"/><text x="647" y="174">cmd</text>
+      <rect x="790" y="158" width="40" height="24" rx="4" fill="#fff" stroke="#3b6fd4"/><text x="810" y="174">pg</text>
+      <rect x="710" y="158" width="34" height="24" rx="4" fill="#fff" stroke="#b4530a"/><text x="727" y="174">sns</text>
+      <rect x="628" y="92" width="34" height="22" rx="4" fill="#fff" stroke="#176b37"/><text x="645" y="107">idxq</text>
+      <rect x="700" y="92" width="34" height="22" rx="4" fill="#fff" stroke="#176b37"/><text x="717" y="107">idxr</text>
+      <rect x="790" y="92" width="40" height="22" rx="4" fill="#fff" stroke="#176b37"/><text x="810" y="107">proj</text>
+      <rect x="628" y="236" width="34" height="22" rx="4" fill="#fff" stroke="#176b37"/><text x="645" y="251">rptq</text>
+      <rect x="700" y="236" width="34" height="22" rx="4" fill="#fff" stroke="#176b37"/><text x="717" y="251">rptr</text>
+      <rect x="790" y="236" width="40" height="22" rx="4" fill="#fff" stroke="#176b37"/><text x="810" y="251">s3</text>
+    </g>
+    <g stroke="#3b6fd4" stroke-width="1.4" fill="none">
+      <path d="M504 170 L550 170" marker-end="url(#a2)"/>
+      <path d="M584 170 L630 170" marker-end="url(#a2)" stroke-dasharray="4 3"/>
+      <path d="M664 170 L790 170" marker-end="url(#a2)"/>
+    </g>
+    <!-- async spur to sns then fan to lanes -->
+    <g stroke="#b4530a" stroke-width="1.3" fill="none" stroke-dasharray="4 3">
+      <path d="M664 165 L710 165" marker-end="url(#a2)"/>
+      <path d="M727 158 L727 114 L700 114" />
+      <path d="M727 182 L727 236 L700 236" />
+    </g>
+    <text x="640" y="326" font-size="10" fill="#0b6e6e" text-anchor="middle">tiers aligned · write vs read separated · async (dashed) offset · branches mirrored</text>
+  </svg>
+  </div>
+  <figcaption>The same CQRS design, two ways. <b>Left:</b> a generic engine minimises crossings over anonymous <code>n1..n7</code> &mdash; correct, but structureless. <b>Right:</b> SDA reads the design's own semantics &mdash; role columns (client&rarr;edge&rarr;compute&rarr;stores), the write path on its own lane, the two projection paths as mirrored read lanes, the async hops drawn as offset dashed spurs. The right diagram is not merely prettier; it <em>teaches the architecture</em>. Only a tool that kept the meaning can draw it.</figcaption>
+</figure>
+
+<h2><span class="no">2</span>The objective — hard constraints, then weighted beauty <span class="tag new">the owner reviews these weights</span></h2>
+<p class="lead">A layout is chosen by <em>maximising a score</em>. That score has two parts: <b>hard constraints</b> that a candidate must satisfy to be legal at all (a candidate that violates one is rejected, never merely penalised), and a set of <b>weighted soft terms</b> whose sum is the aesthetic quality. Every soft term is normalised to <code>[0,1]</code> so the weights are the <em>only</em> place preference lives &mdash; and that vector is exactly what the owner should review, because it encodes what &ldquo;beautiful&rdquo; means for SDA.</p>
+
+<h3>2.1 Hard constraints — legality, not preference</h3>
+<p>These are booleans. A candidate layout either satisfies all of them or it is discarded before scoring. They are cheap to check and they guarantee the optimiser can never &ldquo;win&rdquo; the score by cheating geometry.</p>
+<table>
+  <tr><th>#</th><th>Hard constraint</th><th>How it is enforced</th></tr>
+  <tr><td>H1</td><td><b>No wire through a non-endpoint node.</b> The property the router already guarantees and the CQRS regression test pins at <code>0</code> cuts.</td><td>The winner is <em>routed</em> before it is applied (&sect;3.4); any candidate the router cannot route cleanly is infeasible. Reuses <code>segmentBlocked</code> / <code>pathHitsBox</code> (<span class="path">edge-routing.ts</span>).</td></tr>
+  <tr><td>H2</td><td><b>No node overlap.</b> Two node boxes, each inflated by the minimum clearance, are disjoint.</td><td>Pairwise AABB test; a proposed move that would overlap is rejected at candidate-generation time (cheap, O(<em>n</em>) with a spatial hash).</td></tr>
+  <tr><td>H3</td><td><b>Minimum spacings.</b> Column pitch, row gap, lane gap and group padding stay &ge; the constants Tidy already uses (<code>COLW</code>, <code>VGAP</code>, <code>LANE_GAP</code>, <code>PAD_X</code>).</td><td>Candidate moves quantise to a grid of those spacings; the spacings are constants shared with <span class="path">layout.ts</span> so Tidy and the optimiser agree.</td></tr>
+  <tr><td>H4</td><td><b>Group containment.</b> A node that belongs to group <em>G</em> sits inside <em>G</em>'s band; a node that does not, does not.</td><td>Group membership (<code>Group.members</code>) is a placement partition, exactly as Tidy's lanes are; a move that would eject a member is illegal.</td></tr>
+  <tr><td>H5</td><td><b>Pins are fixed.</b> A hand-placed (pinned, &sect;5.3) node's position is immovable.</td><td>Pinned nodes are removed from the free set; the optimiser lays out only around them.</td></tr>
+</table>
+
+<h3>2.2 The soft terms — normalised, weighted, summed</h3>
+<p>Let a layout be a set of node rectangles and the <em>routed</em> wire polylines. Each term below maps that geometry to a penalty <code>p&nbsp;&isin;&nbsp;[0,1]</code> (0 = perfect, 1 = worst plausible). The quality is <code>score&nbsp;=&nbsp;1&nbsp;&minus;&nbsp;&Sigma;&nbsp;w&#8339;&nbsp;p&#8339;</code>, with the weights summing to 1. The first three are the terms a generic engine also has; the rest are <b>SDA's semantic terms</b> &mdash; the ones that make us best.</p>
+<table>
+  <tr><th>Term</th><th>Penalty formula (normalised)</th><th>Proposed weight</th></tr>
+  <tr><td><b>crossings</b><br><span class="tag now">generic</span></td><td><code>X / X&#8407;</code> — routed wire&ndash;wire crossings over the pair bound <code>X&#8407;=E(E&minus;1)/2</code>. Counted on the <em>real</em> routed polylines, not straight-line estimates.</td><td class="num"><span class="wbar" style="width:36px"></span>0.18</td></tr>
+  <tr><td><b>bends</b><br><span class="tag now">generic</span></td><td><code>B / (b·E)</code> — total 90&deg; corners over a per-wire budget <code>b=4</code>. Read off the routed geometry (<span class="path">simplifyOrthogonal</span> corner count).</td><td class="num"><span class="wbar" style="width:20px"></span>0.10</td></tr>
+  <tr><td><b>wire length</b><br><span class="tag now">generic</span></td><td><code>L / (E·D)</code> — total routed arc length over <code>E</code>&times; the canvas diagonal <code>D</code> (a wire longer than the whole canvas is the worst case).</td><td class="num"><span class="wbar" style="width:20px"></span>0.10</td></tr>
+  <tr><td><b>block alignment</b><br><span class="tag new">first-class</span></td><td><code>1 &minus; aligned/alignable</code> — fraction of node centres NOT snapped (within &epsilon;) to a shared vertical or horizontal <em>guideline</em> used by &ge;2 nodes. Shared axes/rows/columns are a first-class reward, not an accident of the grid.</td><td class="num"><span class="wbar" style="width:32px"></span>0.16</td></tr>
+  <tr><td><b>lane coherence</b><br><span class="tag new">semantic</span></td><td>Per flow (<code>requestFlows</code>): the vertical spread of its members beyond the lane's natural height, plus a penalty when two flows of different <em>kind</em> (read vs write, or different request class) share a Y-band. Each flow wants to be one clean horizontal lane.</td><td class="num"><span class="wbar" style="width:24px"></span>0.12</td></tr>
+  <tr><td><b>role layering</b><br><span class="tag new">semantic</span></td><td>Count of wires that run <em>backward</em> in role order (<code>role(target)&nbsp;&lt;&nbsp;role(source)</code>) plus each node's column deviation from its role's canonical band. Drives clients left, stores right &mdash; from the type-tier map (&sect;4.1).</td><td class="num"><span class="wbar" style="width:20px"></span>0.10</td></tr>
+  <tr><td><b>symmetry</b><br><span class="tag new">semantic</span></td><td>For each fan-out into sibling sub-flows (e.g. <code>sns&rarr;{index, report}</code>): the asymmetry of the branches' vertical offsets and shapes about the fan-out axis. Parallel branches want to mirror.</td><td class="num"><span class="wbar" style="width:16px"></span>0.08</td></tr>
+  <tr><td><b>group compactness</b><br><span class="tag new">semantic</span></td><td>Per group: <code>(box_area &minus; &Sigma;member_area) / box_area</code> — wasted space in the container &mdash; plus a hard-edged penalty for any non-member intruding into the box.</td><td class="num"><span class="wbar" style="width:12px"></span>0.06</td></tr>
+  <tr><td><b>async offset</b><br><span class="tag new">semantic</span></td><td>Fraction of async wires (<code>semantics:'async'</code>) NOT drawn as a visually distinct spur (offset off the sync spine / on their own short run). Async should <em>look</em> async.</td><td class="num"><span class="wbar" style="width:8px"></span>0.04</td></tr>
+  <tr><td><b>area / aspect</b></td><td><code>&frac12;(area/(n·cell)) + &frac12;|aspect &minus; target|</code> — compactness against an <em>n</em>-node ideal area, plus deviation from a target aspect (default 16:10, tunable).</td><td class="num"><span class="wbar" style="width:8px"></span>0.04</td></tr>
+  <tr><td><b>label clearance</b></td><td>Count of edge-label / node-chip boxes that overlap another node or wire, over the label count. Labels must be readable, not buried.</td><td class="num"><span class="wbar" style="width:4px"></span>0.02</td></tr>
+</table>
+<div class="callout"><b>The weight vector is the whole preference &mdash; and it lives in ONE place.</b> Because every term is normalised, all of &ldquo;what SDA finds beautiful&rdquo; is these eleven numbers. They ship as a single exported constant (proposed: <code>LAYOUT_WEIGHTS</code>), tunable without touching the scorer, and are the headline thing for the owner to ratify (&sect;6). The <em>proposal</em> above front-loads crossings and alignment (the two an architect notices first) and gives real weight to the four semantic terms that are our moat &mdash; but the split is a policy, not a law.</div>
+
+<h3>2.3 Worked score — CQRS, raw Tidy vs the ideal <span class="tag now">the committed example</span></h3>
+<p>The canonical example (<span class="path">examples/cqrs.sda.json</span> &mdash; 11 nodes, 10 wires, <b>0 groups</b>): a client &rarr; gateway &rarr; command handler, which writes to Postgres (the source of truth) and publishes to an SNS topic that fans out to two projection pipelines &mdash; an Elasticsearch <em>index</em> path and an S3 <em>report</em> path. Scoring the current Tidy output against the ideal layout, term by term (penalty, 0 = perfect):</p>
+<table>
+  <tr><th>Term (weight)</th><th class="num">Tidy p</th><th class="num">Ideal p</th><th>What changed</th></tr>
+  <tr><td>crossings (0.18)</td><td class="num">0.00</td><td class="num">0.00</td><td>Both zero — Tidy + the router already win this. <b>The generic metric is a tie.</b></td></tr>
+  <tr><td>block alignment (0.16)</td><td class="num">0.46</td><td class="num">0.06</td><td>Tidy aligns columns by layer but centres each lane independently, so the two projection paths float at unrelated Y. The ideal snaps the two queues to one column, the two computes to the next, the two stores to the last.</td></tr>
+  <tr><td>lane coherence (0.12)</td><td class="num">0.55</td><td class="num">0.08</td><td>Tidy puts every ungrouped node in one lane, interleaving the write spur with both read paths. The ideal separates write / index / report into three bands.</td></tr>
+  <tr><td>wire length (0.10)</td><td class="num">0.30</td><td class="num">0.18</td><td>Shorter once the branches are lane-local rather than reaching across a shared column.</td></tr>
+  <tr><td>role layering (0.10)</td><td class="num">0.10</td><td class="num">0.02</td><td>Nearly right already (the pipeline's longest-path ≈ its role order); the ideal fixes the store/topic column tie.</td></tr>
+  <tr><td>bends (0.10)</td><td class="num">0.45</td><td class="num">0.25</td><td>Routed bends fall 18&rarr;10 (the routing round already took 24&rarr;18; placement takes the rest).</td></tr>
+  <tr><td>symmetry (0.08)</td><td class="num">0.60</td><td class="num">0.10</td><td>The index and report branches gain mirrored vertical offsets about the SNS fan-out.</td></tr>
+  <tr><td>group compactness (0.06)</td><td class="num" colspan="2" style="text-align:center">— inert —</td><td>CQRS declares no groups, so this term is <b>N/A</b>; its weight is renormalised away. (Honest: a term with no subject scores nothing, it does not score zero-perfect.)</td></tr>
+  <tr><td>async offset (0.04)</td><td class="num">1.00</td><td class="num">0.15</td><td>Tidy draws the async <code>gw&rarr;cmd</code> and the SNS fan-out identically to sync wires; the ideal offsets them as dashed spurs.</td></tr>
+  <tr><td>area / aspect (0.04)</td><td class="num">0.30</td><td class="num">0.20</td><td>Tighter, closer to 16:10.</td></tr>
+  <tr><td>label clearance (0.02)</td><td class="num">0.10</td><td class="num">0.05</td><td>Marginal.</td></tr>
+  <tr><td><b>aggregate score</b> (renorm. over the 10 active terms)</td><td class="num"><b>0.653</b></td><td class="num"><b>0.898</b></td><td><b><span class="up">+0.245</span></b> — a 25-point gain, driven almost entirely by the semantic terms (alignment, lane, symmetry, async). The generic terms were already near-optimal.</td></tr>
+</table>
+<div class="callout warn"><b>Read the worked score honestly, because it is the whole argument.</b> On <em>crossings</em> &mdash; the metric dagre and ELK live and die by &mdash; SDA and raw Tidy <b>tie at zero</b>. If layout were only crossings, we would have nothing to add. The entire 25-point gain comes from <b>alignment, lane coherence, symmetry and async offset</b> &mdash; terms a generic engine cannot score because it does not know the CQRS design has a write path, two read paths, and asynchronous fan-out. This is the thesis, quantified: <em>we are not a better crossing-minimiser; we optimise a strictly larger objective.</em></p></div>
+
+<h2><span class="no">3</span>The search — Tidy seeds, the semantic pass shapes, GPU proposes, CPU &amp; the router prove</h2>
+<p class="lead">Finding the layout that maximises &sect;2 is a search over node positions, port orders and lane orderings &mdash; a large, non-convex space. The design spends real background compute on it, structured as a pipeline that is always answering: an instant seed, a cheap deterministic shaping pass, then a GPU-accelerated refinement that proposes thousands of candidates and a CPU-plus-router stage that proves the winner. The three-layer discipline from TASK-81 governs every use of the GPU.</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="860" height="330" viewBox="0 0 860 330" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <text x="24" y="24" font-size="13" font-weight="700" fill="#183a56">The layout pipeline — always answering, refined in the background</text>
+    <!-- stage 0 -->
+    <rect x="18" y="46" width="150" height="86" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/>
+    <text x="93" y="68" font-size="12" font-weight="700" fill="#0b6e6e" text-anchor="middle">0 · Tidy seed</text>
+    <text x="93" y="86" font-size="9.5" fill="#4b5263" text-anchor="middle">layered / Sugiyama</text>
+    <text x="93" y="100" font-size="9.5" fill="#4b5263" text-anchor="middle">&lt;16ms · instant</text>
+    <text x="93" y="118" font-size="9" fill="#0b6e6e" text-anchor="middle" font-style="italic">applied at once</text>
+    <!-- stage 1 -->
+    <rect x="182" y="46" width="158" height="86" rx="9" fill="#fff" stroke="#3b6fd4"/>
+    <text x="261" y="68" font-size="12" font-weight="700" fill="#274b8e" text-anchor="middle">1 · Semantic pass</text>
+    <text x="261" y="85" font-size="9.5" fill="#4b5263" text-anchor="middle">lanes · role columns</text>
+    <text x="261" y="99" font-size="9.5" fill="#4b5263" text-anchor="middle">read/write · mirror · spurs</text>
+    <text x="261" y="118" font-size="9" fill="#274b8e" text-anchor="middle" font-style="italic">deterministic · cheap</text>
+    <!-- stage 2 -->
+    <rect x="354" y="46" width="176" height="86" rx="9" fill="#fdf2e2" stroke="#b4530a"/>
+    <text x="442" y="68" font-size="12" font-weight="700" fill="#8a4008" text-anchor="middle">2 · GPU PROPOSES</text>
+    <text x="442" y="85" font-size="9.5" fill="#4b5263" text-anchor="middle">anneal / beam over positions</text>
+    <text x="442" y="99" font-size="9.5" fill="#4b5263" text-anchor="middle">WGSL batch-scores 1000s (fp32)</text>
+    <text x="442" y="118" font-size="9" fill="#8a4008" text-anchor="middle" font-style="italic">preview-grade ranking</text>
+    <!-- stage 3 -->
+    <rect x="544" y="46" width="150" height="86" rx="9" fill="#fff" stroke="#0b6e6e"/>
+    <text x="619" y="68" font-size="12" font-weight="700" fill="#0b6e6e" text-anchor="middle">3 · CPU PROVES</text>
+    <text x="619" y="85" font-size="9.5" fill="#4b5263" text-anchor="middle">re-score top-k in fp64</text>
+    <text x="619" y="99" font-size="9.5" fill="#4b5263" text-anchor="middle">exact · verdict-grade</text>
+    <text x="619" y="118" font-size="9" fill="#0b6e6e" text-anchor="middle" font-style="italic">fp32 never final</text>
+    <!-- stage 4 -->
+    <rect x="708" y="46" width="134" height="86" rx="9" fill="#e9f5f2" stroke="#176b37"/>
+    <text x="775" y="68" font-size="12" font-weight="700" fill="#176b37" text-anchor="middle">4 · ROUTER</text>
+    <text x="775" y="85" font-size="9.5" fill="#4b5263" text-anchor="middle">route the finalists</text>
+    <text x="775" y="99" font-size="9.5" fill="#4b5263" text-anchor="middle">bends/crossings REAL</text>
+    <text x="775" y="118" font-size="9" fill="#176b37" text-anchor="middle" font-style="italic">final arbiter</text>
+    <!-- arrows -->
+    <g stroke="#4b5263" stroke-width="1.5" fill="none">
+      <path d="M168 89 L180 89" marker-end="url(#af)"/>
+      <path d="M340 89 L352 89" marker-end="url(#af)"/>
+      <path d="M530 89 L542 89" marker-end="url(#af)"/>
+      <path d="M694 89 L706 89" marker-end="url(#af)"/>
+    </g>
+    <!-- refinement loop -->
+    <path d="M442 132 L442 168 L619 168 L619 132" stroke="#b4530a" stroke-width="1.3" fill="none" stroke-dasharray="5 3" marker-end="url(#af)"/>
+    <text x="530" y="184" font-size="9.5" fill="#8a4008" text-anchor="middle">refinement loop — propose → prove → keep best-so-far (seeded, bounded budget)</text>
+
+    <!-- apply / handshake -->
+    <rect x="18" y="210" width="824" height="96" rx="9" fill="#faf8f3" stroke="#e5e1d8"/>
+    <text x="34" y="232" font-size="11.5" font-weight="700" fill="#183a56">The resting handshake (TASK-81, made spatial)</text>
+    <text x="34" y="252" font-size="10.5" fill="#4b5263">• EDIT → stage 0 Tidy applies instantly; the polisher restarts (latest-wins). The canvas is never blank, never waiting.</text>
+    <text x="34" y="270" font-size="10.5" fill="#4b5263">• POLISHING (background, off-thread, debounced, idle = zero work) → stages 1–4 explore for a wall-clock budget (~2–5s), keeping the best routed layout.</text>
+    <text x="34" y="288" font-size="10.5" fill="#4b5263">• REST → if a better layout exists, offer/apply it WITHOUT a canvas jump — smooth morph or an explicit “apply better layout” (the round's UX call, §5).</text>
+  </svg>
+  </div>
+  <figcaption>The five stages. Stage 0 (Tidy) is instant and always applied, so the canvas never blocks. Stages 1&ndash;4 refine in the background under the TASK-81 ambient loop. The GPU only <em>proposes</em> (fp32 ranking of thousands of candidates); the CPU re-scores the top-<em>k</em> exactly, and the router measures the bends and crossings that actually ship &mdash; three proofs before a pixel moves.</figcaption>
+</figure>
+
+<h3>3.1 Stage 0 — Tidy, the instant seed (unchanged)</h3>
+<p>The existing <code>tidyLayout</code> runs first and is applied immediately, exactly as today. It is deterministic, dependency-free, and well under 16&nbsp;ms; it gives a correct, readable layout with zero crossings on the committed examples. Nothing below <em>replaces</em> it &mdash; the search <b>seeds from it</b>, so the worst case of the whole feature is &ldquo;you get Tidy, instantly,&rdquo; which is what ships today. That is the safety floor.</p>
+
+<h3>3.2 Stage 1 — the semantic pass (deterministic, cheap, no randomness)</h3>
+<p>Before any stochastic search, a single deterministic pass rewrites the seed using the meaning Tidy ignores: assign each flow (<code>requestFlows</code>) to a horizontal <b>lane</b>; bias each node's column toward its <b>role</b> (&sect;4.1); separate <b>read from write</b> paths into distinct bands; give sibling branches <b>mirrored</b> offsets; push <b>async</b> wires onto offset spurs; snap columns and rows to shared <b>guidelines</b>. This is pure, cheap, and reproducible &mdash; and it alone captures most of the &sect;2.3 gain (alignment, lane, symmetry, async). It is the part of &ldquo;best-in-industry&rdquo; that needs <em>no</em> GPU at all; the search that follows only polishes what it cannot decide deterministically (exact row orders, tie-breaks, jog removal).</p>
+
+<h3>3.3 Stage 2 — GPU proposes: batch-scoring thousands of candidates in fp32</h3>
+<p>From the shaped seed, a bounded search (simulated annealing, or a beam over the best <em>k</em>) generates candidate layouts by local moves: swap two rows in a column, nudge a node onto a nearby guideline, flip a branch's offset, reorder a node's ports, shuffle group-lane order. The geometry score of &sect;2 is <b>embarrassingly parallel and fp32-friendly</b> &mdash; crossings are pairwise segment-intersection counts, length and alignment and area are sums over coordinates &mdash; so a WGSL compute kernel scores <em>thousands</em> of candidates in one dispatch, one candidate per invocation. This is the exact shape the existing GPU backend already runs (one <em>scenario</em> per invocation, <span class="path">engine/solver-contract/src/gpu/webgpu.ts</span>); here the payload is candidate coordinates rather than override tables, but the discipline is identical.</p>
+<div class="callout"><b>Reuse the gpu-module DISCIPLINE, author a new geometry kernel.</b> The existing kernel scores the engine's <em>cell network</em> (capacity/latency math) &mdash; different arithmetic from layout geometry, so this is a <b>new</b> WGSL shader living with the layout code, not a call into the solver kernel. What it reuses is the pattern proven by TASK-81: reach WebGPU only through a lazily-imported entry (bundle separation &mdash; the driver stays out of the static graph), probe honestly with <code>gpuDevice()</code> (Chrome/Edge/webview yes, else <code>null</code>), fall back to CPU <b>silently</b> when there is no device, and report which backend ran so the surface can tag preview vs confirmed. The device plumbing (<code>gpuDevice</code>, the error-scope handling, device-loss re-probe) can be shared verbatim; only the shader body and the buffer layout are new.</div>
+
+<h3>3.4 Stages 3–4 — CPU proves, the router arbitrates (fp32 never final)</h3>
+<p>The GPU's fp32 ranking is <b>preview-grade</b>: good enough to pick the top handful of candidates, never good enough to <em>apply</em>. So the top-<em>k</em> are re-scored on the CPU in exact fp64 &mdash; and then the decisive step: the <b>deterministic router runs on each finalist</b>, so its bends and crossings are measured on the <em>actual wires that will ship</em>, not the straight-line estimate the batch kernel used. This matters because the two can disagree: a candidate the estimator loved may route into an ugly staircase, and one the estimator ranked third may route cleanest. The router is only ~2&nbsp;ms (median 1.9&nbsp;ms, per the routing round), so routing a handful of finalists per refinement step is affordable &mdash; the budget spends where it earns. The router is the <b>final arbiter</b>; the applied layout is the finalist that wins the fp64 score computed on <em>real</em> routes.</p>
+<div class="callout warn"><b>The three-layer discipline, extended to geometry.</b> TASK-81 established two layers: GPU proposes (fp32), CPU proves (fp64). Layout adds a third, because the aesthetic that ships is a property of the <em>routed</em> geometry, not the placement alone: <b>GPU ranks &rarr; CPU re-scores exactly &rarr; router measures reality</b>. An fp32 score never decides which layout the architect sees. This keeps the &ldquo;tool must not lie&rdquo; invariant trivially satisfied here (&sect;3.5) and mirrors, one-form-per-kind, the honesty pattern the whole codebase already uses for compute.</div>
+
+<h3>3.5 Layout is beauty, never truth — the honesty this feature owes</h3>
+<p>One structural fact makes the GPU use here <em>low-stakes</em> in a way the solver's is not: <b>a layout never changes a computed number.</b> Load, latency, cost and verdicts are functions of the graph, not its coordinates; the worst a bad layout can do is look ugly, never report a wrong capacity. So &ldquo;the tool must not lie&rdquo; is satisfied by construction &mdash; there is no infra number to fabricate. The three-layer proof above is therefore not about correctness of <em>truth</em> (there is none at risk) but about correctness of the <em>claim we make about beauty</em>: we do not present an fp32-ranked layout as &ldquo;the best we found&rdquo; until the CPU and the router have confirmed it is. And the seed guarantees the honest floor: if the GPU is absent, the device is lost, or the budget expires with nothing better than Tidy, the architect keeps Tidy &mdash; a good layout, instantly, always.</p>
+
+<h3>3.6 Budget, determinism, persistence</h3>
+<p>The polisher runs under the TASK-81 ambient loop: <b>event-driven</b> (a design mutation restarts it), <b>debounced</b>, <b>latest-wins</b> (a new edit supersedes an in-flight search), <b>idle = zero work</b> (no polling timer, battery-honest). A wall-clock <b>budget</b> (proposed 2&ndash;5&nbsp;s, tunable) bounds the anneal; it may stop at any time and keep the best-so-far. The search is <b>seeded</b> (&sect;5.2), so the same design yields the same layout. The applied result persists in <code>doc.layout</code> exactly as today &mdash; <b>no schema change</b> (AC#3): the optimiser writes the same <code>{id&rarr;{x,y}}</code> map Tidy writes.</p>
+
+<h2><span class="no">4</span>Hierarchy detection — the structure induces itself, no user input</h2>
+<p class="lead">The semantic pass needs a hierarchy to lay out to: which nodes are a lane, which column is a tier, which box is a group. The owner's requirement is that the architect never has to <em>declare</em> any of this &mdash; it is read from the design the tool already holds. Here is how flows, roles and groups induce the hierarchy, and what happens when the topology refuses to be a hierarchy at all.</p>
+
+<h3>4.1 Flows &rarr; lanes, roles &rarr; columns, groups &rarr; blocks</h3>
+<table>
+  <tr><th>Source of structure</th><th>What it induces</th><th>Read from</th></tr>
+  <tr><td><b>Flows</b> (traffic origin &rarr; reachable set &rarr; terminal)</td><td>Each independent flow becomes one horizontal <b>lane</b>. A CQRS design's write client and its (20&times;) read client are already separate flows; the read and write paths land on separate bands with no user hint.</td><td><code>requestFlows()</code>, <span class="path">content/sda/src/system.ts</span> — already computed for the System roll-up.</td></tr>
+  <tr><td><b>Roles</b> (client / edge / compute / broker / store)</td><td>The left-to-right <b>column</b> order. A wire that would run backward against role order is penalised (&sect;2.2), so clients sit left and stores right even where the pure longest-path is ambiguous.</td><td>A type-prefix &rarr; tier map (<code>client.*</code>=0, <code>apigw.*/cdn.*</code>=1, <code>compute.*</code>=2, <code>queue.*/topic.*</code>=2.5, <code>db.*/storage.*/search.*</code>=3). Content data, not engine logic.</td></tr>
+  <tr><td><b>Groups</b> (explicit member sets)</td><td>An aligned, compact <b>block</b>: members share a lane band, the box hugs them, non-members stay out (H4 + compactness).</td><td><code>Group.members</code>, <span class="path">app/core/src/document.ts</span> — already the lane primitive in <code>tidyLayout</code>.</td></tr>
+  <tr><td><b>Wire semantics</b> (sync / async)</td><td>Async hops drawn as offset spurs off the sync spine; the spine stays the straight-through backbone.</td><td><code>Wire.semantics</code>, <span class="path">content/sda/src/manifest.ts</span> — already on every edge (default <code>sync</code>).</td></tr>
+</table>
+<div class="callout"><b>Role from type is a heuristic — and that is a choice to confirm.</b> The tier map above reads a node's role from its <em>type prefix</em>, which is content data the layout may inspect (the layout lives in <span class="path">app/presenter</span>, which is allowed to be domain-aware; the domain-agnostic <em>engine</em> is untouched). This is honest but heuristic: a novel component with an unmapped prefix falls to a neutral tier and is placed by flow depth alone &mdash; never mis-placed, just un-hinted. The alternative is an explicit <code>tier</code> field on the registry key metadata (one-form-per-kind, like the <code>role</code> axis the assumption model adds). Which source of truth to use is an open question (&sect;6).</div>
+
+<h3>4.2 When the topology is not a hierarchy — ambiguous, cyclic, mesh</h3>
+<p>Not every design is a clean DAG, and the tool must not <em>invent</em> a hierarchy that isn't there (that would be a layout that lies about the architecture). Three honest fallbacks:</p>
+<ul>
+  <li><b>Ambiguous depth</b> (a node reachable at several depths): the role-layering term breaks the tie toward role order; where role is also unknown, the barycenter rule (already in Tidy) decides. Deterministic, never arbitrary.</li>
+  <li><b>Cyclic flow</b> (A&rarr;B&rarr;&hellip;&rarr;A): a single implicit river has no acyclic layering &mdash; and SDA already <em>names</em> this rather than faking a fixpoint (<code>cyclicFlowDiagnosis</code>). The layout answer is the same as the engine's: <b>request classes carve the mesh into per-class acyclic slices</b>, and each class becomes its own lane laid out acyclically. Shared nodes appear once, positioned by a barycenter consensus across the classes that use them. The mesh loops; every commodity's lane is clean.</li>
+  <li><b>Full mesh / no gradient</b> (everything talks to everything, no role slope): there is genuinely no hierarchy to draw. The layout falls back to a force-directed / circular arrangement scored by the <em>same</em> objective &mdash; but with the role-layering and lane terms going to zero because no structure exists to reward. Honest: when there is no hierarchy, we optimise crossings and symmetry and say nothing false about tiers.</li>
+</ul>
+
+<h2><span class="no">5</span>Tensions &amp; the hard cases, resolved honestly</h2>
+<p class="lead">The interesting design is where the objectives fight, where determinism and search collide, and where the optimiser must keep its hands off. Stated plainly &mdash; some resolved with a lean, some genuinely for the owner.</p>
+
+<h3>5.1 Alignment vs wire length — they pull in opposite directions</h3>
+<p>The sharpest internal tension. Snapping a node onto a shared guideline (alignment&darr;) can drag it away from its neighbours and <em>lengthen</em> its wires (length&uarr;). A naive optimiser oscillates between the two. <b>Resolution:</b> alignment operates within a <b>snap tolerance</b> &mdash; a node only snaps to a guideline when the displacement is &le; &tau; (proposed <code>0.3&times;COLW</code>), so alignment can never yank a node across a lane to chase a distant axis. Above &tau;, the length term dominates and the node stays put. The two terms are thus coupled by a <b>dominance rule</b>, not just summed: a large length increase vetoes a small alignment gain. The weights (&sect;2.2) then arbitrate the residual near the tolerance boundary. This keeps &ldquo;aligned&rdquo; from ever meaning &ldquo;stretched.&rdquo;</p>
+
+<h3>5.2 Determinism vs annealing — a seeded schedule</h3>
+<p>Annealing is stochastic, but the project demands reproducibility (&ldquo;seeded &rarr; reproducible layout&rdquo;) and no surprise motion. These reconcile the same way the Monte-Carlo module already reconciles them: a <b>recorded seed</b> drives a fixed PRNG, and the entire schedule &mdash; temperature ladder, iteration count, the sequence of neighbour moves, tie-breaks &mdash; is a pure function of <code>(seed, design-hash)</code>. Same design + same seed &rarr; <b>byte-identical</b> layout. The seed can be derived from a content hash of the graph, so it need not even be stored to be reproducible; storing it (in layout provenance, not a schema change) additionally lets the architect re-roll for a different local optimum on demand. This is exactly the seeded-determinism discipline of <span class="path">content/sda/src/uncertainty.ts</span>, applied to geometry.</p>
+
+<h3>5.3 When the optimiser must NOT move things — pin semantics</h3>
+<p>A hand-placed node is a decision, and the polisher must never silently undo it. <b>Detecting a manual placement</b> without a new schema: a node whose stored position diverges from what <code>tidyLayout</code> of the <em>current</em> topology would produce, beyond a small &epsilon;, is inferred to be <b>hand-placed</b> &mdash; a pin. Pins are hard constraints (H5): the optimiser removes them from the free set and lays out only around them, routing wires to and from them like any obstacle. <b>Proposed pin UX:</b> dragging a node implicitly pins it (a small pin glyph appears); an explicit &ldquo;re-tidy this node&rdquo; unpins it back into the free set; a group can be pinned as a block. The invariant: <em>the polisher improves the diagram the architect is building, it never fights the architect for control of a node.</em> The exact affordance (implicit-on-drag vs an explicit pin toggle; whether a global re-tidy clears pins) is an open question (&sect;6).</p>
+
+<h3>5.4 Performance at 50+ nodes, and fp32 score ties</h3>
+<ul>
+  <li><b>Scale.</b> The committed examples run to 23 nodes (<span class="path">cqrs-production-large</span>, 4 groups); &ldquo;best in industry&rdquo; must hold at 50+ (design-for-growth: the socket before the load). The search cost is dominated by candidate scoring, which is exactly where the GPU earns its keep &mdash; TASK-81 measured the GPU flat in batch size and ~5&times; the CPU at N=10&#8202;000. So more nodes &rarr; a larger candidate space &rarr; a bigger batch, which is the GPU's best case. The wall-clock budget bounds the search regardless; at worst the architect gets the semantic pass (stage 1) result, which is already a large gain over Tidy with no search at all.</li>
+  <li><b>fp32 ties.</b> Two candidates whose true scores differ by less than fp32 can resolve may tie or mis-rank on the GPU. That is precisely why fp32 only <em>proposes</em>: the CPU re-scores the top-<em>k</em> in fp64 and the router measures real bends, so ties are broken exactly and <b>deterministically</b> (the total-ordered tie-break already used by the router's priority queue extends to the finalist ranking). An fp32 tie is never applied; it is merely a slightly wider top-<em>k</em> sent to the exact stage.</li>
+</ul>
+
+<h2><span class="no">6</span>Benchmark — making &ldquo;najlepsi&rdquo; a measured claim</h2>
+<p class="lead">The owner's word is <em>best</em>, and best must be <b>measured</b>, not felt. So the deliverable includes a comparison harness that scores SDA's layout against the industry's engines on our own committed designs, with an objective table &mdash; crossings, bends, length, alignment, lanes &mdash; so the claim is falsifiable.</p>
+
+<h3>6.1 The harness</h3>
+<p>For each committed example, run four layout engines &mdash; raw <b>Tidy</b>, <b>dagre</b>, <b>elkjs</b> (layered), and <b>SDA-ideal</b> &mdash; then route <em>all four</em> with the same deterministic router and score all four with the same &sect;2 objective. The engines that ship in the product are Tidy and SDA-ideal only; dagre and elkjs are <b>test-only devDependencies of the harness</b> (or their published outputs vendored as golden fixtures), never runtime deps &mdash; the &ldquo;dependency-free layout&rdquo; invariant holds. The output is one table per example:</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="820" height="270" viewBox="0 0 820 270" font-family="Segoe UI,system-ui,sans-serif">
+    <text x="24" y="22" font-size="13" font-weight="700" fill="#183a56">Benchmark (CQRS, illustrative) — lower is better on every bar</text>
+    <text x="24" y="40" font-size="10" fill="#7a8394">generic terms both engines can score · semantic terms only SDA can score</text>
+    <!-- legend -->
+    <g font-size="10">
+      <rect x="560" y="30" width="12" height="12" fill="#9aa3b2"/><text x="577" y="40" fill="#4b5263">dagre / ELK</text>
+      <rect x="660" y="30" width="12" height="12" fill="#0b6e6e"/><text x="677" y="40" fill="#4b5263">SDA-ideal</text>
+    </g>
+    <!-- groups: crossings, bends, length, alignment(pen), lane(pen) -->
+    <g font-size="10.5" fill="#4b5263" text-anchor="middle">
+      <text x="110" y="250">crossings</text><text x="250" y="250">bends</text><text x="390" y="250">wire length</text>
+      <text x="530" y="250">MISALIGN</text><text x="690" y="250">LANE incoherence</text>
+    </g>
+    <!-- baseline -->
+    <line x1="50" y1="220" x2="800" y2="220" stroke="#ccc"/>
+    <!-- bars: [dagre gray, sda teal] -->
+    <!-- crossings: both ~0 -->
+    <rect x="86" y="216" width="22" height="4" fill="#9aa3b2"/><rect x="112" y="216" width="22" height="4" fill="#0b6e6e"/>
+    <text x="110" y="206" font-size="9" fill="#7a8394" text-anchor="middle">≈ tie (0)</text>
+    <!-- bends -->
+    <rect x="226" y="150" width="22" height="70" fill="#9aa3b2"/><rect x="252" y="170" width="22" height="50" fill="#0b6e6e"/>
+    <!-- length -->
+    <rect x="366" y="140" width="22" height="80" fill="#9aa3b2"/><rect x="392" y="158" width="22" height="62" fill="#0b6e6e"/>
+    <!-- alignment (SDA far lower) -->
+    <rect x="506" y="120" width="22" height="100" fill="#9aa3b2"/><rect x="532" y="200" width="22" height="20" fill="#0b6e6e"/>
+    <text x="530" y="112" font-size="9" fill="#a33" text-anchor="middle">generic: high</text>
+    <!-- lane -->
+    <rect x="666" y="108" width="22" height="112" fill="#9aa3b2"/><rect x="692" y="204" width="22" height="16" fill="#0b6e6e"/>
+    <text x="690" y="100" font-size="9" fill="#a33" text-anchor="middle">generic: can't even see it</text>
+    <!-- divider between generic and semantic -->
+    <line x1="460" y1="60" x2="460" y2="228" stroke="#e5e1d8" stroke-dasharray="4 4"/>
+    <text x="250" y="72" font-size="9.5" fill="#7a8394" text-anchor="middle">GENERIC terms — near tie</text>
+    <text x="620" y="72" font-size="9.5" fill="#0b6e6e" text-anchor="middle">SEMANTIC terms — SDA wins by construction</text>
+  </svg>
+  </div>
+  <figcaption>The shape of the result (illustrative values). On the <b>generic</b> terms &mdash; crossings, bends, length &mdash; SDA ties or edges out dagre/ELK; nobody has a monopoly on crossing-minimisation. On the <b>semantic</b> terms &mdash; alignment, lane coherence (and symmetry, async offset, not shown) &mdash; SDA wins <em>by construction</em>, because the generic engines cannot score them: they never knew the design had lanes. &ldquo;Best&rdquo; is the area under the whole objective, and the whole objective is strictly larger for us.</figcaption>
+</figure>
+<div class="callout"><b>The benchmark is also the proof of the thesis.</b> If dagre or ELK ever matched SDA on the generic terms and there were no semantic terms, we would have no claim to &ldquo;best.&rdquo; The semantic columns are where the claim lives &mdash; and they are unbeatable by a generic engine not because our search is cleverer but because <em>the objective is one only SDA can write down</em>. The harness turns that from a slogan into a table AC#1 can gate on.</div>
+
+<h3>6.2 Build rounds — each gate independently green</h3>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate (done when)</th></tr>
+  <tr>
+    <td><b>R0 · the objective + scorer</b><br><span class="tag new">prerequisite</span></td>
+    <td>Implement the pure-TS scorer (all &sect;2 terms, normalised) and the &sect;6 benchmark harness (Tidy / dagre / ELK / — ). Weights in ONE exported constant. No layout change yet — measurement first.</td>
+    <td>the scorer is deterministic and unit-tested; the harness runs on all committed examples and prints the metric table; the weight vector is a single reviewable constant.</td>
+  </tr>
+  <tr>
+    <td><b>R1 · the semantic pass</b><br><span class="tag now">the unfair advantage</span></td>
+    <td>Deterministic lane/role/group shaping from flows+roles+groups: read/write separation, mirrored branches, async spurs, guideline snapping. No randomness, no GPU.</td>
+    <td>measurably beats raw Tidy on the semantic terms across every example (before/after table); still &lt;16ms; seeded-identical; no schema change; router regression (0 crossings) intact.</td>
+  </tr>
+  <tr>
+    <td><b>R2 · the refinement search (CPU)</b></td>
+    <td>Seeded annealing/beam over positions + port orders + lane order, scored by R0, with the router run on the finalists (bends/crossings on real routes). Under the TASK-81 ambient loop; resting-handshake apply.</td>
+    <td>beats R1 on the aggregate on every example; seeded-reproducible; no canvas jumps; latest-wins/idle=zero honoured; full repo green.</td>
+  </tr>
+  <tr>
+    <td><b>R3 · GPU proposes</b><br><span class="tag new">compute buys beauty</span></td>
+    <td>WGSL batch scorer behind the gpu-module discipline (lazy, probed, silent CPU fallback); winner re-scored fp64 + routed on CPU (fp32 never final). Differential CPU-fp32 vs GPU-fp32 on seeded corpora, declared tolerance.</td>
+    <td>GPU agrees with CPU-fp32 within the declared tolerance; the top-k is identical after fp64 re-score; measured speedup at 50+ nodes; fp32 never applied; bundle-separation lint passes.</td>
+  </tr>
+  <tr>
+    <td><b>R4 · pins &amp; polish</b><br><span class="tag now">make it feel best</span></td>
+    <td>Pin semantics (implicit-on-drag anchors, explicit unpin, group pin); transition animation; 50+ node perf; the published benchmark table as an AC artifact.</td>
+    <td>pinned nodes never move (property test); smooth apply, no jumps; the benchmark table shows SDA dominating the aggregate on all examples; full repo green.</td>
+  </tr>
+</table>
+
+<h3>6.3 Open questions for the owner</h3>
+<table>
+  <tr><th>Question</th><th>Why it matters</th><th>Proposed lean</th></tr>
+  <tr><td><b>The weight vector</b> (&sect;2.2)</td><td>It <em>is</em> the definition of beautiful. Front-loading alignment vs crossings vs lanes changes the whole feel.</td><td>Ship the proposed eleven as defaults in one constant, tune against the benchmark table on real examples. This is the headline decision to ratify.</td></tr>
+  <tr><td><b>Pin UX</b> (&sect;5.3)</td><td>Implicit-on-drag is frictionless but can surprise; explicit pinning is predictable but a step. And: does a global re-tidy clear pins?</td><td>Implicit pin on drag (with a visible glyph) + an explicit per-node/group unpin; a global re-tidy asks before clearing pins. Confirm.</td></tr>
+  <tr><td><b>Transition animation</b> (&sect;3.6)</td><td>The resting handshake can apply the better layout by a smooth morph, or offer it behind an explicit &ldquo;apply&rdquo; button. Motion can delight or distract.</td><td>Smooth animated morph on rest by default (no jump), with the option demoted to a setting. Confirm whether an explicit apply is wanted for large moves.</td></tr>
+  <tr><td><b>Role source</b> (&sect;4.1)</td><td>Type-prefix heuristic vs an explicit registry <code>tier</code> field. The heuristic is zero-cost but soft; the field is exact but is more meta-model.</td><td>Start with the type-prefix map (ships now, no meta-model change); promote to an explicit tier on the role axis if/when the assumption-model's <code>role</code> work lands. Confirm the sequencing.</td></tr>
+  <tr><td><b>Symmetry policy</b> (&sect;2.2)</td><td>Mirror <em>all</em> sibling branches, or only branches of the same request class? Mirroring unlike branches can mislead.</td><td>Mirror only branches that are the same kind (same class / both read); leave unlike branches asymmetric. Confirm.</td></tr>
+  <tr><td><b>Search budget</b> (&sect;3.6)</td><td>2&ndash;5s of background polish is proposed; longer finds more, but holds &ldquo;polishing&hellip;&rdquo; longer.</td><td>A 3s default budget, tunable in one place, with the search always keeping best-so-far so a shorter budget only means less polish, never a worse result than Tidy.</td></tr>
+</table>
+
+<h2><span class="no">7</span>Non-goals</h2>
+<table>
+  <tr><td><b>No new schema</b></td><td>The applied layout is the same <code>doc.layout</code> <code>{id&rarr;{x,y}}</code> map Tidy writes today (AC#3). Pins and seeds are inferred or content-hashed, not new persisted structure &mdash; every existing project loads and lays out unchanged.</td></tr>
+  <tr><td><b>No required dependency</b></td><td>The shipped runtime layout stays pure TypeScript &mdash; no dagre, no elkjs, no WASM in the product path. dagre/ELK appear only in the benchmark harness as test-only devDeps (or vendored golden output). The GPU module is lazily imported and optional; absent a device, the CPU path is silent and complete.</td></tr>
+  <tr><td><b>fp32 never decides the applied layout</b></td><td>The GPU proposes a ranking; the CPU re-scores exactly and the router measures real routes. The layout the architect sees has always been proven in fp64 on real geometry (the three-layer discipline, &sect;3.4).</td></tr>
+  <tr><td><b>No invented hierarchy</b></td><td>Where the topology is a mesh with no role gradient, the tool does not fake tiers &mdash; it falls back to a force-directed arrangement scored by the same objective with the structural terms zeroed (&sect;4.2). A cyclic flow is carved by request classes, exactly as the engine already carves it.</td></tr>
+  <tr><td><b>No fighting the architect</b></td><td>Hand-placed nodes are pins the optimiser lays out <em>around</em>, never over (&sect;5.3). The polisher improves the diagram being built; it never seizes a node the human placed.</td></tr>
+  <tr><td><b>No change to any computed number</b></td><td>Layout is beauty, not truth (&sect;3.5). The optimiser moves pixels; it never touches load, latency, cost, availability or a verdict. A worse layout can be ugly, never wrong.</td></tr>
+  <tr><td><b>No engine domain leakage</b></td><td>The optimiser lives in <span class="path">app/presenter</span> (already domain-aware, already the home of Tidy and the router). The domain-agnostic engine and the solver contract are untouched; the GPU geometry kernel is a new presenter-side shader, not a solver-contract change.</td></tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <span class="path">docs/design/ideal-layout.html</span> · the ideal layout (semantic placement + GPU-scored search) · the owner's 20-year wish for the best layout algorithm, answered: we win not by a cleverer crossing-minimiser but by optimising a richer objective only a tool that kept the meaning can write · grounded in <span class="path">app/presenter/src/{layout,edge-routing}.ts</span>, <span class="path">engine/solver-contract/src/gpu/{index,webgpu,compile,fp32}.ts</span>, <span class="path">content/sda/src/{system,request-class,registry,manifest}.ts</span>, <span class="path">app/core/src/document.ts</span>, <span class="path">examples/cqrs.sda.json</span> · realises TASK-88 under the three-layer discipline (TASK-81) + one-form-per-kind · Tidy seeds · compute buys beauty · the router arbitrates · a layout is beauty, never truth.
+</footer>
+</div>
+</body>
+</html>

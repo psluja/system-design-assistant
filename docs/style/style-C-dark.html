@@ -1,0 +1,160 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SDA · Style C — Pro Dark Control Room</title>
+<style>
+:root{
+  --bg:#0a0e1a;--panel:#10162a;--panel2:#0c1120;--ink:#e9edfb;--ink2:#9aa6c8;--ink3:#5f6b8e;
+  --line:#1d2742;--line2:#2a3760;--accent:#7c8bff;--accent2:#22d3ee;--accent-tint:#18203c;
+  --ok:#34d399;--ok-tint:#0f2b22;--warn:#fbbf24;--warn-tint:#2c2410;--bad:#fb7185;--bad-tint:#2c1320;
+  --glow:0 0 0 1px rgba(124,139,255,.5),0 0 22px rgba(124,139,255,.35);
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:13.5px;-webkit-font-smoothing:antialiased}
+.app{height:100vh;display:grid;grid-template-rows:54px 1fr 44px}
+.top{display:flex;align-items:center;gap:15px;padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em;font-size:15px}
+.logo .mk{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#7c8bff,#22d3ee);display:grid;place-items:center;box-shadow:0 0 16px rgba(124,139,255,.5)}
+.logo .mk svg{width:15px;height:15px;color:#0a0e1a}
+.crumb{color:var(--ink3);font-size:12.5px}.crumb b{color:var(--ink2);font-weight:600}
+.modes{display:flex;gap:2px;margin-left:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px}
+.modes button{font:600 12px var(--sans);border:0;background:transparent;color:var(--ink2);padding:5px 13px;border-radius:6px;cursor:pointer}
+.modes button.on{background:var(--accent-tint);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.spacer{flex:1}
+.btn{font:600 12.5px var(--sans);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);padding:8px 13px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.btn.primary{background:linear-gradient(135deg,#7c8bff,#6d6bff);border:0;color:#fff;box-shadow:0 0 18px rgba(124,139,255,.45)}
+.btn .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#7c8bff,#22d3ee);color:#0a0e1a;display:grid;place-items:center;font-weight:800;font-size:11px}
+.mid{display:grid;grid-template-columns:226px 1fr 318px;min-height:0}
+.rail{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:14px}
+.rail h5{margin:16px 6px 7px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.rail h5:first-child{margin-top:0}
+.search{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 11px;color:var(--ink3);font-size:12.5px;margin-bottom:6px}
+.palette{display:grid;gap:5px}
+.pi{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:10px;border:1px solid transparent;cursor:grab}
+.pi:hover{background:var(--accent-tint);border-color:var(--line2)}
+.pi .ic{width:28px;height:28px;border-radius:8px;background:var(--panel2);border:1px solid var(--line2);display:grid;place-items:center;color:var(--accent2)}
+.pi .ic svg{width:15px;height:15px}
+.pi b{font-weight:600;font-size:12.7px}.pi span{display:block;color:var(--ink3);font-size:11px}
+.canvas{position:relative;overflow:hidden;background:
+  linear-gradient(rgba(124,139,255,.05) 1px,transparent 1px) 0 0/26px 26px,
+  linear-gradient(90deg,rgba(124,139,255,.05) 1px,transparent 1px) 0 0/26px 26px,
+  radial-gradient(900px 500px at 60% 30%, rgba(124,139,255,.08), transparent 70%),
+  var(--bg)}
+.canvas .hud{position:absolute;left:16px;top:14px;display:flex;gap:8px;z-index:5}
+.tagpill{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:6px 11px;font-size:11.5px;color:var(--ink2)}
+.node{position:absolute;width:164px;background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:2}
+.node .hd{display:flex;align-items:center;gap:10px;padding:11px 12px 8px}
+.node .hd .ic{width:28px;height:28px;border-radius:8px;background:var(--accent-tint);color:var(--accent2);display:grid;place-items:center;border:1px solid var(--line2)}
+.node .hd .ic svg{width:16px;height:16px}
+.node .hd .nm{font-weight:700;font-size:12.8px}.node .hd .ty{color:var(--ink3);font-size:10.5px}
+.node .mt{display:flex;gap:6px;padding:0 12px 11px;flex-wrap:wrap}
+.chip{font:600 10.5px var(--mono);background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:3px 8px;color:var(--ink2)}
+.chip.warn{background:var(--warn-tint);border-color:#5a4410;color:#fcd34d}
+.chip.ok{background:var(--ok-tint);border-color:#1c5340;color:#6ee7b7}
+.node.sel{border-color:var(--accent);box-shadow:var(--glow),0 12px 30px rgba(0,0,0,.55)}
+.node .port{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--panel);border:2px solid var(--accent2);top:34px;box-shadow:0 0 8px rgba(34,211,238,.6)}
+.node .port.l{left:-5px}.node .port.r{right:-5px}
+.flag{position:absolute;top:-9px;right:-7px;width:19px;height:19px;border-radius:50%;background:var(--bad);color:#1a0a10;display:grid;place-items:center;font-size:12px;font-weight:800;box-shadow:0 0 14px rgba(251,113,133,.6)}
+.insp{background:var(--panel);border-left:1px solid var(--line);overflow:auto}
+.insp .ih{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px}
+.insp .ih .ic{width:32px;height:32px;border-radius:9px;background:var(--accent-tint);color:var(--accent2);display:grid;place-items:center;border:1px solid var(--line2)}
+.insp .ih .ic svg{width:18px;height:18px}
+.insp .ih b{font-size:14px}.insp .ih span{display:block;color:var(--ink3);font-size:11.5px}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+.sec h6{margin:0 0 10px;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+.field{display:flex;align-items:center;justify-content:space-between;margin:9px 0}
+.field label{color:var(--ink2);font-size:12.5px}
+.field .val{font:600 12px var(--mono);background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:6px 10px;min-width:100px;text-align:right;color:var(--ink)}
+.vr{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin:8px 0;background:var(--panel2)}
+.vr .k{font-size:12.3px;color:var(--ink2)}.vr .v{font:600 12px var(--mono)}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.st::before{content:"";width:6px;height:6px;border-radius:50%}
+.st.ok{background:var(--ok-tint);color:#6ee7b7}.st.ok::before{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.st.warn{background:var(--warn-tint);color:#fcd34d}.st.warn::before{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.st.bad{background:var(--bad-tint);color:#fda4af}.st.bad::before{background:var(--bad)}
+.fix{margin-top:11px;background:var(--accent-tint);border:1px solid var(--line2);border-radius:10px;padding:11px 12px;font-size:12px;color:#c7d0ff;line-height:1.55}
+.fix b{color:#a9b4ff}
+.bottom{display:flex;align-items:center;gap:18px;padding:0 18px;background:var(--panel);border-top:1px solid var(--line)}
+.metric{display:flex;align-items:center;gap:8px}
+.metric .lab{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+.metric .num{font:800 13px var(--mono);color:var(--ink)}
+.sep{width:1px;height:20px;background:var(--line2)}
+</style></head>
+<body><div class="app">
+  <div class="top">
+    <div class="logo"><div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 13l4 4 10-11"/></svg></div> SDA</div>
+    <div class="crumb"><b>payments-platform</b> / checkout-path</div>
+    <div class="modes"><button class="on">Design</button><button>Simulate</button><button>Optimize</button></div>
+    <div class="spacer"></div>
+    <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg> Re-verify</button>
+    <button class="btn primary"><span class="dot"></span> Verified · 2 issues</button>
+    <div class="avatar">PS</div>
+  </div>
+  <div class="mid">
+    <aside class="rail">
+      <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg> Search blocks</div>
+      <h5>Compute</h5>
+      <div class="palette">
+        <div class="pi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><circle cx="7" cy="7.5" r=".9"/><circle cx="7" cy="16.5" r=".9"/></svg></span><div><b>Service</b><span>container / app</span></div></div>
+        <div class="pi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span><div><b>Function</b><span>serverless</span></div></div>
+      </div>
+      <h5>Data</h5>
+      <div class="palette">
+        <div class="pi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><div><b>Database</b><span>relational</span></div></div>
+        <div class="pi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h5M7 13h8"/></svg></span><div><b>Cache</b><span>in-memory</span></div></div>
+      </div>
+      <h5>Network</h5>
+      <div class="palette">
+        <div class="pi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span><div><b>API Gateway</b><span>ingress</span></div></div>
+        <div class="pi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><div><b>CDN</b><span>edge</span></div></div>
+      </div>
+    </aside>
+    <main class="canvas">
+      <div class="hud"><div class="tagpill">checkout · 1,000 req/s demand</div><div class="tagpill">SLO p99 &lt; 350 ms</div></div>
+      <svg class="wires" width="920" height="800" style="position:absolute;left:0;top:0;z-index:1">
+        <defs>
+          <marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#22d3ee"/></marker>
+          <filter id="gl" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <g filter="url(#gl)" stroke="#22d3ee" stroke-width="2" fill="none" opacity="0.95">
+          <path d="M188 286 C 206 286, 200 286, 218 286" marker-end="url(#aC)"/>
+          <path d="M382 286 C 418 286, 414 252, 442 252" marker-end="url(#aC)"/>
+          <path d="M606 252 C 646 252, 642 156, 678 156" marker-end="url(#aC)"/>
+          <path d="M606 252 C 646 252, 642 368, 678 368" marker-end="url(#aC)"/>
+        </g>
+      </svg>
+      <div class="node" style="left:24px;top:250px"><div class="hd"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><div class="nm">Client</div><div class="ty">browser</div></div></div><div class="mt"><span class="chip">1,000 rps</span></div><span class="port r"></span></div>
+      <div class="node" style="left:218px;top:250px"><div class="hd"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span><div><div class="nm">API Gateway</div><div class="ty">ingress</div></div></div><div class="mt"><span class="chip ok">10k rps</span><span class="chip">5 ms</span></div><span class="port l"></span><span class="port r"></span></div>
+      <div class="node sel" style="left:442px;top:213px"><div class="hd"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><circle cx="7" cy="7.5" r=".9"/><circle cx="7" cy="16.5" r=".9"/></svg></span><div><div class="nm">Checkout Service</div><div class="ty">container · 1×</div></div></div><div class="mt"><span class="chip">4,300 rps</span><span class="chip">20 ms</span></div><span class="port l"></span><span class="port r"></span></div>
+      <div class="node" style="left:678px;top:118px"><div class="flag">!</div><div class="hd"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><div><div class="nm">PostgreSQL</div><div class="ty">primary</div></div></div><div class="mt"><span class="chip warn">2,000 rps</span><span class="chip">100 conn</span></div><span class="port l"></span></div>
+      <div class="node" style="left:678px;top:330px"><div class="hd"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h5M7 13h8"/></svg></span><div><div class="nm">Redis</div><div class="ty">cache</div></div></div><div class="mt"><span class="chip ok">100k ops</span><span class="chip">0.5 ms</span></div><span class="port l"></span></div>
+    </main>
+    <aside class="insp">
+      <div class="ih"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/></svg></span><div><b>Checkout Service</b><span>compute · container</span></div></div>
+      <div class="sec"><h6>Configuration</h6>
+        <div class="field"><label>Concurrency</label><div class="val">200</div></div>
+        <div class="field"><label>Service time</label><div class="val">20 ms</div></div>
+        <div class="field"><label>Replicas</label><div class="val">1</div></div>
+        <div class="field"><label>Cost / replica</label><div class="val">$120 /mo</div></div>
+      </div>
+      <div class="sec"><h6>Verdict</h6>
+        <div class="vr"><span class="k">Throughput</span><span class="v">4,300 rps <span class="st ok">ok</span></span></div>
+        <div class="vr"><span class="k">Latency p99</span><span class="v">38 ms <span class="st ok">ok</span></span></div>
+        <div class="vr"><span class="k">Availability</span><span class="v">99.9% <span class="st warn">single</span></span></div>
+        <div class="fix"><b>Remediation.</b> The downstream PostgreSQL caps the path at 2,000 rps. Add a read replica or raise <code>max_connections</code> to clear the 1,000 rps SLO with headroom.</div>
+      </div>
+    </aside>
+  </div>
+  <div class="bottom">
+    <div class="metric"><span class="lab">Throughput</span><span class="num">2,000<span style="color:var(--ink3)"> rps</span></span><span class="st warn">below SLO</span></div>
+    <div class="sep"></div>
+    <div class="metric"><span class="lab">Latency p99</span><span class="num">312 ms</span><span class="st ok">ok</span></div>
+    <div class="sep"></div>
+    <div class="metric"><span class="lab">Availability</span><span class="num">99.5%</span><span class="st ok">ok</span></div>
+    <div class="sep"></div>
+    <div class="metric"><span class="lab">Cost</span><span class="num">$480<span style="color:var(--ink3)"> /mo</span></span></div>
+    <div class="spacer" style="flex:1"></div>
+    <button class="btn primary" style="padding:6px 12px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Auto-fix bottleneck</button>
+  </div>
+</div></body></html>

@@ -1,0 +1,7 @@
+# Only the built artifacts + manifest ship in the .vsix — sources, configs and tests stay out.
+**
+!dist/**
+!media/**
+!package.json
+!README.md
+!LICENSE*

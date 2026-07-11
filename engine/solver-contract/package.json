@@ -1,0 +1,28 @@
+{
+  "name": "@sda/solver-contract",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "The solver contract: per-capability interfaces, abstract domain models, honesty states and a conformance suite. The canonical documentation home every solver adapter is graded against — see docs/design/solver-contract.html (TASK-79).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./conformance": "./src/conformance/index.ts",
+    "./harness": "./src/harness/index.ts",
+    "./incumbent": "./src/incumbent/index.ts",
+    "./native": "./src/native/index.ts",
+    "./gpu": "./src/gpu/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sda/engine-core": "workspace:*",
+    "@sda/engine-solve": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "clingo-wasm": "^0.3.2",
+    "typescript": "^5.6.3"
+  }
+}

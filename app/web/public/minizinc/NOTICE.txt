@@ -1,0 +1,9 @@
+This directory contains a WebAssembly build of:
+
+  MiniZinc — Mozilla Public License 2.0 (https://mozilla.org/MPL/2.0/)
+             source: https://github.com/MiniZinc/libminizinc
+  Gecode   — MIT License, source: https://github.com/Gecode/gecode
+  HiGHS    — MIT License, source: https://github.com/ERGO-Code/HiGHS
+
+Build recipe: tools/minizinc-wasm/ in the System Design Assistant repository.
+See THIRD_PARTY_NOTICES.md at the repository root for details.

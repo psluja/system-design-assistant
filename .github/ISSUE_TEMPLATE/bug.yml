@@ -1,0 +1,87 @@
+name: Bug report
+description: Something computed, rendered, or behaved incorrectly.
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in what you can — a minimal reproduction
+        is worth more than a long description.
+
+        Do **not** report security vulnerabilities here. See
+        [SECURITY.md](../blob/main/.github/SECURITY.md) for the private reporting channel.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: The actual behavior you observed.
+      placeholder: When I connected the gateway to the service, the throughput verdict showed…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: The behavior you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence of actions that triggers the bug.
+      placeholder: |
+        1. Add a client and a service
+        2. Connect them
+        3. Set the service concurrency to …
+        4. Observe …
+    validations:
+      required: true
+  - type: textarea
+    id: design-file
+    attributes:
+      label: Minimal design file (.sda.json)
+      description: >
+        When the bug involves a specific design, paste a minimal `.sda.json` export that reproduces it
+        (Export from the app). This is the single most useful thing you can provide. Redact anything
+        sensitive first.
+      render: json
+    validations:
+      required: false
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Which shell?
+      description: Where you saw the bug.
+      options:
+        - Web app (@sda/web)
+        - VS Code extension (sda-vscode)
+        - MCP server / AI bridge
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App / extension version
+      description: The web app build or the VS Code extension version, if known.
+      placeholder: e.g. sda-vscode 0.0.1, or the web build date
+    validations:
+      required: false
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser + OS (for the web app), or VS Code version + OS (for the extension).
+      placeholder: e.g. Chrome 126 on Windows 11 / VS Code 1.90 on macOS 14
+    validations:
+      required: false
+  - type: textarea
+    id: console
+    attributes:
+      label: Console / error output
+      description: Any relevant browser console or extension-host errors. Optional.
+      render: text
+    validations:
+      required: false

@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SDA · Coverage Map — what the engine covers</title>
+<style>
+:root{--ink:#0f172a;--ink-soft:#334155;--ink-faint:#64748b;--bg:#fbfcfe;--bg-tint:#f3f5fb;--card:#fff;--line:#e6e9f2;--line-strong:#d3d9e6;--accent:#5b63f5;--accent-deep:#3f44c9;--accent-tint:#eef0fe;--ok:#10b981;--ok-tint:#e7f8f1;--warn:#f59e0b;--warn-tint:#fdf3e1;--idea:#64748b;--idea-tint:#eef1f6;--no:#f43f5e;--no-tint:#fdeaee;--radius:14px;--radius-sm:9px;--shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06);--shadow-sm:0 1px 2px rgba(15,23,42,.05),0 2px 8px rgba(15,23,42,.05);--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;--maxw:880px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:13mm}@media print{.topbar{position:static}}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg);line-height:1.7;font-size:16.5px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}main{padding-bottom:80px}section{margin:48px 0;scroll-margin-top:80px}
+.topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:saturate(180%) blur(8px);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;gap:14px;height:56px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--ink);text-decoration:none}
+.topbar nav{margin-left:auto;display:flex;gap:3px;flex-wrap:wrap}
+.topbar nav a{color:var(--ink-faint);text-decoration:none;font-size:13px;font-weight:600;padding:6px 8px;border-radius:8px}
+.topbar nav a:hover{color:var(--ink);background:var(--bg-tint)}
+.hero{padding:50px 0 8px}
+.hero .eyebrow{color:var(--accent-deep);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.hero h1{font-size:clamp(28px,5vw,42px);line-height:1.1;letter-spacing:-.02em;margin:12px 0 14px}
+.hero p.lede{font-size:18.5px;color:var(--ink-soft);max-width:64ch;margin:0}
+.gradient{font-weight:800;background:linear-gradient(100deg,var(--accent),#7c5cff 60%,#2bb3a3);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:25px;letter-spacing:-.02em;margin:0 0 4px}h3{font-size:18px;margin:26px 0 4px;color:var(--ink)}
+.section-no{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:800;margin-right:10px}
+.section-sub{color:var(--ink-faint);margin:0 0 18px;max-width:74ch}
+p,li{color:var(--ink-soft)}p{margin:13px 0}a{color:var(--accent-deep)}strong{color:var(--ink);font-weight:700}
+.aside{background:var(--bg-tint);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:20px 0}
+.aside h4{margin:0 0 6px;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint)}
+.aside p{margin:8px 0 0}
+.grid{display:grid;gap:14px}.grid.cols-5{grid-template-columns:repeat(5,1fr)}
+@media(max-width:780px){.grid.cols-5{grid-template-columns:1fr 1fr}}@media(max-width:500px){.grid.cols-5{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px;box-shadow:var(--shadow-sm)}
+.mech .num{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:12px}.mech .name{font-weight:700;color:var(--ink);margin:3px 0;font-size:14.5px}.mech .how{font-size:13px;color:var(--ink-faint)}
+.callout{border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--card);border-radius:var(--radius-sm);padding:14px 16px;margin:20px 0;box-shadow:var(--shadow-sm)}
+.callout .tag{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-deep)}
+.callout.honest{border-left-color:var(--ok)}.callout.honest .tag{color:var(--ok)}.callout p{margin:6px 0 0}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%}
+.pill.ok{background:var(--ok-tint);color:#047857}.pill.ok::before{background:var(--ok)}
+.pill.partial{background:var(--warn-tint);color:#b45309}.pill.partial::before{background:var(--warn)}
+.pill.idea{background:var(--idea-tint);color:#475569}.pill.idea::before{background:var(--idea)}
+.pill.no{background:var(--no-tint);color:#be123c}.pill.no::before{background:var(--no)}
+@media(prefers-color-scheme:dark){.pill.ok{color:#6ee7b7}.pill.partial{color:#fbbf24}.pill.idea{color:#cbd5e1}.pill.no{color:#fda4af}}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card)}
+thead th{text-align:left;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);padding:11px 13px;border-bottom:1px solid var(--line-strong);background:var(--bg-tint)}
+tbody td{padding:11px 13px;border-bottom:1px solid var(--line);color:var(--ink-soft);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+code{font-family:var(--mono);font-size:12.6px;background:var(--bg-tint);border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--ink)}
+figure{margin:22px 0}figure svg{display:block;width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+figcaption{margin-top:9px;color:var(--ink-faint);font-size:13px;text-align:center}
+.svg-node{fill:var(--card);stroke:var(--line-strong);stroke-width:1.5}.svg-node.accent{fill:var(--accent-tint);stroke:var(--accent)}.svg-node.ok{fill:var(--ok-tint);stroke:var(--ok)}.svg-node.hot{fill:var(--warn-tint);stroke:var(--warn)}
+.svg-label{fill:var(--ink);font:600 13px var(--sans)}.svg-sub{fill:var(--ink-faint);font:500 10.5px var(--mono)}
+.svg-edge{stroke:var(--ink-faint);stroke-width:1.8;fill:none}.svg-edge.dim{stroke:var(--line-strong);stroke-dasharray:4 4}
+.svg-title{fill:var(--ink-faint);font:700 11px var(--sans);letter-spacing:.06em;text-transform:uppercase}
+.bar{fill:var(--accent)}.bar.peak{fill:#7c5cff}.bar-track{fill:var(--bg-tint)}.bar-label{fill:var(--ink-soft);font:600 12px var(--sans)}.bar-val{fill:var(--ink-faint);font:600 11.5px var(--mono)}
+dl.glossary{margin:6px 0}
+dl.glossary dt{font-weight:700;color:var(--ink);margin-top:18px;font-size:15.5px}
+dl.glossary dt .ab{font-family:var(--mono);font-size:12px;color:var(--accent-deep);font-weight:600;margin-left:8px}
+dl.glossary dd{margin:5px 0 0;color:var(--ink-soft)}
+footer{border-top:1px solid var(--line);margin-top:60px;padding:24px 0;color:var(--ink-faint);font-size:13px}
+.muted{color:var(--ink-faint)}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wrap">
+  <a class="brand" href="#top"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="var(--accent)" stroke-width="2"/><path d="M7 13l3 3 7-8" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> SDA · Coverage</a>
+  <nav>
+    <a href="#about">About</a><a href="#problem">Problem</a><a href="#how">How</a><a href="#rule">Rule</a><a href="#covered">Coverage</a><a href="#example">Example</a><a href="#scope">Scope</a><a href="#glossary">Glossary</a>
+  </nav>
+</div></header>
+
+<main class="wrap" id="top">
+
+  <div class="hero">
+    <div class="eyebrow">System Design Assistant · document 8</div>
+    <h1>What the engine <span class="gradient">covers</span> — and why</h1>
+    <p class="lede">This document explains, in plain terms, which system-design questions the tool can answer, the precise reason each one is or is not in reach, and where the boundary of the tool deliberately lies. It is written to be read on its own — every term it relies on is defined in the glossary at the end.</p>
+  </div>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <h2><span class="section-no">·</span>About this document</h2>
+    <div class="aside">
+      <h4>What is the System Design Assistant?</h4>
+      <p>The System Design Assistant (SDA) is a tool for designing software architecture on a canvas and then <strong>checking the design by computing it</strong>, rather than merely drawing it. You place building blocks (a load balancer, a database, a queue) and connect them; the tool calculates how the resulting system would behave — how much traffic it can carry, how slow it would be, how reliable, how expensive — and tells you, with reasons, where it would fail to meet your targets. Run in reverse, it can even propose or repair designs.</p>
+    </div>
+    <p><strong>Who this is for.</strong> Anyone deciding what the tool should and should not do: an architect evaluating whether SDA can answer their question, or a contributor deciding whether a new feature belongs. You do not need to know the tool's internals to read it.</p>
+    <p><strong>How to read it.</strong> Sections build on each other: first the class of mistakes SDA exists to prevent, then how it is built, then the single rule that decides what is coverable, then the coverage itself, a worked example, the boundary of scope, and finally a glossary. Abbreviations are spelled out the first time they appear and collected in the glossary.</p>
+  </section>
+
+  <!-- PROBLEM -->
+  <section id="problem">
+    <h2><span class="section-no">1</span>The problem SDA exists to solve</h2>
+    <p class="section-sub">Most system-design mistakes are not drawing mistakes. They are mistakes of arithmetic that never happened — assumptions that were written down but never checked.</p>
+    <p>A diagram can look perfectly reasonable and still describe a system that cannot work. The classic failures all share one cause: a number that was never actually computed across the whole design. For example:</p>
+    <ul>
+      <li><strong>Reasoning about averages instead of the slow cases.</strong> A team estimates "average response time is about 60 milliseconds" by adding up average times, and ships. In production the slow end of the distribution — the 1-in-100 request — is several times worse, because requests queue. Users feel the slow tail, not the average.</li>
+      <li><strong>Assuming a chain runs as fast as its quickest part.</strong> A request passes through five components. Throughput is limited by the <em>slowest</em> one, not the fastest; adding capacity anywhere else changes nothing. Teams routinely spend effort on the wrong tier.</li>
+      <li><strong>Forgetting that reliability multiplies downward.</strong> Five components that are each "99.9% available" do not give a 99.9% system; in a chain their availabilities multiply to roughly 99.5%, and a single component with no backup drags the whole thing down.</li>
+      <li><strong>Overlooking hard limits.</strong> A PostgreSQL database accepts only 100 simultaneous connections by default. Under load the connection pool is exhausted and the application stalls — a limit that was knowable on day one.</li>
+    </ul>
+    <p>SDA attacks exactly this class of error. It does not try to judge whether your business logic is correct or your code is good. It answers the <strong>quantitative envelope</strong> — capacity, speed, reliability, cost, and legality of the wiring — by actually computing it across the whole design, and it does so <strong>honestly</strong>: it distinguishes a value you assumed from a value it derived, and when it cannot know something it says <em>unknown</em> rather than guessing.</p>
+  </section>
+
+  <!-- HOW -->
+  <section id="how">
+    <h2><span class="section-no">2</span>How SDA is built — one engine, four lenses</h2>
+    <p class="section-sub">A deliberate split keeps the tool honest and general: a calculation engine that knows no cloud vocabulary, fed by content that supplies all the meaning.</p>
+    <p>The <strong>engine</strong> is domain-agnostic: it computes over an abstract graph of components and their properties and knows nothing about "load balancers" or "databases" — those words never appear in it. All cloud meaning lives in <strong>content</strong>: data files that describe each component (its limits, its formulas, the protocols it speaks). The same engine therefore works for any kind of system; teaching it new components means adding data, never changing the engine.</p>
+    <p>The engine answers questions through four independent solvers — think of them as four lenses on the same design. A numeric solver computes quantities; a time-domain simulator computes behaviour over time; a relational solver checks legality; and an enumerator generates candidate structures. Their output is an honest <strong>verdict</strong> for every target you set.</p>
+    <figure>
+      <svg viewBox="0 0 880 270" role="img" aria-label="Architecture: content feeds the engine, which produces a verdict">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-faint)"/></marker></defs>
+        <rect class="svg-node" x="20" y="66" width="170" height="78" rx="12"/>
+        <text class="svg-label" x="105" y="100" text-anchor="middle">CONTENT</text>
+        <text class="svg-sub" x="105" y="120" text-anchor="middle">component data</text>
+        <rect class="svg-node accent" x="286" y="54" width="308" height="100" rx="12"/>
+        <text class="svg-label" x="440" y="88" text-anchor="middle">ENGINE</text>
+        <text class="svg-sub" x="440" y="108" text-anchor="middle">domain-agnostic calculator</text>
+        <rect class="svg-node ok" x="690" y="66" width="170" height="78" rx="12"/>
+        <text class="svg-label" x="775" y="94" text-anchor="middle">VERDICT</text>
+        <text class="svg-sub" x="775" y="113" text-anchor="middle">pass / warn / fail</text>
+        <text class="svg-sub" x="775" y="128" text-anchor="middle">+ cause + fix</text>
+        <line class="svg-edge" x1="190" y1="105" x2="282" y2="105" marker-end="url(#ar)"/>
+        <line class="svg-edge" x1="594" y1="105" x2="686" y2="105" marker-end="url(#ar)"/>
+        <line class="svg-edge dim" x1="346" y1="154" x2="346" y2="198"/>
+        <line class="svg-edge dim" x1="412" y1="154" x2="412" y2="198"/>
+        <line class="svg-edge dim" x1="480" y1="154" x2="480" y2="198"/>
+        <line class="svg-edge dim" x1="548" y1="154" x2="548" y2="198"/>
+        <rect class="svg-node" x="286" y="198" width="72" height="52" rx="9"/><text class="svg-label" x="322" y="220" text-anchor="middle" style="font-size:11px">numeric</text><text class="svg-sub" x="322" y="236" text-anchor="middle">quantities</text>
+        <rect class="svg-node" x="368" y="198" width="72" height="52" rx="9"/><text class="svg-label" x="404" y="220" text-anchor="middle" style="font-size:11px">time</text><text class="svg-sub" x="404" y="236" text-anchor="middle">simulation</text>
+        <rect class="svg-node" x="450" y="198" width="72" height="52" rx="9"/><text class="svg-label" x="486" y="220" text-anchor="middle" style="font-size:11px">relational</text><text class="svg-sub" x="486" y="236" text-anchor="middle">legality</text>
+        <rect class="svg-node" x="532" y="198" width="72" height="52" rx="9"/><text class="svg-label" x="568" y="220" text-anchor="middle" style="font-size:11px">enumerate</text><text class="svg-sub" x="568" y="236" text-anchor="middle">designs</text>
+      </svg>
+      <figcaption>Content (the data) feeds the engine; the engine runs four solvers over one shared model and returns an explanatory verdict.</figcaption>
+    </figure>
+  </section>
+
+  <!-- RULE -->
+  <section id="rule">
+    <h2><span class="section-no">3</span>The rule that decides what is coverable</h2>
+    <p class="section-sub">Coverage is not ad hoc. A question is answerable by SDA if, and only if, it can be expressed as one of five kinds of thing. If it cannot, covering it would force cloud-specific knowledge into the engine, or make the tool guess — so it is out of scope.</p>
+    <div class="grid cols-5">
+      <div class="card mech"><div class="num">1 · numeric</div><div class="name">A quantity that combines along a path</div><div class="how">e.g. add the latencies, take the smallest capacity, multiply the availabilities</div></div>
+      <div class="card mech"><div class="num">2 · time</div><div class="name">A question about behaviour over time</div><div class="how">slow tails, queueing, warm-up, feedback — answered by simulation</div></div>
+      <div class="card mech"><div class="num">3 · relational</div><div class="name">A legality or compatibility fact</div><div class="how">does this port fit that one; is this wiring allowed</div></div>
+      <div class="card mech"><div class="num">4 · enumerate</div><div class="name">A "which whole designs are valid" choice</div><div class="how">generate every admissible architecture from a set of options</div></div>
+      <div class="card mech"><div class="num">5 · optimize</div><div class="name">A search for the best or smallest change</div><div class="how">the cheapest design that meets the targets; the minimal fix</div></div>
+    </div>
+    <p style="margin-top:18px">Everything in the coverage table below maps to one of these five. This is what makes the boundary principled rather than a matter of taste: if a desired feature does not reduce to a quantity-with-a-rule, a time question, a legality fact, an enumeration, or an optimization, it does not belong in the engine.</p>
+  </section>
+
+  <!-- COVERED -->
+  <section id="covered">
+    <h2><span class="section-no">4</span>What SDA covers today</h2>
+    <p class="section-sub">Grouped by theme, in plain language, with the mechanism that makes each possible. Every item here is backed by an automated test or a worked real-world example.</p>
+
+    <h3>Capacity and bottlenecks</h3>
+    <p>SDA computes the throughput (requests per second) the design can sustain by taking the <em>smallest</em> capacity along each request path — the bottleneck — and then tracing which specific component is the binding constraint, so you know exactly where to add capacity. Where a component's capacity follows from its configuration (for example, the number of worker threads divided by how long each request takes — a relationship known as Little's law), the engine derives it rather than asking you to supply it. Hard limits such as a database's maximum connection count are modelled as plain data, so the classic "connection-pool exhaustion" failure shows up before you ship.</p>
+
+    <h3>Latency, including the slow tail</h3>
+    <p>Mean latency is computed by adding the per-component times along the synchronous path. But means hide the cases users actually feel, so SDA also runs a discrete-event simulation — a step-by-step model of requests arriving, waiting in queues, and being served — to compute true percentiles: the 50th, 99th, and 99.9th percentile response times. This is the one lens a static diagram fundamentally cannot provide, and it routinely reveals a slow tail hiding behind a healthy-looking average.</p>
+
+    <h3>Reliability — availability and durability</h3>
+    <p>Availability (the fraction of time a component is up) and durability (the chance data survives) both compound by multiplication along the path, which is why a single un-replicated component drags the whole system down. SDA computes both and surfaces the weakest link, making single points of failure visible as a measurable drop rather than a vague worry.</p>
+
+    <h3>Cost</h3>
+    <p>Fixed monthly costs are summed across the design. Pay-per-use costs — where you are billed in proportion to actual traffic — are expressed as a formula of throughput, so the bill rises with load and falls to nearly nothing when idle, exactly as a serverless system behaves.</p>
+
+    <h3>Structure and legality</h3>
+    <p>Before any numbers are computed, the relational solver checks that the wiring is legal: that connected ports speak compatible protocols and point the right way. Placement rules — "every stateful service needs a replica", "these two components may not be combined" — are enforced as well, and a catalogue of protocols keeps the vocabulary consistent and catches typos.</p>
+
+    <h3>Search — running the design in reverse</h3>
+    <p>Beyond checking a design you drew, SDA can work backwards. <strong>Optimize</strong> finds the cheapest configuration that still meets every target. <strong>Repair</strong> finds the smallest change to a violating design that makes it pass. <strong>Synthesize</strong> generates whole candidate architectures from a set of component choices, evaluates each, discards those that miss the targets, and ranks the survivors. And when a target simply cannot be met, the engine explains which one and by how much, instead of returning a bare "impossible".</p>
+
+    <div class="table-wrap" style="margin-top:22px">
+      <table>
+        <thead><tr><th>Capability</th><th>How it is computed</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Throughput &amp; bottleneck</td><td>smallest capacity along the path, plus a trace to the binding component</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Mean latency · slow-tail latency (p50/p99)</td><td>sum of times · discrete-event simulation</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Availability · durability</td><td>product of per-component values along the path</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Capacity from configuration (Little's law) · connection limits</td><td>a derived formula per component</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Horizontal scaling (capacity grows with replicas)</td><td>a derived formula per component</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Fixed cost · pay-per-use cost</td><td>sum · a formula of throughput</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Verdict with a cause and a suggested fix</td><td>attribution over the computed model</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Optimize · repair · explain an impossible target</td><td>constraint optimization</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Synthesize &amp; rank candidate architectures</td><td>enumeration, then evaluation, then ranking</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Legal wiring (protocols, direction) · placement rules</td><td>relational checks · enumeration constraints</td><td><span class="pill ok">covered</span></td></tr>
+          <tr><td>Synchronous vs asynchronous coupling · cold starts</td><td>path rules · simulation</td><td><span class="pill ok">covered</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- EXAMPLE -->
+  <section id="example">
+    <h2><span class="section-no">5</span>A worked example</h2>
+    <p class="section-sub">A real design, reconstructed from a live cloud project: a voice-conversation service in which a single "turn" — one spoken exchange — flows through six components.</p>
+    <p>In this system a user speaks into a browser; the audio travels through a content-delivery network to a small serverless function, which orchestrates one turn of conversation: it sends the speech to a speech-to-text service, passes the text to a large language model that generates a reply, sends the reply to a text-to-speech service, and records the session in a database. The two questions that matter are: <em>how many conversations can run at once</em>, and <em>how long does a turn take</em>. The engine answers both, and the answers are not where intuition would put them.</p>
+
+    <figure>
+      <svg viewBox="0 0 880 130" role="img" aria-label="The six-step request path of one conversation turn">
+        <defs><marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-faint)"/></marker></defs>
+        <g>
+          <rect class="svg-node" x="20" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="70" y="66" text-anchor="middle" style="font-size:11.5px">Browser</text><text class="svg-sub" x="70" y="82" text-anchor="middle">user</text>
+          <rect class="svg-node" x="136" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="186" y="66" text-anchor="middle" style="font-size:11.5px">CDN</text><text class="svg-sub" x="186" y="82" text-anchor="middle">10 ms</text>
+          <rect class="svg-node hot" x="252" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="302" y="63" text-anchor="middle" style="font-size:11.5px">Function</text><text class="svg-sub" x="302" y="79" text-anchor="middle">limit 10</text>
+          <rect class="svg-node" x="368" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="418" y="66" text-anchor="middle" style="font-size:11.5px">Speech→Text</text><text class="svg-sub" x="418" y="82" text-anchor="middle">300 ms</text>
+          <rect class="svg-node accent" x="484" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="534" y="63" text-anchor="middle" style="font-size:11.5px">LLM</text><text class="svg-sub" x="534" y="79" text-anchor="middle">1500 ms</text>
+          <rect class="svg-node" x="600" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="650" y="66" text-anchor="middle" style="font-size:11.5px">Text→Speech</text><text class="svg-sub" x="650" y="82" text-anchor="middle">500 ms</text>
+          <rect class="svg-node ok" x="716" y="42" width="100" height="48" rx="10"/><text class="svg-label" x="766" y="66" text-anchor="middle" style="font-size:11.5px">Database</text><text class="svg-sub" x="766" y="82" text-anchor="middle">end</text>
+        </g>
+        <g>
+          <line class="svg-edge" x1="120" y1="66" x2="132" y2="66" marker-end="url(#ar2)"/>
+          <line class="svg-edge" x1="236" y1="66" x2="248" y2="66" marker-end="url(#ar2)"/>
+          <line class="svg-edge" x1="352" y1="66" x2="364" y2="66" marker-end="url(#ar2)"/>
+          <line class="svg-edge" x1="468" y1="66" x2="480" y2="66" marker-end="url(#ar2)"/>
+          <line class="svg-edge" x1="584" y1="66" x2="596" y2="66" marker-end="url(#ar2)"/>
+          <line class="svg-edge" x1="700" y1="66" x2="712" y2="66" marker-end="url(#ar2)"/>
+        </g>
+        <text class="svg-title" x="254" y="26">caps throughput</text>
+        <text class="svg-title" x="486" y="26">drives latency</text>
+      </svg>
+      <figcaption>The amber component caps how many conversations run at once; the indigo one dominates how long a turn takes.</figcaption>
+    </figure>
+
+    <p><strong>Throughput.</strong> The serverless function is deliberately limited to ten simultaneous executions to cap cost. Because each turn keeps a function busy for the full ~2.3 seconds it takes the downstream services to respond, ten slots divided by 2.3 seconds is only about 4.3 turns per second — far below the eight the team needs for eight agents. The engine names the function as the binding constraint and suggests raising its concurrency limit.</p>
+    <p><strong>Latency.</strong> The total time for a turn is 2,340 milliseconds, of which the language model alone is 1,500. The chart makes the point visceral: optimising the infrastructure (the network, the function, the database — all tiny bars) would barely move the total. The real lever is the model choice. The engine names the language model as the cause and points the fix there.</p>
+
+    <figure>
+      <svg viewBox="0 0 880 252" role="img" aria-label="Bar chart of where the 2340 ms goes; the language model is 1500 ms">
+        <text class="svg-title" x="16" y="26">Where a 2,340 ms turn goes — the language model is 1,500 ms of it</text>
+        <g>
+          <text class="bar-label" x="16" y="69">CDN</text><rect class="bar-track" x="180" y="56" width="600" height="18" rx="4"/><rect class="bar" x="180" y="56" width="4" height="18" rx="2"/><text class="bar-val" x="192" y="69">10</text>
+          <text class="bar-label" x="16" y="101">Function</text><rect class="bar-track" x="180" y="88" width="600" height="18" rx="4"/><rect class="bar" x="180" y="88" width="8" height="18" rx="2"/><text class="bar-val" x="196" y="101">20</text>
+          <text class="bar-label" x="16" y="133">Speech→Text</text><rect class="bar-track" x="180" y="120" width="600" height="18" rx="4"/><rect class="bar" x="180" y="120" width="120" height="18" rx="3"/><text class="bar-val" x="308" y="133">300</text>
+          <text class="bar-label" x="16" y="165">Language model</text><rect class="bar-track" x="180" y="152" width="600" height="18" rx="4"/><rect class="bar peak" x="180" y="152" width="600" height="18" rx="4"/><text class="bar-val" x="724" y="165" style="fill:#fff">1500</text>
+          <text class="bar-label" x="16" y="197">Text→Speech</text><rect class="bar-track" x="180" y="184" width="600" height="18" rx="4"/><rect class="bar" x="180" y="184" width="200" height="18" rx="3"/><text class="bar-val" x="388" y="197">500</text>
+          <text class="bar-label" x="16" y="229">Database</text><rect class="bar-track" x="180" y="216" width="600" height="18" rx="4"/><rect class="bar" x="180" y="216" width="4" height="18" rx="2"/><text class="bar-val" x="192" y="229">10</text>
+        </g>
+      </svg>
+      <figcaption>Each bar is one component's contribution to the turn, in milliseconds. The fix is the model, not the infrastructure.</figcaption>
+    </figure>
+
+    <div class="callout"><span class="tag">The verdict the engine emits</span>
+      <p><strong>Throughput:</strong> 4.3 turns per second, below the 8 required — <span class="pill ok" style="font-size:11px">fails</span> the target; cause: the serverless function's concurrency limit; fix: raise it. &nbsp;<strong>Latency:</strong> 2,340 ms; cause: the language model; fix: choose a faster model.</p>
+    </div>
+  </section>
+
+  <!-- SCOPE -->
+  <section id="scope">
+    <h2><span class="section-no">6</span>The boundary of scope</h2>
+    <p class="section-sub">Three honest categories: things mostly built, things one clean extension away, and things deliberately left out.</p>
+
+    <h3>Partly covered — the mechanism exists, more content is needed</h3>
+    <p>The simulation can in principle model failure dynamics such as retry storms (where retries pile load onto a struggling service), circuit breakers, and start-up transients, but the content describing those feedback loops is not yet written. Single points of failure are already visible through the availability calculation, though there is not yet a dedicated detector that flags them by name.</p>
+    <ul>
+      <li><span class="pill partial">partial</span> &nbsp;Retry storms · circuit breakers · transients — simulation handles them; the models are unwritten.</li>
+      <li><span class="pill partial">partial</span> &nbsp;Single points of failure — surfaced via availability; no dedicated flag yet.</li>
+    </ul>
+
+    <h3>Within reach — feasible, one clean extension away</h3>
+    <p>The strongest differentiators are about <em>correctness of data flow</em> rather than raw numbers: whether a path preserves a chosen consistency model (for instance, whether a user always reads their own most recent write), and whether message ordering is preserved end-to-end. Both are legality questions and fit the relational solver; they need one new capability — propagating a categorical label (not just a number) along a request path. Diagram tools cannot do this at all.</p>
+    <ul>
+      <li><span class="pill idea">next</span> &nbsp;Consistency model (strong / eventual / read-your-writes).</li>
+      <li><span class="pill idea">next</span> &nbsp;Delivery and ordering guarantees (per-partition ordering, first-in-first-out queues).</li>
+    </ul>
+
+    <h3>Out of scope — deliberately</h3>
+    <p>Some things are left out on purpose, because covering them would either dissolve the tool's discipline ("the engine computes, it does not guess") or turn it into a different product.</p>
+    <ul>
+      <li><span class="pill no">out</span> &nbsp;Identity and access management, and deep security — a large domain in its own right, deferred by decision.</li>
+      <li><span class="pill no">out</span> &nbsp;Correctness of business logic or the data model — not a quantitative envelope.</li>
+      <li><span class="pill no">out</span> &nbsp;Operational practice, monitoring runbooks, and organisational factors.</li>
+      <li><span class="pill no">out</span> &nbsp;Exact live cloud pricing — the cost <em>structure</em> is modelled, but precise figures are a maintenance burden and are only ever shown marked as an estimate.</li>
+    </ul>
+  </section>
+
+  <!-- HONESTY -->
+  <section id="honesty">
+    <h2><span class="section-no">7</span>The honesty contract</h2>
+    <div class="callout honest"><span class="tag">The tool must not lie</span>
+      <p>Every value the tool reports is one of three things: an <strong>assumption you supplied</strong>, a <strong>value it derived</strong> from other values, or <strong>unknown</strong> — never a guess dressed up as a fact. Numbers that come from content are sourced from documentation where possible and marked as estimates otherwise. A tail-latency target is reported as <em>unknown</em> until a simulation has actually produced the figure. And where two solvers can answer the same question, they are tested against each other so a disagreement is caught immediately. This is the difference between "I drew an architecture" and "I verified an architecture".</p>
+    </div>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <h2><span class="section-no">8</span>Glossary</h2>
+    <p class="section-sub">Every term and abbreviation used above, in plain language.</p>
+    <dl class="glossary">
+      <dt>System design</dt><dd>The activity of choosing the components of a software system and how they connect, so that the whole meets goals for speed, scale, reliability and cost.</dd>
+      <dt>Component <span class="ab">building block</span></dt><dd>One element of a design — a load balancer, a function, a database, a cache. In SDA each is described by data (its limits and formulas), never code.</dd>
+      <dt>Throughput</dt><dd>How much work a system handles per unit time, usually requests per second.</dd>
+      <dt>Latency</dt><dd>How long a single request takes from start to finish, usually in milliseconds.</dd>
+      <dt>Percentile · tail latency <span class="ab">p50, p99, p999</span></dt><dd>A way to describe the spread of latencies. The 99th percentile (p99) is the time under which 99% of requests complete — the "slow tail" that the average hides. p50 is the median; p999 is the 99.9th percentile.</dd>
+      <dt>Availability</dt><dd>The fraction of time a component or system is working, often written as a number of "nines" (99.9% is "three nines").</dd>
+      <dt>Durability</dt><dd>The probability that stored data is not lost — for object storage, famously around "eleven nines".</dd>
+      <dt>Bottleneck</dt><dd>The single component that limits the whole system's throughput; the slowest link in the chain.</dd>
+      <dt>Capacity</dt><dd>The maximum throughput a single component can sustain.</dd>
+      <dt>Concurrency</dt><dd>How many requests a component handles at the same time — for example, a function's simultaneous-execution limit or a database's connection limit.</dd>
+      <dt>Little's law</dt><dd>A basic result of queueing theory: the average number of items in a system equals the arrival rate times the average time each spends inside. In practice it lets capacity be derived from concurrency and service time.</dd>
+      <dt>Service Level Objective <span class="ab">SLO</span></dt><dd>A target the design must meet — for example "99th-percentile latency under 200 ms" or "throughput at least 1000 requests per second".</dd>
+      <dt>Band</dt><dd>How a target is shaped in SDA: a floor/target/ceiling range, an exact point, or a set of percentile targets.</dd>
+      <dt>Verdict</dt><dd>The engine's answer for one target: pass, warning, failure, or unknown — together with the cause and a suggested fix.</dd>
+      <dt>Cause-chain</dt><dd>The trace from a failing target back to the component actually responsible for it.</dd>
+      <dt>Remediation</dt><dd>A concrete, ranked suggestion for fixing a failed target (for example, "raise this component's concurrency").</dd>
+      <dt>Backpressure</dt><dd>What happens when a downstream component cannot keep up and the slowdown propagates upstream; it makes the maths circular and requires solving for a steady state.</dd>
+      <dt>Steady state · least-fixpoint</dt><dd>The stable operating point a system settles into once backpressure has propagated. "Least-fixpoint" is the mathematical name for the natural, smallest such point.</dd>
+      <dt>Discrete-event simulation <span class="ab">DES</span></dt><dd>A step-by-step model of a system over time — requests arriving, waiting in queues, being served — used to compute true tail latencies and other time-dependent behaviour that formulas cannot.</dd>
+      <dt>Queueing theory · M/M/1</dt><dd>The mathematics of waiting lines. M/M/1 is the simplest model (random arrivals, random service, one server) with known formulas, used to check that the simulation is correct.</dd>
+      <dt>Cold start</dt><dd>The extra delay when a component (often a serverless function) has to start up before serving a request; it affects the slow tail more than the average.</dd>
+      <dt>Synchronous vs asynchronous</dt><dd>A synchronous call makes the caller wait for the reply (its time adds to the total); an asynchronous one hands work off and returns immediately (it does not add to the caller's latency).</dd>
+      <dt>Protocol · port</dt><dd>A protocol is the language two components speak (HTTP, a database wire protocol). A port is a connection point on a component that speaks one protocol in one direction.</dd>
+      <dt>Manifest · registry · content</dt><dd>A manifest is the data file describing one component. The registry lists the properties the tool understands and how each combines along a path. Together they are the "content" that gives the engine its cloud meaning.</dd>
+      <dt>Domain-agnostic</dt><dd>Describes the engine: it computes over an abstract graph and contains no knowledge of cloud services — all such knowledge lives in content.</dd>
+      <dt>Aggregation algebra</dt><dd>The rule for how a property combines along a path: latency and cost add up, throughput takes the minimum, availability and durability multiply.</dd>
+      <dt>Optimize · repair · synthesize</dt><dd>The three "reverse" modes: optimize finds the cheapest design meeting the targets; repair finds the smallest change that fixes a failing one; synthesize generates and ranks whole candidate designs.</dd>
+      <dt>UNSAT</dt><dd>Short for "unsatisfiable": no configuration can meet the targets. SDA never stops there — it explains which target is impossible and by how much.</dd>
+      <dt>Solver</dt><dd>A reusable computation engine for one class of problem. SDA uses four: a numeric optimizer (MiniZinc), a simulator (discrete-event), a relational query engine (DataScript), and an enumerator (clingo / Answer Set Programming).</dd>
+    </dl>
+  </section>
+
+</main>
+
+<footer><div class="wrap">
+  System Design Assistant · document 8 — Coverage Map · written to be read on its own.
+</div></footer>
+</body>
+</html>

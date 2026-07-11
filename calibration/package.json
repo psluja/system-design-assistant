@@ -1,0 +1,28 @@
+{
+  "name": "@sda/calibration",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "The SDA calibration harness (TASK-93): a data corpus of measured ground-truth systems plus a deterministic fitter that predicts each with SDA's engine, fits the tunable component defaults, and reports the residual — the structural gaps no tunable can remove. Reads + fits + reports; NEVER mutates shipped content defaults.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "calibrate": "tsx src/run.ts",
+    "calibrate:check": "tsx src/run.ts --check",
+    "fidelity": "tsx src/fidelity.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sda/content": "workspace:*",
+    "@sda/engine-core": "workspace:*",
+    "@sda/engine-sim": "workspace:*",
+    "@sda/engine-solve": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

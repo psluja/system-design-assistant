@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assumption Uncertainty — Monte Carlo over the register · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#0d3a2e,#1c7a5f);color:#fff;padding:56px 24px 44px}
+  .w{max-width:880px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",sans-serif;opacity:.9;max-width:680px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.7;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0d3a2e}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#0d3a2e;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Assumption Uncertainty</h1>
+  <div class="sub">Monte Carlo over the assumptions register: every estimate becomes an honest range, every conclusion becomes a distribution — and the register turns into a prioritized to-do list of what to measure first.</div>
+  <div class="meta">SDA design document · 2026-07-03 · status: for owner review — not started</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> computes an architecture drawn on a canvas — load, latency, availability, cost — against declared requirements, and generates a design document whose <b>assumptions register</b> lists every input number with its provenance (documented / estimate / architect / default). This document adds the missing dimension: how much the conclusions <em>wobble</em> when the soft inputs move.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>Monte Carlo</b></td><td>evaluating the same design thousands of times, each time with the uncertain inputs drawn from their declared ranges — the spread of results IS the uncertainty of the conclusion.</td></tr>
+  <tr><td style="white-space:nowrap"><b>p95 / percentile</b></td><td>the value below which 95% of scenarios fall — "p95 cost $7.2k" means only 1 in 20 plausible worlds costs more.</td></tr>
+  <tr><td style="white-space:nowrap"><b>tornado analysis</b></td><td>ranking the uncertain inputs by how much of the outcome's spread each one drives — the tall bars are what to measure first.</td></tr>
+  <tr><td style="white-space:nowrap"><b>seeded</b></td><td>the random draws come from a recorded seed, so every run is exactly reproducible.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The last place the tool lies by tone</h2>
+<p class="lead">The generated document says the system costs <b>$5,746.90</b> — five significant digits resting on a cache-hit ratio that is an <em>estimate</em> and service times that are <em>estimates</em>. The register honestly labels which inputs are soft; it stays silent about how much the conclusions inherit that softness. Point values with estimate-grade inputs are false precision — the polite name for a lie of tone.</p>
+
+<h2><span class="no">2</span>The model — declared ranges, deterministic sampling</h2>
+<table>
+  <tr><th>Piece</th><th>Design</th></tr>
+  <tr><td><b>Range declarations</b></td><td>any config value may carry an optional <code>range</code> (data, like source/est.): <code>{lo, hi}</code> uniform or <code>{lo, mode, hi}</code> triangular — nothing fancier in v1 (heavier distributions need evidence we don't have; declaring them would itself be a guess). Catalog <code>est.</code> entries ship sensible sourced-or-est. ranges; the architect can add/override a range on ANY value from the Inspector — including their own declarations ("traffic 2,000, but could be 1,500–3,000").</td></tr>
+  <tr><td><b>Sampling</b></td><td>N scenarios (default 1,000; knob up to 10,000): each draws every ranged input once, evaluates the full forward pass. Seeded → byte-reproducible; the seed is recorded in the document. No range anywhere ⇒ the feature is silent (no-filler) and results are today's, bit for bit.</td></tr>
+  <tr><td><b>Batch-evaluation seam</b></td><td>the ONE new abstraction: <code>evaluateBatch(design, scenarios[]) → results[]</code> — CPU worker first (a 6 ms evaluation × 1,000 ≈ 6 s off-thread), designed so a WebGPU backend slots in later. This seam IS layer 1 of the domain solver (TASK-79 "GPU proposes") — building this feature builds half the solver's foundation.</td></tr>
+  <tr><td><b>Outputs</b></td><td>per metric (cost, flow latency, availability): median/p5/p95 + a histogram series; per SLO: <b>% of scenarios satisfied</b>; per ranged input: its <b>tornado share</b> of each outcome's variance (computed by correlation on the SAME sample — no extra runs needed in v1; one-at-a-time refinement later).</td></tr>
+  <tr><td><b>The 100% contract</b></td><td>identical to guarantees: certain (seeded sampling + the same deterministic engine per scenario), declared (every range is data with provenance — a register row), refused (no invented distributions; an input without a range simply stays fixed — the result then honestly reads "uncertainty of X not modeled").</td></tr>
+</table>
+
+<h2><span class="no">3</span>What the architect gains</h2>
+<table>
+  <tr><th>Power</th><th>Reads as</th></tr>
+  <tr><td><b>Cost/SLO as distributions</b></td><td>"median $5.7k, p95 $7.2k" · "latency SLO holds in 97% of scenarios" — board-room language, computed</td></tr>
+  <tr><td><b>Tornado — what to measure first</b></td><td>"80% of cost variance comes from the CDN hit ratio → measure it in production before committing; the rest isn't worth refining" — the register becomes an ACTION LIST</td></tr>
+  <tr><td><b>Risk-aware alternatives</b></td><td>variant A cheaper at median, B safer at p95 — the difference that most often decides real reviews, currently invisible everywhere</td></tr>
+  <tr><td><b>(Later) robust optimize</b></td><td>"cheapest config holding the SLOs in ≥95% of scenarios" — designs stop being brittle to the day an estimate misses</td></tr>
+</table>
+
+<h2><span class="no">4</span>UX/UI</h2>
+<table>
+  <tr><th>Surface</th><th>Behavior</th></tr>
+  <tr><td><b>Inspector</b></td><td>each config knob gains an optional "± range" affordance (collapsed by default); est. catalog values show their shipped range with provenance</td></tr>
+  <tr><td><b>System panel</b></td><td>an "Uncertainty" block (only when ranges exist + a run completed): metric rows as `median (p5–p95)`, SLO rows as "% scenarios ✓", a run button with N + seed; runs off-thread (worker), never blocks the canvas</td></tr>
+  <tr><td><b>Canvas</b></td><td>no new pixels in v1 (uncertainty is a system-level property; per-node tinting would imply per-node precision we don't have)</td></tr>
+  <tr><td><b>Generated document</b></td><td>register rows show ranges; a new "Uncertainty" section: histogram SVGs, the tornado chart, SLO confidence, the seed + N for reproducibility. Absent without ranges.</td></tr>
+  <tr><td><b>MCP</b></td><td><code>set_range</code> / <code>run_uncertainty{n?, seed?}</code> with guided errors; results in the same shapes the doc uses</td></tr>
+</table>
+
+<h2><span class="no">5</span>Build plan</h2>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td><b>R1 — seam + math</b></td><td>range data on config; evaluateBatch (worker); sampling + percentiles + SLO confidence + correlation tornado; property tests (no ranges ≡ today; seed determinism; percentile sanity vs closed-form on a linear toy)</td><td>full rigor; sensitivity-matrix row for ranges</td></tr>
+  <tr><td><b>R2 — content + doc</b></td><td>ranges for catalog est. entries (sourced bounds or honest est.); DocModel + renderer section (histograms, tornado); register range column</td><td>content suite + doc goldens</td></tr>
+  <tr><td><b>R3 — surfaces</b></td><td>Inspector ± affordance, System Uncertainty block, MCP tools, smokes + screenshots</td><td>both shells + e2e</td></tr>
+</table>
+
+<h2><span class="no">6</span>Non-goals (v1)</h2>
+<table>
+  <tr><td>Correlated inputs / copulas, heavy-tailed fitted distributions</td><td>no data to justify them — declaring correlation would be a guess; revisit with measurements</td></tr>
+  <tr><td>Uncertainty inside the DES</td><td>v1 ranges drive the FORWARD pass; tail-under-uncertainty is a later, costlier round</td></tr>
+  <tr><td>Per-node uncertainty pixels on canvas</td><td>would imply precision the method doesn't give</td></tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <code>docs/design/uncertainty-monte-carlo.html</code> · the bridge feature into TASK-79 (the batch-evaluation seam is the solver's layer 1) · the 100% contract: certain / declared / refused.
+</footer>
+</div>
+</body>
+</html>

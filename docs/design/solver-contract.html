@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Solver Contract — capability interfaces, conformance suite & composition root · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:720px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{background:#1d2330;color:#e7e4da;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:18px 0;font:13px/1.62 "Cascadia Code",Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  pre .c{color:#7f8ba3;font-style:italic}
+  pre .k{color:#6fb3ff}
+  pre .t{color:#8fe3c0}
+  pre .s{color:#e0b070}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14.5px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:10px 13px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center;overflow-x:auto}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.now{background:#e9f5f2;color:#0b6e6e}
+  .tag.p0{background:#fbe7e7;color:#a33}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:13px}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>The Solver Contract</h1>
+  <div class="sub">The heart of the project, made explicit: one small package that is the <em>canonical documentation home</em>, the <em>abstract domain models</em>, and the <em>executable specification</em> that every solver — the incumbent generic ones and our own domain solver to come — must pass, identically. Distilled from the code that exists, not invented.</div>
+  <div class="meta">SDA design document · 2026-07-03 · TASK-79 phase 0 · status: for owner review — not started</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design — load, latency, cost, feasibility — against declared requirements. Underneath, SDA is a <b>domain-agnostic engine</b> that turns the drawing into a typed-property graph and answers questions about it with a handful of solvers. Today three of those solvers are heavy third-party WebAssembly components (a numeric optimizer, a logic enumerator); the long-term plan (TASK-79) replaces their <em>runtime</em> use with a purpose-built solver and keeps the generic ones forever as <b>test-time referees</b>. This document designs <b>phase 0</b>: the boundary — the contract — that makes such a swap a one-line change and provably behavior-preserving.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>capability</b></td><td>one question the engine can answer about a design: evaluate it, optimize a knob, repair it, explain why it can't be met, enumerate legal topologies, evaluate a batch. Each is its own small interface.</td></tr>
+  <tr><td style="white-space:nowrap"><b>adapter / implementation</b></td><td>a concrete thing that answers a capability. The incumbent adapter wraps MiniZinc / clingo / the JS hot path; the second adapter will be our own solver. Both satisfy the same interface.</td></tr>
+  <tr><td style="white-space:nowrap"><b>conformance suite</b></td><td>an executable test battery shipped <em>with</em> the contract that every adapter runs against — exactness, never-hang, honest non-convergence, determinism, cancellation. Passing it is what "implements the capability" means.</td></tr>
+  <tr><td style="white-space:nowrap"><b>composition root</b></td><td>the single place in each app that decides which adapter is bound to which capability. Everything else depends only on the interface (dependency inversion), never on a concrete solver.</td></tr>
+  <tr><td style="white-space:nowrap"><b>referee mode</b></td><td>binding <em>both</em> adapters at once behind a comparison wrapper that runs them side by side and flags any divergence as a top-priority bug — how we prove the new solver matches the old.</td></tr>
+  <tr><td style="white-space:nowrap"><b>honesty state</b></td><td>SDA's rule that uncertainty is a <em>value</em>, never a guess: an answer may be a solution, or <code>infeasible</code>, or <code>did-not-converge</code> — and those three are never conflated.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>Why the contract is the heart</h2>
+<p class="lead">SDA's whole promise — "the tool must not lie" — rests on the solvers. The value of a verified design is exactly the trustworthiness of the thing that verified it. Today that trust lives implicitly, scattered across a facade, three injected function types, a CLI adapter, a browser twin, and the doc-4 charter prose. It works, but the <em>idea</em> is not in one place, and there is no single artifact that a second implementation could be built against and measured by.</p>
+<p>The owner's framing (2026-07-03, <span class="mono">"musimy to mieć"</span>) is a <b>centralization of the idea</b> into one separated package, <code>@sda/solver-contract</code>, that is three things at once:</p>
+<table>
+  <tr><th>The contract package is…</th><th>What that means concretely</th></tr>
+  <tr><td><b>The canonical documentation home</b></td><td>the abstract domain models — request shapes, result shapes, the honesty states — carry their meaning as doc-comments <em>on the interface itself</em>. The contract IS the documentation: there is no truth about "what optimize returns when it can't converge" that lives anywhere but on the type. Design docs (this one, doc-4) reference the contract; they do not re-state it.</td></tr>
+  <tr><td><b>The abstract domain models</b></td><td>one home for <code>OptimizeRequest</code>, <code>OptimizeResult</code>, <code>Shortfall</code>, <code>SolveOutcome</code>, <code>EnumerateResult</code>… — the vocabulary in which every solver question is posed and every answer is read, independent of MiniZinc syntax, clingo atoms, or cell-network internals.</td></tr>
+  <tr><td><b>The executable specification</b></td><td>a conformance suite ships in the package. "Adapter X implements capability C" is not a claim in a README — it is a green test run. The incumbent adapter is the first to pass it (pinning today's behavior); our solver is the second, built <em>against</em> it.</td></tr>
+</table>
+<div class="callout"><b>The one rule that keeps this honest: an interface exists only if two real implementations exercise it.</b> Phase 0 does not invent abstractions for solvers we might write. Every capability in the contract is <em>distilled</em> from an implementation that ships today and is destined for a second implementation (our domain solver, or — for enumerate — a future in-house enumerator). No speculative generality; the abstraction earns its place by being needed twice.</p></div>
+
+<h2><span class="no">2</span>The distillation table — every solver seam as it exists today</h2>
+<p>Before a single interface is written, this is the ground truth: each capability, its exact signature in the code today, who consumes it, and the honesty states it already speaks. Every row is verified against the named file.</p>
+<table>
+  <tr><th>Capability</th><th>Today's signature &amp; where it lives</th><th>Today's consumers</th><th>Today's honesty states</th></tr>
+  <tr>
+    <td><b>Evaluate</b><br><span class="tag now">JS hot path</span></td>
+    <td><code>evaluate(graph, registry): Result&lt;Evaluation, string[]&gt;</code> — <span class="path">engine/solve/src/engine.ts</span>. <b>Synchronous.</b> Builds the cell network, runs the least-fixpoint <code>solve()</code> (<span class="path">fixpoint/solve.ts</span>), checks bands. <code>Evaluation</code> = <code>{ converged, value(node,key), verdicts }</code>.</td>
+    <td>The facade <code>Engine.evaluate/check</code> (<span class="path">facade.ts</span>); the browser (<span class="path">app/web/src/app.tsx</span>); <code>synthesize()</code> forward-ranking (<span class="path">content/sda/src/synthesize.ts</span>); every MCP command tool.</td>
+    <td><code>converged:false</code> (did-not-converge / NaN); a build <code>Result</code> error (unregistered key, malformed relation); per-band verdict <code>ok/warning/violation/unknown/did-not-converge</code> (<span class="path">engine/core/src/verdict.ts</span>).</td>
+  </tr>
+  <tr>
+    <td><b>Optimize</b><br><span class="tag now">MiniZinc / COIN-BC · HiGHS</span></td>
+    <td><code>optimize(graph, tunables, objective, headroom?): Promise&lt;Result&lt;OptimizeResult, string[]&gt;&gt;</code> — <span class="path">facade.ts</span>. <b>Async.</b> Prunes to <code>reachableTunables</code>, emits <code>optimizeModel</code> (<span class="path">minizinc/search.ts</span>), awaits the injected <code>MznSolver</code>. <code>OptimizeResult</code> = <code>{ assignments[], value(node,key) }</code>.</td>
+    <td>MCP <code>optimize</code> tool (<span class="path">app/mcp/src/search.ts</span> · <code>buildSearchTools(studio, registry, nativeSolveMzn)</code>); web Improve (<span class="path">app.tsx</span> → <code>./mzn</code>); <code>synthesize()</code> sizing.</td>
+    <td><code>SolveOutcome</code> kinds (<span class="path">minizinc/cli.ts</span>): <code>solved</code> · <code>infeasible</code> (→ INFEASIBLE msg) · <code>unknown</code> (→ DID_NOT_CONVERGE msg). The two are never conflated.</td>
+  </tr>
+  <tr>
+    <td><b>Repair</b><br><span class="tag now">MiniZinc / COIN-BC · HiGHS</span></td>
+    <td><code>repair(graph, tunables, headroom?): Promise&lt;Result&lt;Change[], string[]&gt;&gt;</code> — <span class="path">facade.ts</span>. Emits <code>repairModel</code> (minimize L1 distance from current). <code>Change</code> = <code>{ node, key, from, to, delta }</code>.</td>
+    <td>MCP <code>repair</code> tool (<span class="path">search.ts</span>); web Improve / Auto-fix.</td>
+    <td>Same <code>SolveOutcome</code> triad; empty array = "already within SLOs — no change needed".</td>
+  </tr>
+  <tr>
+    <td><b>ExplainInfeasible</b><br><span class="tag now">MiniZinc / COIN-BC · HiGHS</span></td>
+    <td><code>explainInfeasible(graph, tunables): Promise&lt;Result&lt;Shortfall[], string[]&gt;&gt;</code> — <span class="path">facade.ts</span>. Emits <code>relaxedModel</code> (soft-penalty per band, minimize total). <code>Shortfall</code> = <code>{ node, key, bound:'floor'|'ceiling'|'point', amount }</code>.</td>
+    <td>MCP <code>explain_infeasible</code> tool (<span class="path">search.ts</span>).</td>
+    <td>Relaxed model is always satisfiable, so only <code>unknown</code> (timeout) → DID_NOT_CONVERGE; positive penalty = the exact shortfall, empty = feasible.</td>
+  </tr>
+  <tr>
+    <td><b>Enumerate</b><br><span class="tag now">clingo / ASP</span></td>
+    <td><code>enumerateSelections(problem, run, {limit?}): Promise&lt;Selection[]&gt;</code> — <span class="path">engine/solve/src/asp/clingo.ts</span>. Builds an ASP program, awaits the injected <code>RunAsp = (program, models) =&gt; Promise&lt;AnswerSet[]&gt;</code>, parses <code>choose/2</code> atoms, sorts canonically.</td>
+    <td><code>synthesize()</code> / MCP <code>compare_options</code> (<span class="path">content/sda/src/synthesize.ts</span>, <span class="path">app/mcp/src/synthesize.ts</span>); node runner <code>nativeRunAsp</code> (<span class="path">app/mcp/src/clingo-node.ts</span>), browser twin <span class="path">app/web/src/clingo.ts</span>.</td>
+    <td>UNSAT ⇒ <code>[]</code> (<code>answerSets</code>); a clingo <code>ERROR</code> <em>throws</em> (the one place a solve throws — see tension §"open questions"). No timeout state modeled today.</td>
+  </tr>
+  <tr>
+    <td><b>EvaluateBatch</b><br><span class="tag p0">not built — designed</span></td>
+    <td>Designed in <span class="path">docs/design/uncertainty-monte-carlo.html</span> as <code>evaluateBatch(design, scenarios[]) → results[]</code>: N forward passes over drawn inputs. Called out there as "layer 1 of the domain solver (TASK-79 'GPU proposes')".</td>
+    <td>(Future) the Monte-Carlo uncertainty feature; the WebGPU proposer of the domain solver.</td>
+    <td>Inherits Evaluate's per-scenario states; adds seeded-determinism as a first-class requirement.</td>
+  </tr>
+  <tr>
+    <td><b>Simulate</b><br><span class="tag now">DES (separate engine)</span></td>
+    <td><code>simulate(network, opts): SimResult</code> — <span class="path">engine/sim/src/des.ts</span>. <b>Synchronous, seeded.</b> <code>SimResult</code> carries <code>sojournPercentile(p)</code>, station stats, goodput/error/amplification. Fed to verdicts via the <code>TailProvider</code> seam (<span class="path">engine/solve/src/verdict/tail.ts</span>).</td>
+    <td>MCP sim tools; the tail-latency verdicts; validated against the analytic M/M/c twin (<span class="path">engine/sim/src/analytic.ts</span>).</td>
+    <td>Steady-state via warm-up discard; a tail with no answer stays <code>unknown</code> in <code>checkTailBands</code>. Non-convergence is a modeling choice (warm-up), not a solver state.</td>
+  </tr>
+</table>
+
+<figure>
+  <div class="svgc">
+  <svg width="860" height="290" viewBox="0 0 860 290" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <text x="20" y="24" font-size="13" font-weight="700" fill="#183a56">TODAY — the seam is implicit, spread across many files</text>
+    <rect x="20" y="40" width="150" height="46" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="95" y="60" text-anchor="middle" font-size="12" font-weight="600">app/web</text><text x="95" y="76" text-anchor="middle" font-size="10.5" fill="#4b5263">app.tsx</text>
+    <rect x="20" y="100" width="150" height="46" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="95" y="120" text-anchor="middle" font-size="12" font-weight="600">app/mcp</text><text x="95" y="136" text-anchor="middle" font-size="10.5" fill="#4b5263">search · synthesize</text>
+    <rect x="230" y="66" width="170" height="60" rx="8" fill="#e9f5f2" stroke="#0b6e6e"/><text x="315" y="90" text-anchor="middle" font-size="12" font-weight="700">Engine facade</text><text x="315" y="108" text-anchor="middle" font-size="10.5" fill="#4b5263">createEngine(reg,{solveMzn})</text>
+    <rect x="460" y="26" width="170" height="40" rx="8" fill="#fff" stroke="#8b8fa3"/><text x="545" y="51" text-anchor="middle" font-size="11.5">MznSolver (injected)</text>
+    <rect x="460" y="76" width="170" height="40" rx="8" fill="#fff" stroke="#8b8fa3"/><text x="545" y="101" text-anchor="middle" font-size="11.5">RunAsp (injected)</text>
+    <rect x="460" y="126" width="170" height="40" rx="8" fill="#fff" stroke="#8b8fa3"/><text x="545" y="151" text-anchor="middle" font-size="11.5">JS fixpoint (in-proc)</text>
+    <rect x="680" y="26" width="160" height="40" rx="8" fill="#fdf2e2" stroke="#b4530a"/><text x="760" y="45" text-anchor="middle" font-size="11">MiniZinc wasm</text><text x="760" y="59" text-anchor="middle" font-size="10" fill="#a33">17.3 MB</text>
+    <rect x="680" y="76" width="160" height="40" rx="8" fill="#fdf2e2" stroke="#b4530a"/><text x="760" y="95" text-anchor="middle" font-size="11">clingo wasm</text><text x="760" y="109" text-anchor="middle" font-size="10" fill="#a33">2.5 MB</text>
+    <line x1="170" y1="63" x2="228" y2="82" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="170" y1="123" x2="228" y2="108" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="400" y1="86" x2="458" y2="52" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="400" y1="96" x2="458" y2="96" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="400" y1="106" x2="458" y2="140" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="630" y1="46" x2="678" y2="46" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="630" y1="96" x2="678" y2="96" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="20" y="205" font-size="13" font-weight="700" fill="#183a56">PHASE 0 — the seam is one package everyone depends on</text>
+    <rect x="20" y="222" width="300" height="48" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="170" y="242" text-anchor="middle" font-size="12" font-weight="600">apps + facade + synthesize</text><text x="170" y="259" text-anchor="middle" font-size="10.5" fill="#4b5263">depend ONLY on the interfaces</text>
+    <rect x="360" y="216" width="180" height="60" rx="9" fill="#e9f5f2" stroke="#0b6e6e" stroke-width="2"/><text x="450" y="240" text-anchor="middle" font-size="12.5" font-weight="700">@sda/solver-contract</text><text x="450" y="258" text-anchor="middle" font-size="10.5" fill="#0b6e6e">interfaces · models · suite</text>
+    <rect x="580" y="216" width="120" height="26" rx="6" fill="#fff" stroke="#8b8fa3"/><text x="640" y="234" text-anchor="middle" font-size="10.5">incumbent adapter</text>
+    <rect x="580" y="250" width="120" height="26" rx="6" fill="#fff" stroke="#8b8fa3" stroke-dasharray="4 3"/><text x="640" y="268" text-anchor="middle" font-size="10.5">domain adapter (later)</text>
+    <line x1="320" y1="246" x2="358" y2="246" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <line x1="578" y1="229" x2="542" y2="238" stroke="#4b5263" stroke-width="1.4" marker-end="url(#a)"/>
+    <line x1="578" y1="263" x2="542" y2="254" stroke="#4b5263" stroke-width="1.4" marker-end="url(#a)" stroke-dasharray="4 3"/>
+  </svg>
+  </div>
+  <figcaption>Dependencies point <b>inward</b> to the contract (dependency inversion): apps and adapters both depend on the interfaces; neither depends on the other. Today the same wiring exists but the interfaces are only conventions on injected function types — phase 0 makes them a package with a suite.</figcaption>
+</figure>
+
+<h2><span class="no">3</span>The contract — one interface per capability</h2>
+<p class="lead">Each capability below is a distilled interface with its request/result domain models and honesty states, written so the doc-comment IS the specification. Each is justified by naming its <b>two implementations</b> — the rule from §1. Signatures preserve today's shapes; the contract renames toward capability nouns and lifts the models out of <span class="path">minizinc/</span> into the shared package.</p>
+
+<div class="callout warn"><b>The central design tension, resolved once here: the sync hot path vs the async cold solvers.</b> Evaluate is synchronous today (a &lt;16 ms in-process fixpoint) and must stay so — the canvas re-evaluates on every edit. Optimize/Repair/Explain/Enumerate are asynchronous (they await a WASM worker). The contract does <b>not</b> force one shape on both. Each capability declares its own natural return type: <code>Evaluate</code> returns <code>Result&lt;…&gt;</code> directly; the search capabilities return <code>Promise&lt;Result&lt;…&gt;&gt;</code>. This is deliberate interface segregation — there is no god-interface a solver must implement wholesale. A solver adapter implements exactly the capabilities it provides, and a consumer depends only on the capabilities it calls. The <em>future</em> domain solver may answer Evaluate synchronously and Optimize asynchronously from one module — that is fine; it satisfies two separate interfaces.</div>
+
+<h3>3.1 Evaluate — the hot path <span class="tag now">sync</span></h3>
+<pre><span class="c">/** Forward evaluation: solve the design's typed-property graph to its least fixpoint and</span>
+<span class="c"> *  judge every declared band. SYNCHRONOUS and pure — this runs on every canvas edit, so it</span>
+<span class="c"> *  must not await. Uncertainty is a VALUE, never a throw: a build problem is a Result error;</span>
+<span class="c"> *  a failure to settle is `converged:false`; a band no value can decide is verdict `unknown`. */</span>
+<span class="k">export interface</span> <span class="t">Evaluate</span> {
+  (req: <span class="t">EvaluateRequest</span>): <span class="t">Result</span>&lt;<span class="t">Evaluation</span>, <span class="k">readonly</span> string[]&gt;;
+}
+<span class="k">export interface</span> <span class="t">EvaluateRequest</span> { <span class="k">readonly</span> graph: <span class="t">Graph</span>; <span class="c">/* registry is bound at adapter construction */</span> }
+<span class="k">export interface</span> <span class="t">Evaluation</span> {
+  <span class="k">readonly</span> converged: boolean;              <span class="c">// false ⇒ did-not-converge / NaN (honest)</span>
+  value(node: <span class="t">NodeId</span>, key: <span class="t">Key</span>): number | <span class="k">undefined</span>;
+  <span class="k">readonly</span> verdicts: <span class="k">readonly</span> <span class="t">Verdict</span>[];  <span class="c">// each: ok|warning|violation|unknown|did-not-converge</span>
+}</pre>
+<p><b>Two implementations:</b> (1) the cell-network least-fixpoint <code>evaluate()</code> shipping today; (2) the domain solver's CPU forward pass (TASK-79 layer 2, "CPU proves"). Verified against <span class="path">engine/solve/src/engine.ts</span> and <span class="path">fixpoint/solve.ts</span> (<code>converged = settled && !hasNaN</code>).</p>
+
+<h3>3.2 Optimize — search a knob against SLOs <span class="tag now">async</span></h3>
+<pre><span class="c">/** Run backwards: choose values for the freed `tunables` that make every SLO hold while</span>
+<span class="c"> *  minimizing/maximizing `objective`. ASYNCHRONOUS (awaits a worker). The result triad is</span>
+<span class="c"> *  load-bearing and MUST NOT be conflated: a proven-optimal `solved`, a proven `infeasible`</span>
+<span class="c"> *  (no assignment can satisfy the SLOs — use ExplainInfeasible for the shortfall), or an</span>
+<span class="c"> *  honest `did-not-converge` (hit the hard time bound — simplify or set knobs manually). */</span>
+<span class="k">export interface</span> <span class="t">Optimize</span> {
+  (req: <span class="t">OptimizeRequest</span>): <span class="t">Promise</span>&lt;<span class="t">SearchResult</span>&lt;<span class="t">OptimizeSolution</span>&gt;&gt;;
+}
+<span class="k">export interface</span> <span class="t">OptimizeRequest</span> {
+  <span class="k">readonly</span> graph: <span class="t">Graph</span>;
+  <span class="k">readonly</span> tunables: <span class="k">readonly</span> <span class="t">Tunable</span>[];        <span class="c">// {node,key,min,max} — a freed config input</span>
+  <span class="k">readonly</span> objective: <span class="t">Objective</span>;                 <span class="c">// {node,key,direction:'min'|'max'}</span>
+  <span class="k">readonly</span> headroom?: <span class="t">Headroom</span>;                  <span class="c">// {key,factor} — ρ ≤ factor, finite-latency sizing</span>
+}
+<span class="k">export interface</span> <span class="t">OptimizeSolution</span> {
+  <span class="k">readonly</span> assignments: <span class="k">readonly</span> { node: <span class="t">NodeId</span>; key: <span class="t">Key</span>; value: number }[];
+  value(node: <span class="t">NodeId</span>, key: <span class="t">Key</span>): number | <span class="k">undefined</span>;
+}
+<span class="c">// The honesty triad, shared by every search capability. `did-not-converge` ≠ `infeasible`.</span>
+<span class="k">export type</span> <span class="t">SearchResult</span>&lt;<span class="t">T</span>&gt; =
+  | { <span class="k">readonly</span> kind: <span class="s">'solved'</span>; <span class="k">readonly</span> value: <span class="t">T</span> }
+  | { <span class="k">readonly</span> kind: <span class="s">'infeasible'</span> }
+  | { <span class="k">readonly</span> kind: <span class="s">'did-not-converge'</span> };</pre>
+<p><b>Two implementations:</b> (1) the MiniZinc projection <code>optimizeModel</code> + COIN-BC/HiGHS; (2) the domain solver's CPU branch-and-bound over the same cell network. The three-kind result is distilled straight from <code>SolveOutcome</code> (<span class="path">minizinc/cli.ts</span>) and the facade's two distinct error constants <code>INFEASIBLE</code> / <code>DID_NOT_CONVERGE</code> (<span class="path">facade.ts</span> lines 13–14) — the contract promotes those constants into a typed <code>kind</code> so the distinction cannot be lost in a string.</p>
+<div class="callout"><b>A model-fidelity note the contract must carry, not hide:</b> the facade prunes to <code>reachableTunables</code> and evaluates violated bands <em>before</em> calling the solver (<span class="path">facade.ts</span> lines 74–82). That pruning is a performance optimization <em>of the incumbent adapter</em>, not part of the capability's meaning — so it stays inside the adapter, below the interface. The contract specifies only the observable behavior (best objective subject to SLOs); the conformance suite pins that, and the domain adapter is free to prune differently as long as it returns the same optimum.</div>
+
+<h3>3.3 Repair — the minimal edit <span class="tag now">async</span></h3>
+<pre><span class="c">/** Given a design that violates its SLOs, find the SMALLEST change to the tunables that</span>
+<span class="c"> *  makes every band hold (minimize Σ|new − current|). Answers "what is the least edit that</span>
+<span class="c"> *  fixes this", not "what is the cheapest design". Same async triad; a `solved` with an</span>
+<span class="c"> *  EMPTY change list means the design already holds — no edit needed. */</span>
+<span class="k">export interface</span> <span class="t">Repair</span> {
+  (req: <span class="t">RepairRequest</span>): <span class="t">Promise</span>&lt;<span class="t">SearchResult</span>&lt;<span class="k">readonly</span> <span class="t">Change</span>[]&gt;&gt;;
+}
+<span class="k">export interface</span> <span class="t">Change</span> { <span class="k">readonly</span> node: <span class="t">NodeId</span>; key: <span class="t">Key</span>; from: number; to: number; delta: number; }</pre>
+<p><b>Two implementations:</b> (1) <code>repairModel</code> (L1-minimizing MIP); (2) the domain solver's local-search repair. Verified against <span class="path">facade.ts</span> lines 111–123 and <span class="path">minizinc/search.ts</span> <code>repairModel</code>.</p>
+
+<h3>3.4 ExplainInfeasible — the exact shortfall <span class="tag now">async</span></h3>
+<pre><span class="c">/** Explain WHY the SLOs cannot be met: re-encode every band as SOFT and minimize total</span>
+<span class="c"> *  penalty. A positive penalty names exactly WHICH SLO fails and BY HOW MUCH — strictly</span>
+<span class="c"> *  more informative than a boolean UNSAT or an unsat-core. The relaxed model is always</span>
+<span class="c"> *  satisfiable, so the only non-`solved` outcome is `did-not-converge` (a timeout). */</span>
+<span class="k">export interface</span> <span class="t">ExplainInfeasible</span> {
+  (req: <span class="t">ExplainRequest</span>): <span class="t">Promise</span>&lt;<span class="t">SearchResult</span>&lt;<span class="k">readonly</span> <span class="t">Shortfall</span>[]&gt;&gt;;
+}
+<span class="k">export interface</span> <span class="t">Shortfall</span> {
+  <span class="k">readonly</span> node: <span class="t">NodeId</span>; key: <span class="t">Key</span>;
+  <span class="k">readonly</span> bound: <span class="s">'floor'</span> | <span class="s">'ceiling'</span> | <span class="s">'point'</span>;
+  <span class="k">readonly</span> amount: number;  <span class="c">// how far the band is missed (0 ⇒ satisfied)</span>
+}</pre>
+<p><b>Two implementations:</b> (1) <code>relaxedModel</code> soft-penalty MIP; (2) the domain solver's slack computation over the same bands. Verified against <span class="path">facade.ts</span> lines 97–109 and <code>relaxedModel</code> (<span class="path">minizinc/search.ts</span> lines 408–444).</p>
+
+<h3>3.5 Enumerate — generate legal topologies <span class="tag now">async</span></h3>
+<pre><span class="c">/** GENERATE candidate discrete structures (not check one): return every valid selection —</span>
+<span class="c"> *  exactly one option per slot such that all adjacent choices are compatible and placement</span>
+<span class="c"> *  rules (requires/conflicts) hold. Domain-agnostic: slots/options/compat are opaque ids.</span>
+<span class="c"> *  UNSAT ⇒ an EMPTY list (not an error). Deterministic order for reproducible callers. */</span>
+<span class="k">export interface</span> <span class="t">Enumerate</span> {
+  (req: <span class="t">EnumerateRequest</span>): <span class="t">Promise</span>&lt;<span class="t">EnumerateResult</span>&gt;;
+}
+<span class="k">export interface</span> <span class="t">EnumerateRequest</span> {
+  <span class="k">readonly</span> problem: <span class="t">SelectionProblem</span>;   <span class="c">// slots · adjacencies · compatible · requires? · conflicts?</span>
+  <span class="k">readonly</span> limit?: number;             <span class="c">// 0 / omitted ⇒ all answer sets</span>
+}
+<span class="k">export type</span> <span class="t">EnumerateResult</span> =
+  | { <span class="k">readonly</span> kind: <span class="s">'enumerated'</span>; <span class="k">readonly</span> selections: <span class="k">readonly</span> <span class="t">Selection</span>[] }
+  | { <span class="k">readonly</span> kind: <span class="s">'did-not-converge'</span> };  <span class="c">// NEW — a bound the raw runner lacks today (see §"open questions")</span></pre>
+<p><b>Two implementations:</b> (1) <code>enumerateSelections</code> over clingo-wasm (<code>RunAsp</code>); (2) a future in-house series-parallel enumerator (TASK-79 exploited-structure), OR — nearer term — the second implementation is the <em>node vs browser</em> pair of <code>RunAsp</code> providers, which already exercise the same <code>SelectionProblem</code> → <code>Selection[]</code> contract through two independent WASM wirings (<span class="path">app/mcp/src/clingo-node.ts</span> and <span class="path">app/web/src/clingo.ts</span>). Verified against <span class="path">engine/solve/src/asp/clingo.ts</span>.</p>
+<div class="callout warn"><b>Honesty gap surfaced by distillation:</b> today <code>answerSets</code> <em>throws</em> on a clingo <code>ERROR</code>, and enumeration has no time bound (<span class="path">asp/clingo.ts</span> line 28). This violates the "search never throws / never hangs" discipline that the MiniZinc path already honors (<span class="path">app/mcp/src/search.ts</span> lines 24–30). The contract specifies the correct shape — a <code>did-not-converge</code> kind and no-throw — and the incumbent Enumerate adapter must close that gap to conform. This is exactly the value of writing the contract: it makes the one inconsistent seam visible and gives it a fix target with zero ambiguity.</div>
+
+<h3>3.6 EvaluateBatch — N evaluations, one call <span class="tag p0">async · not yet built</span></h3>
+<pre><span class="c">/** Evaluate the SAME design under many input scenarios in one call. The batch seam is layer 1</span>
+<span class="c"> *  of the domain solver ("GPU proposes") and the engine behind Monte-Carlo uncertainty. SEEDED:</span>
+<span class="c"> *  byte-reproducible. A CPU backend (loop of Evaluate off-thread) is the first implementation;</span>
+<span class="c"> *  a WebGPU backend the second. Per-scenario states are exactly Evaluate's. */</span>
+<span class="k">export interface</span> <span class="t">EvaluateBatch</span> {
+  (req: <span class="t">EvaluateBatchRequest</span>): <span class="t">Promise</span>&lt;<span class="k">readonly</span> <span class="t">Evaluation</span>[]&gt;;
+}
+<span class="k">export interface</span> <span class="t">EvaluateBatchRequest</span> {
+  <span class="k">readonly</span> graph: <span class="t">Graph</span>;
+  <span class="k">readonly</span> scenarios: <span class="k">readonly</span> <span class="t">Scenario</span>[];  <span class="c">// each: drawn overrides for ranged config inputs</span>
+}</pre>
+<p><b>Two implementations:</b> (1) the CPU worker loop over <code>Evaluate</code> (Monte-Carlo R1); (2) the WebGPU/WGSL batch proposer (TASK-79 layer 1). This interface is included in phase 0 <b>only as a declared seam</b> — it has no implementation to pin yet, so its conformance clauses are written but <code>skip</code>-marked until the first backend lands (honoring "no interface without two impls" by marking it not-yet-active rather than pretending). Distilled from <span class="path">docs/design/uncertainty-monte-carlo.html</span> §2.</p>
+
+<h3>3.7 Simulate — the time engine <span class="tag now">sync · seeded</span> <span class="tag p0">contract-adjacent</span></h3>
+<p>The DES is a <em>separate engine</em> (doc-4 §3b): it computes dynamics and true percentiles, not a fixpoint over the property graph. It is <b>not</b> a solver of the cell network and TASK-79 does not replace it — the referee story (numeric differential vs MiniZinc) does not apply. Phase 0's decision: <b>Simulate does not join the solver contract.</b> Its already-clean seam is the <code>TailProvider</code> (<span class="path">verdict/tail.ts</span>) that decouples <code>engine/solve</code> from <code>engine/sim</code>; that seam stays where it is. Including Simulate would be a god-interface reflex — the honest call is to list it, explain why it is out, and keep the contract to the cell-network solver family. (If a second DES implementation ever appears, it earns its own small contract then — not speculatively now.)</p>
+
+<h2><span class="no">4</span>The conformance suite — the executable specification</h2>
+<p class="lead">The suite ships in the package and every adapter runs it. It is parameterized by the adapter under test: <code>conformanceOf(adapter)</code> returns a describe-block the adapter's own test file invokes. "Implements capability C" means: this suite is green for C.</p>
+<table>
+  <tr><th>Clause</th><th>What it asserts</th><th>Executable test shape</th></tr>
+  <tr>
+    <td><b>Exactness</b></td>
+    <td>On a corpus of designs with known answers, the adapter returns the same solution the reference does (the optimum, the shortfall, the selection set). This is the anti-lie clause.</td>
+    <td><code>for (design of corpus) expect(adapter.optimize(design)).toEqual(reference[design])</code> — the reference being the pinned incumbent output (phase 0) and later the MiniZinc referee (phase 1's generated suite).</td>
+  </tr>
+  <tr>
+    <td><b>Hard time-bound (never hangs)</b></td>
+    <td>A pathological input returns within the budget — as a best-so-far or an honest <code>did-not-converge</code> — but always <em>returns</em>. A tool that can hang is poison for an agent flow (memory: <code>solver-time-bounded</code>).</td>
+    <td><code>const t=Date.now(); const r=await adapter.optimize(degenerate); expect(Date.now()-t).toBeLessThan(BUDGET+margin); expect(r.kind).toBeDefined()</code>. Uses the known 319 s-degeneracy family as fixtures.</td>
+  </tr>
+  <tr>
+    <td><b>Honest non-convergence</b></td>
+    <td><code>infeasible</code> and <code>did-not-converge</code> are returned as distinct kinds and never swapped; a genuinely-infeasible design reads <code>infeasible</code>, a timed-out one reads <code>did-not-converge</code>.</td>
+    <td>Two fixtures: a proven-UNSAT design ⇒ <code>expect(r.kind).toBe('infeasible')</code>; a within-budget-impossible design ⇒ <code>expect(r.kind).toBe('did-not-converge')</code>. Also: no capability ever throws on a no-solution.</td>
+  </tr>
+  <tr>
+    <td><b>Determinism under seed</b></td>
+    <td>Same input + same seed ⇒ byte-identical output, run twice. Enumerate returns its canonical order; EvaluateBatch is reproducible.</td>
+    <td><code>expect(await run(input,seed)).toEqual(await run(input,seed))</code> and, for enumerate, <code>expect(selections).toEqual([...selections].sort(canonical))</code>.</td>
+  </tr>
+  <tr>
+    <td><b>Cancellation</b></td>
+    <td>A solve handed an already-aborted <code>AbortSignal</code> settles promptly without producing a stale result; an in-flight solve aborted mid-run rejects/returns cancelled rather than resolving late onto a superseded design (the epoch-guard discipline, <code>web-workers-concurrency</code>).</td>
+    <td><code>const c=new AbortController(); c.abort(); const r=await adapter.optimize({...,signal:c.signal}); expect(r).toBe(CANCELLED)</code> — cancellation is a <b>new</b> parameter the contract introduces (see §"open questions": today cancellation is staleness-guarded at the call site, not passed to the solver).</td>
+  </tr>
+</table>
+<div class="callout"><b>Why the suite lives WITH the contract, not with the engine:</b> the suite is the operational definition of the interfaces' doc-comments. If a clause and a comment ever disagree, that is a contract bug — keeping them in one package makes that impossible to miss. The engine's own tests (property, differential, golden) stay where they are and test the <em>incumbent implementation</em>; the conformance suite tests <em>the boundary</em>, and is what the second implementation is graded against.</div>
+
+<h2><span class="no">5</span>The composition root — one binding site, referee mode</h2>
+<p class="lead">Every app has exactly one place that decides which adapter answers which capability. Nothing else names a concrete solver. Switching implementations — for one capability or all — is a single change there.</p>
+<pre><span class="c">// app/mcp/src/composition.ts  (and the browser twin in app/web/src/composition.ts)</span>
+<span class="k">import type</span> { <span class="t">SolverBindings</span> } <span class="k">from</span> <span class="s">'@sda/solver-contract'</span>;
+
+<span class="k">export function</span> <span class="t">bindSolvers</span>(mode: <span class="t">RuntimeMode</span>): <span class="t">SolverBindings</span> {
+  <span class="k">const</span> incumbent = makeIncumbentAdapter({ solveMzn: nativeSolveMzn, runAsp: nativeRunAsp });
+  <span class="k">switch</span> (mode) {
+    <span class="k">case</span> <span class="s">'incumbent'</span>: <span class="k">return</span> incumbent;                     <span class="c">// today, and the runtime default</span>
+    <span class="k">case</span> <span class="s">'domain'</span>:    <span class="k">return</span> makeDomainAdapter();                 <span class="c">// phase 3 — one line flips the runtime</span>
+    <span class="k">case</span> <span class="s">'referee'</span>:   <span class="k">return</span> referee(incumbent, makeDomainAdapter()); <span class="c">// both bound; divergence ⇒ P0</span>
+  }
+}</pre>
+<p>The <code>referee</code> wrapper implements every capability by calling <b>both</b> bound adapters, returning the trusted (incumbent) answer, and asserting equivalence:</p>
+<pre><span class="k">const</span> referee = (trusted: <span class="t">SolverBindings</span>, candidate: <span class="t">SolverBindings</span>): <span class="t">SolverBindings</span> =&gt; ({
+  optimize: <span class="k">async</span> (req) =&gt; {
+    <span class="k">const</span> [a, b] = <span class="k">await</span> Promise.all([trusted.optimize(req), candidate.optimize(req)]);
+    <span class="k">if</span> (!equivalent(a, b)) reportDivergence(<span class="s">'optimize'</span>, req, a, b); <span class="c">// P0 — the tool would lie</span>
+    <span class="k">return</span> a;  <span class="c">// the trusted answer is what ships; the candidate is only measured</span>
+  },
+  <span class="c">/* …one wrapper per capability, each independently switchable… */</span>
+});</pre>
+<figure>
+  <div class="svgc">
+  <svg width="820" height="230" viewBox="0 0 820 230" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <rect x="20" y="90" width="150" height="50" rx="9" fill="#eef4ff" stroke="#3b6fd4"/><text x="95" y="112" text-anchor="middle" font-size="12.5" font-weight="600">app / facade</text><text x="95" y="129" text-anchor="middle" font-size="10.5" fill="#4b5263">calls capabilities</text>
+    <rect x="220" y="80" width="170" height="70" rx="10" fill="#e9f5f2" stroke="#0b6e6e" stroke-width="2"/><text x="305" y="104" text-anchor="middle" font-size="12.5" font-weight="700">composition root</text><text x="305" y="122" text-anchor="middle" font-size="10.5" fill="#0b6e6e">bindSolvers(mode)</text><text x="305" y="138" text-anchor="middle" font-size="10" fill="#4b5263">the ONE binding site</text>
+    <rect x="470" y="20" width="180" height="46" rx="9" fill="#fff" stroke="#8b8fa3"/><text x="560" y="40" text-anchor="middle" font-size="11.5" font-weight="600">incumbent adapter</text><text x="560" y="56" text-anchor="middle" font-size="10" fill="#4b5263">MiniZinc · clingo · JS</text>
+    <rect x="470" y="160" width="180" height="46" rx="9" fill="#fff" stroke="#8b8fa3" stroke-dasharray="5 3"/><text x="560" y="180" text-anchor="middle" font-size="11.5" font-weight="600">domain adapter</text><text x="560" y="196" text-anchor="middle" font-size="10" fill="#4b5263">GPU proposes · CPU proves</text>
+    <rect x="700" y="90" width="100" height="46" rx="9" fill="#fbe7e7" stroke="#a33"/><text x="750" y="110" text-anchor="middle" font-size="11" font-weight="600">referee</text><text x="750" y="126" text-anchor="middle" font-size="9.5" fill="#a33">divergence=P0</text>
+    <line x1="170" y1="115" x2="218" y2="115" stroke="#4b5263" stroke-width="1.6" marker-end="url(#b)"/>
+    <line x1="390" y1="100" x2="468" y2="52" stroke="#4b5263" stroke-width="1.5" marker-end="url(#b)"/>
+    <line x1="390" y1="130" x2="468" y2="180" stroke="#4b5263" stroke-width="1.5" marker-end="url(#b)" stroke-dasharray="5 3"/>
+    <line x1="650" y1="46" x2="700" y2="100" stroke="#a33" stroke-width="1.3" marker-end="url(#b)"/>
+    <line x1="650" y1="182" x2="700" y2="128" stroke="#a33" stroke-width="1.3" marker-end="url(#b)" stroke-dasharray="5 3"/>
+    <text x="215" y="205" font-size="11.5" fill="#4b5263">mode = 'incumbent' | 'domain' | 'referee' — switching is ONE change here, per capability if wanted</text>
+  </svg>
+  </div>
+  <figcaption>Per-capability selection: bindings are a record of capabilities, so the transition can flip <code>evaluate</code> to the domain solver while <code>optimize</code> stays incumbent — de-risking the migration one capability at a time. Referee binds both and compares; the trusted answer always ships.</figcaption>
+</figure>
+<p><b>Transition period:</b> both implementations coexist in the tree; only one is <em>in the runtime</em> per the bound mode. Referee mode is a CI/dev configuration, never the shipped default. <code>equivalent()</code> is capability-specific and tolerance-aware: exact for Enumerate's selection sets and Repair's changes; float-tolerant for Optimize's objective (two optima may differ within ε yet both be valid), with the same value read back through <code>value(node,key)</code> so the comparison is on observable outputs, not solver internals.</p>
+
+<h2><span class="no">6</span>Bundle separation — designed day one</h2>
+<p class="lead">The prize (TASK-79) is dropping the 17.3 MB MiniZinc wasm (plus its data ≈ 17.8 MB) from the <em>runtime</em> bundle once the domain solver ships — while keeping the incumbent adapter in CI forever as the referee. The separation must be structural from day one, or it becomes impossible to extract later.</p>
+<table>
+  <tr><th>Mechanism</th><th>How our builds honor it</th></tr>
+  <tr>
+    <td><b>The referee adapter is a separate entry, dynamically imported</b></td>
+    <td>The incumbent adapter (which pulls in the MiniZinc/clingo loaders) is reached only via <code>await import('@sda/solver-contract/incumbent')</code> from the composition root, never a static top-level import. The domain adapter is the static default. This is the pattern already proven in the tree: <span class="path">app/web/src/app.tsx</span> lines 897–898 dynamically <code>import('./mzn')</code> / <code>import('./clingo')</code>, and the wasm is <em>fetched only on first solve</em> (<span class="path">app/web/src/mzn.ts</span> <code>apiP ??= import(...)</code>). Bundle separation is not new machinery — it is making today's lazy-load the <em>only</em> path to the heavy adapter.</td>
+  </tr>
+  <tr>
+    <td><b>Vite (web) — the wasm is a public asset, the loader a lazy chunk</b></td>
+    <td>The 17.3 MB <span class="path">app/web/public/minizinc/minizinc.wasm</span> is a <code>public/</code> asset resolved at runtime by URL (<span class="path">mzn.ts</span> <code>new URL('minizinc/minizinc.mjs', document.baseURI)</code>), so it is never in the JS graph — it ships or not by whether <code>public/minizinc</code> is vendored. The loader module lands in its own dynamic chunk (Rollup code-splits on <code>import()</code>). Phase-3 removal = drop the vendor step + never bind the incumbent adapter at runtime; the referee CI build re-adds the vendor step behind a flag.</td>
+  </tr>
+  <tr>
+    <td><b>esbuild (VS Code MCP) — a build flag drops the entry</b></td>
+    <td>The VS Code extension bundles with esbuild (<span class="path">app/vscode/esbuild.mjs</span>). The incumbent adapter entry is excluded from the runtime bundle via a define/flag (<code>--define:SDA_REFEREE=false</code>) that dead-code-eliminates the dynamic import, or by marking <code>@sda/solver-contract/incumbent</code> external and shipping it only in the CI build. The wasm files (<span class="path">app/vscode/dist/*.wasm</span>) are copied by the build script conditionally on the same flag.</td>
+  </tr>
+  <tr>
+    <td><b>CI keeps the referee forever</b></td>
+    <td>The conformance + differential jobs build in <code>referee</code> mode (flag on), so the incumbent adapter and its wasm are present in CI regardless of what the shipped bundle contains. The generic solvers never leave the repo — only the runtime bundle.</td>
+  </tr>
+</table>
+<div class="callout"><b>The day-one requirement is a discipline, not a feature:</b> no module outside the incumbent adapter entry may statically import a solver loader. A lint rule / dependency-cruiser check in the contract package enforces it — if <code>app.tsx</code> ever <code>import</code>s <code>./mzn</code> at top level, CI fails. That single rule is what guarantees the 17.8 MB stays extractable in phase 3.</div>
+
+<h2><span class="no">7</span>Migration plan — zero behavior change, pinned by the whole suite</h2>
+<p class="lead">Phase 0 moves the existing implementations behind the contract with <b>no observable change</b>. The safety property is: at every step, the full existing test suite (100 tests) plus the new conformance suite stay green, and the incumbent adapter's outputs are byte-identical to today's.</p>
+<table>
+  <tr><th>Step</th><th>Action</th><th>Risk / note</th></tr>
+  <tr><td><b>1</b></td><td>Create <code>@sda/solver-contract</code> with the interfaces + domain models (lifted from <span class="path">minizinc/search.ts</span>, <span class="path">cli.ts</span>, <span class="path">asp/clingo.ts</span>, <span class="path">engine.ts</span>) — <b>types only, no logic</b>. Re-export the moved types from their old homes so nothing breaks yet.</td><td>Low. Pure type relocation; <code>pnpm -r typecheck</code> is the gate. Keep <code>Tunable/Objective/Headroom/Shortfall/Change/SolveOutcome</code> shape-identical.</td></tr>
+  <tr><td><b>2</b></td><td>Write the conformance suite against the interfaces, parameterized by adapter. Do not run it yet (no adapter object exists).</td><td>Low. This is the spec; writing it first surfaces any interface gap (e.g. the Enumerate throw/timeout gap, §3.5) before an adapter is built.</td></tr>
+  <tr><td><b>3</b></td><td>Wrap today's code as the <b>incumbent adapter</b>: a thin object whose methods call <code>createEngine(...).optimize</code> etc. and translate the <code>Result&lt;…&gt;</code>/error-string shape into the typed <code>SearchResult</code> kinds. No solver logic moves — only adaptation.</td><td>Medium. The one place today's two error <em>strings</em> become typed <em>kinds</em>; a golden test pins that <code>INFEASIBLE</code>→<code>infeasible</code>, <code>DID_NOT_CONVERGE</code>→<code>did-not-converge</code>. Close the Enumerate no-throw/timeout gap here.</td></tr>
+  <tr><td><b>4</b></td><td>Run the conformance suite against the incumbent adapter. It must pass — this is what "zero behavior change" means operationally. Fix the adapter (never the suite) until green.</td><td>Medium. Cancellation clause needs an <code>AbortSignal</code> threaded to the solvers (new — see §"open questions"); until then that clause is <code>skip</code>-marked for the incumbent and tracked as a phase-0 follow-up.</td></tr>
+  <tr><td><b>5</b></td><td>Introduce the composition root in each app; route all solver calls through the bound <code>SolverBindings</code>. Delete the scattered direct <code>createEngine</code>/<code>buildSearchTools(…, nativeSolveMzn)</code> wiring in favor of the single binding.</td><td>Medium. Behavior-preserving refactor of <span class="path">app/mcp/src/index.ts</span> and <span class="path">app/web/src/app.tsx</span>; the existing app/e2e smokes are the pin.</td></tr>
+  <tr><td><b>6</b></td><td>Add the dependency-cruiser rule forbidding static solver-loader imports outside the incumbent entry; add the <code>referee</code> mode wiring (bound to incumbent-vs-incumbent as a smoke until the domain adapter exists).</td><td>Low. Locks in bundle separation and proves the referee harness before there is a second solver to compare.</td></tr>
+</table>
+<div class="callout"><b>The pin that makes this safe:</b> a "characterization" test set captures the incumbent adapter's exact output on the existing content corpus (the checkout design, the archetypes) as goldens. Any diff after any migration step is a regression, full stop. Phase 0 is done when: contract package exists, conformance suite green against the incumbent, composition root is the only binding site, bundle-separation lint passes, and the 100 existing tests plus goldens are unchanged.</div>
+
+<h2><span class="no">8</span>Non-goals (phase 0)</h2>
+<table>
+  <tr><td><b>No new solver logic</b></td><td>Phase 0 writes zero optimization/enumeration algorithms. It only relocates types, wraps existing code, and adds the suite + composition root. The domain solver is phases 1–3.</td></tr>
+  <tr><td><b>No god-interface</b></td><td>No single <code>Solver</code> interface that every adapter must implement wholesale. Capabilities are segregated; an adapter implements only what it provides, a consumer depends only on what it calls (interface segregation, dependency inversion — SOLID throughout).</td></tr>
+  <tr><td><b>No speculative abstractions</b></td><td>An interface exists only where two real implementations exercise it. EvaluateBatch is declared but skip-marked until its first backend; Simulate is deliberately left OUT of the contract (one implementation, a different engine).</td></tr>
+  <tr><td><b>No performance work</b></td><td>Phase 0 changes no hot-path timing. The &lt;16 ms evaluate budget is preserved by keeping Evaluate synchronous and in-process; the batch/GPU speedups belong to later phases.</td></tr>
+  <tr><td><b>No domain leakage</b></td><td>The contract stays domain-agnostic: <code>grep</code> it for <code>aws/lambda/latency</code> ⇒ zero. Slots, tunables, keys and objectives are opaque ids exactly as the engine treats them today.</td></tr>
+</table>
+
+<h2><span class="no">9</span>Design tensions found &amp; open questions for the owner</h2>
+<table>
+  <tr><th>Tension / question</th><th>Where it comes from</th><th>Proposed resolution</th></tr>
+  <tr>
+    <td><b>Sync Evaluate vs async search</b></td>
+    <td><code>evaluate()</code> is sync (<span class="path">engine.ts</span>); optimize/repair/explain/enumerate are async (await a worker).</td>
+    <td>Resolved in §3: no unified shape. Each capability declares its natural return type; interface segregation makes the mismatch a non-issue. <b>Confirm</b> you're happy the contract has both sync and async members rather than forcing all-async.</td>
+  </tr>
+  <tr>
+    <td><b>Enumerate throws + has no time bound</b></td>
+    <td><code>answerSets</code> throws on clingo <code>ERROR</code>; no timeout (<span class="path">asp/clingo.ts</span> line 28). Inconsistent with the MiniZinc never-throw/never-hang discipline.</td>
+    <td>Contract specifies no-throw + a <code>did-not-converge</code> kind; incumbent Enumerate adapter closes the gap in migration step 3. <b>Confirm</b> this is in phase-0 scope (it is a real behavior change to Enumerate, though a strictly-more-honest one).</td>
+  </tr>
+  <tr>
+    <td><b>Cancellation is not passed to solvers today</b></td>
+    <td>Staleness is guarded at the call site / worker epoch (<code>web-workers-concurrency</code>); the solver functions take no <code>AbortSignal</code>.</td>
+    <td>Contract adds an optional <code>signal?: AbortSignal</code> to the async requests; incumbent honors it best-effort (the WASM solves are not always interruptible mid-run, so cancellation may mean "discard the result", not "stop the CPU"). <b>Decide</b>: is best-effort cancellation acceptable for phase 0, with true interruption a later item?</td>
+  </tr>
+  <tr>
+    <td><b>Two optima can differ yet both be valid</b></td>
+    <td>Float MIP: MiniZinc and the domain solver may pick different assignments achieving the same objective within ε.</td>
+    <td>Referee's <code>equivalent()</code> compares <em>objective value</em> (float-tolerant) + <em>SLO satisfaction</em>, not the raw assignment vector. <b>Confirm</b> the equivalence relation is "same objective + all SLOs hold", not "identical knobs".</td>
+  </tr>
+  <tr>
+    <td><b>Registry binding: request field or adapter construction?</b></td>
+    <td>Today <code>createEngine(registry, …)</code> binds the registry once; the graph is per-call.</td>
+    <td>Proposed: registry bound at adapter construction (as today), only the graph in the request — keeps requests light and matches the facade. <b>Confirm</b> vs. putting the registry in every request (more explicit, more verbose).</td>
+  </tr>
+  <tr>
+    <td><b>Package name &amp; what re-exports from where</b></td>
+    <td>Owner suggested <code>@sda/solver-contract</code>. The lifted types currently live in <code>@sda/engine-solve</code> and are imported widely.</td>
+    <td>Keep back-compat re-exports from <code>@sda/engine-solve</code> through phase 0 so no consumer churns; deprecate them in a later cleanup. <b>Confirm</b> the name and that a transitional re-export is acceptable.</td>
+  </tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <span class="path">docs/design/solver-contract.html</span> · TASK-79 phase 0 (the solver contract) · distilled from <span class="path">engine/solve/src/{facade,engine,fixpoint,minizinc,asp}</span>, <span class="path">app/mcp/src/{search,synthesize,mzn-native,clingo-node}</span>, <span class="path">app/web/src/{mzn,clingo,app}</span> · the contract is the documentation home, the abstract domain models, and the executable spec — an interface exists only where two implementations meet.
+</footer>
+</div>
+</body>
+</html>

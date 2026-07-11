@@ -1,0 +1,795 @@
+{
+  "schema": 7,
+  "id": "p1",
+  "name": "Untitled",
+  "instances": [
+    {
+      "id": "cli_cmd",
+      "type": "client.web",
+      "config": {
+        "throughput": 500
+      },
+      "ranges": {
+        "throughput": {
+          "lo": 300,
+          "hi": 700
+        }
+      }
+    },
+    {
+      "id": "cli_qry",
+      "type": "client.web",
+      "config": {
+        "throughput": 10000
+      },
+      "ranges": {
+        "throughput": {
+          "lo": 6000,
+          "hi": 14000
+        }
+      }
+    },
+    {
+      "id": "waf",
+      "type": "security.waf",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 250
+          }
+        }
+      ]
+    },
+    {
+      "id": "alb_w",
+      "type": "lb.alb"
+    },
+    {
+      "id": "apigw",
+      "type": "apigw.rest"
+    },
+    {
+      "id": "cmd",
+      "type": "compute.service",
+      "config": {
+        "availability": 0.9995
+      },
+      "transforms": {
+        "out": {
+          "kind": "ratio",
+          "value": 3
+        }
+      }
+    },
+    {
+      "id": "rds",
+      "type": "proxy.rds"
+    },
+    {
+      "id": "aurora",
+      "type": "db.aurora"
+    },
+    {
+      "id": "kafka",
+      "type": "stream.kafka",
+      "config": {
+        "drainRate": 3000
+      }
+    },
+    {
+      "id": "saga",
+      "type": "compute.service",
+      "transforms": {
+        "db": {
+          "kind": "prob",
+          "value": 0.3
+        }
+      }
+    },
+    {
+      "id": "proj_read",
+      "type": "compute.service",
+      "ranges": {
+        "perRequestDuration": {
+          "lo": 10,
+          "mode": 20,
+          "hi": 40
+        }
+      }
+    },
+    {
+      "id": "proj_srch",
+      "type": "compute.service"
+    },
+    {
+      "id": "proj_hot",
+      "type": "compute.service"
+    },
+    {
+      "id": "rstore",
+      "type": "db.postgres",
+      "bands": [
+        {
+          "key": "cost",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 30000
+          }
+        }
+      ],
+      "config": {
+        "latency": 15,
+        "perRequestDuration": 15
+      },
+      "ranges": {
+        "perRequestDuration": {
+          "lo": 10,
+          "mode": 15,
+          "hi": 30
+        }
+      }
+    },
+    {
+      "id": "es",
+      "type": "search.elasticsearch"
+    },
+    {
+      "id": "redis",
+      "type": "cache.redis",
+      "config": {
+        "availability": 0.9999
+      }
+    },
+    {
+      "id": "dlq",
+      "type": "queue.sqs"
+    },
+    {
+      "id": "notifier",
+      "type": "compute.faas"
+    },
+    {
+      "id": "analytics",
+      "type": "compute.service",
+      "transforms": {
+        "out": {
+          "kind": "window",
+          "value": 1000
+        }
+      }
+    },
+    {
+      "id": "s3_an",
+      "type": "storage.object"
+    },
+    {
+      "id": "cdn",
+      "type": "cdn.cloudfront",
+      "config": {
+        "throughput": 150000
+      },
+      "transforms": {
+        "out": {
+          "kind": "ratio",
+          "value": 0.7
+        }
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 120
+          }
+        },
+        {
+          "key": "tailLatency",
+          "band": {
+            "shape": "percentiles",
+            "targets": {
+              "__map": [
+                [
+                  "p99",
+                  300
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "key": "availability",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 0.999
+          }
+        }
+      ]
+    },
+    {
+      "id": "alb_r",
+      "type": "lb.alb"
+    },
+    {
+      "id": "query",
+      "type": "compute.service",
+      "config": {
+        "availability": 0.9997
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "cli_cmd",
+        "out"
+      ],
+      "to": [
+        "waf",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "waf",
+        "out"
+      ],
+      "to": [
+        "alb_w",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "alb_w",
+        "out"
+      ],
+      "to": [
+        "apigw",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "apigw",
+        "out"
+      ],
+      "to": [
+        "cmd",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cmd",
+        "db"
+      ],
+      "to": [
+        "rds",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "rds",
+        "out"
+      ],
+      "to": [
+        "aurora",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cmd",
+        "out"
+      ],
+      "to": [
+        "kafka",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "saga",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "proj_read",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "proj_srch",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "proj_hot",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "notifier",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "analytics",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "saga",
+        "db"
+      ],
+      "to": [
+        "rds",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "proj_read",
+        "db"
+      ],
+      "to": [
+        "rstore",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "proj_srch",
+        "out"
+      ],
+      "to": [
+        "es",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "proj_srch",
+        "out"
+      ],
+      "to": [
+        "dlq",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.01
+      }
+    },
+    {
+      "from": [
+        "proj_hot",
+        "cache"
+      ],
+      "to": [
+        "redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "analytics",
+        "out"
+      ],
+      "to": [
+        "s3_an",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cli_qry",
+        "out"
+      ],
+      "to": [
+        "cdn",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cdn",
+        "out"
+      ],
+      "to": [
+        "alb_r",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "alb_r",
+        "out"
+      ],
+      "to": [
+        "query",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "query",
+        "cache"
+      ],
+      "to": [
+        "redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "query",
+        "db"
+      ],
+      "to": [
+        "rstore",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.2
+      }
+    }
+  ],
+  "layout": {
+    "cli_cmd": {
+      "x": 80,
+      "y": 80
+    },
+    "cli_qry": {
+      "x": 320,
+      "y": 80
+    },
+    "waf": {
+      "x": 560,
+      "y": 80
+    },
+    "alb_w": {
+      "x": 800,
+      "y": 80
+    },
+    "apigw": {
+      "x": 80,
+      "y": 230
+    },
+    "cmd": {
+      "x": 320,
+      "y": 230
+    },
+    "rds": {
+      "x": 560,
+      "y": 230
+    },
+    "aurora": {
+      "x": 800,
+      "y": 230
+    },
+    "kafka": {
+      "x": 80,
+      "y": 380
+    },
+    "saga": {
+      "x": 320,
+      "y": 380
+    },
+    "proj_read": {
+      "x": 560,
+      "y": 380
+    },
+    "proj_srch": {
+      "x": 800,
+      "y": 380
+    },
+    "proj_hot": {
+      "x": 80,
+      "y": 530
+    },
+    "rstore": {
+      "x": 320,
+      "y": 530
+    },
+    "es": {
+      "x": 560,
+      "y": 530
+    },
+    "redis": {
+      "x": 800,
+      "y": 530
+    },
+    "dlq": {
+      "x": 80,
+      "y": 680
+    },
+    "notifier": {
+      "x": 320,
+      "y": 680
+    },
+    "analytics": {
+      "x": 560,
+      "y": 680
+    },
+    "s3_an": {
+      "x": 800,
+      "y": 680
+    },
+    "cdn": {
+      "x": 80,
+      "y": 830
+    },
+    "alb_r": {
+      "x": 320,
+      "y": 830
+    },
+    "query": {
+      "x": 560,
+      "y": 830
+    }
+  },
+  "labels": {
+    "cli_cmd": "Command clients",
+    "cli_qry": "Query clients",
+    "waf": "WAF",
+    "alb_w": "ALB (write)",
+    "apigw": "API Gateway",
+    "cmd": "Command service",
+    "rds": "RDS Proxy",
+    "aurora": "Write DB (Aurora)",
+    "kafka": "Event log (Kafka)",
+    "saga": "Saga / process mgr",
+    "proj_read": "Read-model projector",
+    "proj_srch": "Search projector",
+    "proj_hot": "Hot projector",
+    "rstore": "Read store (Postgres)",
+    "es": "Search index (ES)",
+    "redis": "Hot cache (Redis)",
+    "dlq": "DLQ",
+    "notifier": "Notification worker",
+    "analytics": "Analytics consumer",
+    "s3_an": "Analytics store (S3)",
+    "cdn": "CDN (read)",
+    "alb_r": "ALB (read)",
+    "query": "Query service"
+  },
+  "descriptions": {
+    "cli_cmd": "Web/mobile issuing writes (POST commands)",
+    "cli_qry": "Web/mobile issuing reads (GET queries)",
+    "waf": "Edge WAF for the write API",
+    "alb_w": "Application load balancer, command path",
+    "apigw": "REST command API, auth + throttling",
+    "cmd": "Validates + dedups, writes source of truth, emits events",
+    "rds": "Connection pooling for the write DB",
+    "aurora": "Source of truth, strongly consistent",
+    "kafka": "Ordered per-key event backbone, fan-out to projectors",
+    "saga": "Consumes events, issues follow-up commands (acyclic: writes to source of truth)",
+    "proj_read": "Builds the relational read model from events",
+    "proj_srch": "Builds the search index from events",
+    "proj_hot": "Maintains the hot cache projection from events",
+    "rstore": "Relational read model for queries",
+    "es": "Search projection",
+    "redis": "Hot read projection / query cache",
+    "dlq": "Dead-letter queue for failed search projection",
+    "notifier": "Sends user notifications from events",
+    "analytics": "Windowed aggregation of events",
+    "s3_an": "Aggregated analytics output",
+    "cdn": "Edge cache/TLS for the query API",
+    "alb_r": "Application load balancer, query path",
+    "query": "Serves reads: cache then read store on miss"
+  },
+  "groups": [
+    {
+      "id": "g_write",
+      "label": "Write side (commands)",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "cli_cmd",
+        "waf",
+        "alb_w",
+        "apigw",
+        "cmd",
+        "rds",
+        "aurora"
+      ]
+    },
+    {
+      "id": "g_events",
+      "label": "Event backbone",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "kafka",
+        "saga"
+      ]
+    },
+    {
+      "id": "g_proj",
+      "label": "Projectors & read stores",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "proj_read",
+        "proj_srch",
+        "proj_hot",
+        "rstore",
+        "es",
+        "redis",
+        "dlq",
+        "notifier",
+        "analytics",
+        "s3_an"
+      ]
+    },
+    {
+      "id": "g_read",
+      "label": "Read side (queries)",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "cli_qry",
+        "cdn",
+        "alb_r",
+        "query"
+      ]
+    }
+  ],
+  "components": [],
+  "guaranteeSlos": [
+    {
+      "source": "cli_cmd",
+      "terminal": "proj_read",
+      "dimension": "ordering",
+      "atLeast": "per-key"
+    }
+  ],
+  "lagSlos": [
+    {
+      "source": "cmd",
+      "terminal": "rstore",
+      "maxMs": 2000
+    }
+  ],
+  "requestClasses": [],
+  "scenarios": [
+    {
+      "id": "real",
+      "name": "Real (stated demand)",
+      "overrides": [
+        {
+          "node": "cli_cmd",
+          "key": "throughput",
+          "value": 500
+        },
+        {
+          "node": "cli_qry",
+          "key": "throughput",
+          "value": 10000
+        }
+      ]
+    },
+    {
+      "id": "pessimistic",
+      "name": "Pessimistic (+40% peak)",
+      "overrides": [
+        {
+          "node": "cli_cmd",
+          "key": "throughput",
+          "value": 700
+        },
+        {
+          "node": "cli_qry",
+          "key": "throughput",
+          "value": 14000
+        },
+        {
+          "node": "proj_read",
+          "key": "perRequestDuration",
+          "value": 40
+        },
+        {
+          "node": "rstore",
+          "key": "perRequestDuration",
+          "value": 30
+        }
+      ]
+    },
+    {
+      "id": "optimistic",
+      "name": "Optimistic (-40%)",
+      "overrides": [
+        {
+          "node": "cli_cmd",
+          "key": "throughput",
+          "value": 300
+        },
+        {
+          "node": "cli_qry",
+          "key": "throughput",
+          "value": 6000
+        },
+        {
+          "node": "rstore",
+          "key": "perRequestDuration",
+          "value": 12
+        }
+      ]
+    }
+  ]
+}

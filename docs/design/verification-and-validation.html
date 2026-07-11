@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verification &amp; Validation — the evidence that SDA does not lie · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--code:#f2f0ea;--good:#2f7d4f;--warn:#b48908;--bad:#b3261e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#0e2f3a,#1c6e7a);color:#fff;padding:56px 24px 44px}
+  .w{max-width:940px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",sans-serif;opacity:.92;max-width:780px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0e3540}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:28px 0 10px;color:#0e3540}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:8px;padding:14px 16px;overflow-x:auto}
+  a{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  .scroll{overflow-x:auto}
+  th{background:#0e3540;color:#fff;text-align:left;padding:10px 14px;font-weight:600;vertical-align:top}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout.big{border-left-width:6px;background:#f5faf9}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:26px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px 10px}
+  figure svg{display:block;max-width:100%;height:auto}
+  figcaption{font:13.5px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:10px;padding-bottom:6px}
+  .axis{stroke:#c9c4b8;stroke-width:1}
+  .grid{stroke:#eceadf;stroke-width:1}
+  .tick{font:11px "Segoe UI",sans-serif;fill:#8a8577}
+  .lbl{font:12.5px "Segoe UI",sans-serif;fill:var(--ink2)}
+  .lblb{font:600 12.5px "Segoe UI",sans-serif;fill:var(--ink)}
+  .small{font:13.5px/1.55 "Segoe UI",sans-serif;color:var(--ink2)}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .tag.gone{background:#fbe7e7;color:#b3261e}
+  .tag.keep{background:#e9f5f2;color:#0b6e6e}
+  .tag.done{background:#e7f3ea;color:#2f7d4f}
+  .v-high{background:#e7f3ea;color:#2f7d4f;font-weight:600}
+  .v-med{background:#fdf2e2;color:#b4530a;font-weight:600}
+  .v-low{background:#eee9df;color:#6b6456;font-weight:600}
+  .cell{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px}
+  .c-val{background:#e7f3ea;color:#2f7d4f}
+  .c-ver{background:#fdf2e2;color:#b4530a}
+  .c-unv{background:#eee9df;color:#6b6456}
+  .fn{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+  .ledger td:first-child{font-weight:600;white-space:nowrap;font-family:"Segoe UI",sans-serif}
+  .matrix td:first-child{font-weight:600;white-space:nowrap}
+  .net{font:600 15px "Segoe UI",sans-serif}
+  .minus{color:var(--bad)}.plus{color:var(--accent2)}.same{color:var(--accent)}
+  ol.build{list-style:none;padding-left:0;counter-reset:step}
+  ol.build>li{position:relative;padding:12px 0 12px 44px;border-bottom:1px solid var(--line);counter-increment:step}
+  ol.build>li::before{content:counter(step);position:absolute;left:0;top:12px;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;background:var(--accent);color:#fff;font:600 14px "Segoe UI",sans-serif}
+  .q{font-weight:600;color:#0e3540}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Verification &amp; Validation — the evidence that SDA does not lie</h1>
+  <div class="sub">SDA is meant to be <em>a system for serious people, competing with the best, that does not lie or feel flimsy</em>. This document turns that intent into a discipline with a name the rest of serious simulation engineering already uses — <b>V&amp;V</b>. <b>Verification</b> asks "are the equations solved correctly?" (the engine agrees with THEORY); <b>Validation</b> asks "are they the RIGHT equations for reality?" (the engine agrees with MEASURED systems). The organizing principle extends the project's hardest invariant — <em>the tool must not lie</em> — to the proof itself: a <b>coverage matrix</b> that makes every gap visible, so for every parameter and every metric we know exactly what is proven, to what error, against what source, and what is <em>not</em>. Green only where there is evidence. This is the credibility backbone, and it is honest about how much is not yet built.</div>
+  <div class="meta">SDA design document · 2026-07-07 · HEAD adc55bf · status: STRATEGY — owner-proposed, docs-only, no code · scope: the V&amp;V discipline · the coverage matrix &amp; generated fidelity report · the architecture-corpus roadmap</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design — throughput, latency, availability, durability, cost, feasibility — against declared requirements, live on every edit, and can run <em>backwards</em> to size or repair it. Under the canvas is a domain-agnostic engine: a typed-property graph, a fixpoint solver for the forward pass, a discrete-event simulator (DES) for tails and transients, and a native search for optimization. All cloud meaning is <em>content</em> (components as data). A tool that computes numbers a professional will stake a design on must be able to <em>show its work</em> — not just that it computed something, but that what it computed is right, and right about the real world. This document is the strategy for that proof. Definitions, stated positively:</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>Verification</b></td><td>"are the equations solved correctly?" — the engine's output agrees with the <b>closed-form theory</b> it claims to implement (Little's law, Erlang-C, the M/M/c and P–K formulae) and with an <b>independent solver</b> on the same problem. It is a purely internal, mathematical check; no real system is involved. Established today by analytic anchors, differential tests, and the solver oracle harness (§2).</td></tr>
+  <tr><td style="white-space:nowrap"><b>Validation</b></td><td>"are they the RIGHT equations for reality?" — the engine's prediction of a <b>measured</b> system (a published benchmark, a real bill) lands within a stated error of the ground truth. It is the check verification cannot make: a perfectly-solved wrong model is still wrong. Seeded today by the calibration harness (§3).</td></tr>
+  <tr><td style="white-space:nowrap"><b>anchor</b></td><td>an <em>analytic</em> ground truth a capability is checked against — a textbook closed form (M/M/1 sojourn, Erlang-C wait), a metamorphic law (scaling load scales ρ), or a property (a flat generator is byte-identical to no generator). An anchor is verification: it needs no measured data, only mathematics.</td></tr>
+  <tr><td style="white-space:nowrap"><b>calibration case</b></td><td>a corpus entry: a real, measured system (a saved <code>.sda.json</code> model), the workload sweep, the tunable component-defaults treated as free variables, and the measured ground truth with cited source URLs — pure DATA under <span class="fn">calibration/corpus/</span> (<span class="fn">corpus.ts:77</span>). A calibration case is validation: it holds SDA against reality and reports the residual.</td></tr>
+  <tr><td style="white-space:nowrap"><b>coverage matrix</b></td><td>the generated table that crosses every capability/parameter, architecture and metric×regime with its evidence, one <b>cell</b> at a time. Each cell is <span class="cell c-val">validated</span> (an anchor AND a calibration error %), <span class="cell c-ver">verified</span> (an anchor but no measured case yet), or <span class="cell c-unv">unvalidated</span> (an honest gap). It is generated from the code + the corpus so it cannot drift (§6).</td></tr>
+  <tr><td style="white-space:nowrap"><b>residual</b></td><td>the error that REMAINS after the best fit — the structural gap no tunable can remove. It is the calibration harness's real output: not "we matched reality" but "here is exactly how far, and why" (<span class="fn">fit.ts:1–5</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>structural limit</b></td><td>a thing SDA fundamentally does NOT model and will not — deep allocator/GC economics, detailed consistency protocols, network-partition dynamics, cache-eviction internals. Flagged permanently <em>unmodeled</em> so the fidelity report is honest about its boundaries, not silent (§9).</td></tr>
+  <tr><td style="white-space:nowrap"><b>fidelity report</b></td><td>the published deliverable: per-capability (anchor ✓ + calibration error % or UNVALIDATED), per-metric×regime, the residual/structural-limits map, and a single honest headline — "X of Y capabilities calibrated, aggregate fidelity Z %, N documented structural gaps" (§7).</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The idea — V&amp;V is the credibility backbone, and honesty is its rule</h2>
+<p class="lead">Every discipline that stakes real decisions on a simulation — computational fluid dynamics, nuclear reactor safety, network capacity planning — separates two questions and never conflates them. <b>Verification</b>: did we solve the equations right? <b>Validation</b>: are they the right equations for the real world? SDA already lives half of this instinctively (a differential-tested engine); this document names it, audits it, and builds the missing half into a discipline you can watch grow as a number.</p>
+<p>The reason to adopt the V&amp;V frame explicitly is that it is the vocabulary of the audience SDA wants to earn — the staff architect who has used a load tester and read a capacity study, and who trusts a tool that can say "this number is verified against Erlang-C and validated against TechEmpower to within 1 %" over one that just renders a confident chart. It is also the discipline that keeps the team honest: the two questions have <em>different</em> failure modes and <em>different</em> fixes, and mixing them is how simulators quietly start lying. A model can pass every property test (verified) and still predict a system that does not exist (invalid); a model can match one measured system (validated once) and be solved by a buggy solver on the next (unverified). You need both, tracked separately.</p>
+<div class="callout big">
+<b>The organizing principle: the tool-must-not-lie invariant extends to the <em>proof</em>.</b>
+<p style="margin-top:8px">SDA's charter forbids inventing infra numbers — uncertainty is a value (<code>unknown</code>), never a guess. This document applies the same rule one level up, to validation itself. The measure of solidity is not "how many green checks" but: <b>for every parameter and every metric, do we know exactly what is proven, to what error, against what source, and what is NOT?</b> The instrument is a coverage matrix where a cell is <span class="cell c-val">green</span> only where evidence exists — an anchor for verification, a measured residual for validation — and every remaining cell reads <span class="cell c-unv">UNVALIDATED</span> in plain sight. A visible gap is not a failure of the tool; a <em>hidden</em> gap is. Solidity is the honesty of the map, not the absence of white space on it.</p>
+</div>
+<figure>
+<svg viewBox="0 0 720 250" role="img" aria-label="The engine sits between theory on the left and measured reality on the right; verification is the differential check against closed forms, validation is the fit against measured systems">
+  <rect x="286" y="86" width="148" height="78" rx="10" fill="#0e3540"/>
+  <text x="360" y="118" text-anchor="middle" fill="#fff" font-family="Segoe UI,sans-serif" font-weight="600" font-size="15">SDA engine</text>
+  <text x="360" y="139" text-anchor="middle" fill="#cfe3e3" font-family="Segoe UI,sans-serif" font-size="11.5">fixpoint · DES · search</text>
+  <!-- Left: theory -->
+  <rect x="24" y="70" width="176" height="110" rx="10" fill="#f5faf9" stroke="#0b6e6e"/>
+  <text x="112" y="94" text-anchor="middle" fill="#0b6e6e" font-family="Segoe UI,sans-serif" font-weight="600" font-size="13.5">THEORY</text>
+  <text x="112" y="116" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">Little · Erlang-C</text>
+  <text x="112" y="133" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">M/M/c · P–K · Burke</text>
+  <text x="112" y="150" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">metamorphic laws</text>
+  <!-- Right: reality -->
+  <rect x="520" y="70" width="176" height="110" rx="10" fill="#fff" stroke="#b4530a"/>
+  <text x="608" y="94" text-anchor="middle" fill="#b4530a" font-family="Segoe UI,sans-serif" font-weight="600" font-size="13.5">MEASURED REALITY</text>
+  <text x="608" y="116" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">DeathStarBench</text>
+  <text x="608" y="133" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">TechEmpower · real bills</text>
+  <text x="608" y="150" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">published benchmarks</text>
+  <!-- arrows -->
+  <line x1="204" y1="125" x2="282" y2="125" stroke="#0b6e6e" stroke-width="1.6" marker-start="url(#vv)" marker-end="url(#vv)"/>
+  <line x1="438" y1="125" x2="516" y2="125" stroke="#b4530a" stroke-width="1.6" marker-start="url(#vw)" marker-end="url(#vw)"/>
+  <defs>
+    <marker id="vv" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto"><path d="M1,1 L8,4.5 L1,8 Z" fill="#0b6e6e"/></marker>
+    <marker id="vw" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto"><path d="M1,1 L8,4.5 L1,8 Z" fill="#b4530a"/></marker>
+  </defs>
+  <text x="243" y="112" text-anchor="middle" fill="#0b6e6e" font-family="Segoe UI,sans-serif" font-weight="600" font-size="11">VERIFY</text>
+  <text x="477" y="112" text-anchor="middle" fill="#b4530a" font-family="Segoe UI,sans-serif" font-weight="600" font-size="11">VALIDATE</text>
+  <text x="243" y="196" text-anchor="middle" fill="#8a8577" font-family="Segoe UI,sans-serif" font-size="10.5">differential vs closed form</text>
+  <text x="477" y="196" text-anchor="middle" fill="#8a8577" font-family="Segoe UI,sans-serif" font-size="10.5">fit + residual vs measured</text>
+  <text x="360" y="34" text-anchor="middle" fill="#0e3540" font-family="Segoe UI,sans-serif" font-weight="600" font-size="14">Two questions, never conflated</text>
+  <text x="360" y="222" text-anchor="middle" fill="#4b5263" font-family="Segoe UI,sans-serif" font-size="11.5">a perfectly-solved wrong model is still wrong · a right model solved by a buggy solver is still wrong · you need both</text>
+</svg>
+<figcaption><b>Figure 1 — the two checks.</b> Verification (left) is internal: the engine's output is differentially compared against the closed-form mathematics it claims to implement, over generated cases. Validation (right) is external: the engine predicts a real, measured system and reports the residual. The coverage matrix is the ledger of which cells have which evidence; the fidelity report is its published headline.</figcaption>
+</figure>
+
+<h2><span class="no">2</span>Verification today — the audit ("are the equations solved correctly?")</h2>
+<p class="lead">SDA is already strongly verification-anchored, in three distinct engines each with its own oracle. This section audits exactly what is anchored — and, in §2.4, exactly what is not. Every claim is a named <code>file:line</code> at HEAD <code>adc55bf</code>.</p>
+
+<h3>2.1 The simulation oracle — closed forms are the ground truth the DES is checked against</h3>
+<p>The continuous, analytic half of the time engine is a file of pure, textbook closed forms — and it exists <em>expressly</em> as "the oracle the discrete-event simulator is validated against" (<span class="fn">engine/sim/src/analytic.ts:2–3</span>). It implements M/M/1 (<span class="fn">analytic.ts:31</span>), M/M/c via the numerically-stable Erlang-B recursion lifted to the Erlang-C wait probability (<span class="fn">analytic.ts:50–63</span>), the Pollaczek–Khinchine mean wait for M/G/1 parameterised by the service SCV (<span class="fn">analytic.ts:70–74</span>), and Little's law (<span class="fn">analytic.ts:77–79</span>), with cited sources (Erlang 1917; Pollaczek 1930 / Khinchine 1932; Little 1961; Cooper 1981) at <span class="fn">analytic.ts:10–11</span>. The DES itself (<span class="fn">engine/sim/src/des.ts</span>) states the differential invariant in its header — "validated differentially against the closed forms (M/M/1, M/M/c, Little, P-K) within confidence tolerances" (<span class="fn">des.ts:15</span>) — and the content-side analytic twin the canvas actually renders (<span class="fn">content/sda/src/queueing.ts</span>) calls the same <code>mmc</code> (<span class="fn">queueing.ts:187</span>) and asserts "@invariants Agrees with the DES within tolerance" (<span class="fn">queueing.ts:1–17</span>). Because both the analytic twin and the DES read one shared station definition (<span class="fn">graph-read.ts:91</span>, <code>queueStation</code>), the two cannot silently drift apart.</p>
+<p>The differential suite that pins this agreement is broad and specific:</p>
+<div class="scroll">
+<table class="matrix">
+  <tr><th>Claim verified</th><th>Oracle (theory)</th><th>Where (file:line)</th><th>Level</th></tr>
+  <tr><td>DES ρ, L, W reproduce M/M/1 at ρ=0.8; Little's law <code>L≈λ·W</code> holds on measured quantities</td><td>M/M/1 algebra + Little</td><td><span class="fn">des.test.ts:21–32</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>DES reproduces M/M/c (3 servers); <code>mmc(c=1)</code> reduces to M/M/1 to 10 digits; ρ≥1 ⇒ Infinity, never a throw</td><td>Erlang-C M/M/c</td><td><span class="fn">des.test.ts:38–68</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>DES reproduces M/D/1 (deterministic service) via P–K</td><td>Pollaczek–Khinchine (SCV=0)</td><td><span class="fn">des.test.ts:71–88</span></td><td><span class="v-med">verified (SCV=0 only)</span></td></tr>
+  <tr><td>A tandem (routing) network satisfies Little's law end-to-end; fan-out sends the full rate to each branch (not a split)</td><td>Little + Poisson superposition</td><td><span class="fn">des.test.ts:91–128</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>Per-node response mean tracks its M/M/c sojourn + synchronous downstream; async hops cut from caller response</td><td>Burke's theorem (tandem decomposition)</td><td><span class="fn">response.test.ts:53–141</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>Flow-scoped lag tracks forward-transit sum; async inclusion; monotone sensitivity</td><td>Burke's theorem</td><td><span class="fn">lag.test.ts:53–148</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>Reneging (abandonment) matches Erlang-A within 8 %; goodput fraction ≈ 1−P<sub>ab</sub></td><td>Erlang-A (M/M/c+M)</td><td><span class="fn">retry.test.ts:96–133</span></td><td><span class="v-med">verified (exp. patience)</span></td></tr>
+  <tr><td>NHPP arrivals invert the integrated rate exactly; a flat profile is byte-identical to no profile</td><td>Çinlar time-change; Lewis &amp; Shedler</td><td><span class="fn">profile.test.ts:80–198</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>Transient backlog grows/peaks/drains at the fluid-limit rates under a step overload</td><td>fluid limit (λ−μ)</td><td><span class="fn">transient.test.ts:73–110</span></td><td><span class="v-high">verified</span></td></tr>
+  <tr><td>Analytic twin ⇄ DES agree within 7–10 % for a single server, a 10-server pool, an Erlang-C M/M/12 datastore pool, and an M/M/8 CPU tier</td><td>DES as oracle for the twin</td><td><span class="fn">queueing.e2e.test.ts:27–160</span>, <span class="fn">cpu-station.e2e.test.ts:119–134</span></td><td><span class="v-high">verified</span></td></tr>
+</table>
+</div>
+
+<h3>2.2 The solver oracle harness — the executable specification (the verification template)</h3>
+<p>The backward capabilities — <b>optimize</b>, <b>repair</b>, <b>explain-infeasible</b>, <b>enumerate</b> — cannot be checked against a hand-written answer table (that would only re-encode a human's belief). Instead <span class="fn">engine/solver-contract/src/harness/</span> is an <em>executable specification</em> (framed at <span class="fn">docs/design/solver-contract.html:49,74</span> — "'adapter X implements capability C' is not a claim in a README — it is a green test run"). It is the template every future verification effort should copy, and it has four clean seams:</p>
+<table>
+  <tr><td style="white-space:nowrap"><b>The oracle</b></td><td>the <em>incumbent</em> adapter (native MiniZinc/COIN-BC MIP + clingo/ASP), whose answer is taken as certified (<span class="fn">oracle.ts:17–22</span>), plus two engine-independent recomputations: a whole-graph objective total by algebraic inversion of the cumulative out-cells (<span class="fn">oracle.ts:151–179</span>) and an anti-lie SLO re-check that re-runs <code>evaluate</code> on the solved assignment and checks every band within ε (<span class="fn">oracle.ts:197–231</span>). The candidate solver is passed in as a parameter, so oracle vs candidate is "just which adapter a caller binds" (<span class="fn">oracle.ts:31–35</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>The generator</b></td><td>a seeded, deterministic generator of opaque typed-property graphs (mulberry32, no <code>Date.now</code>/<code>Math.random</code>; each instance carries the seed that produced it — <span class="fn">generator.ts:122–137,189</span>), over three topologies (chain/fan-out/fan-in), two regimes (sat/unsat, true <em>by construction</em> against the design's own analytically-known ceiling — <span class="fn">generator.ts:184–185,660–691</span>), and 17 named coverage axes (<span class="fn">generator.ts:162–179</span>). Default batch ≈ 54 numeric + 6 enumerate cases (<span class="fn">generator.ts:1254–1260</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>The metamorphic laws</b></td><td>properties whose effect on the optimum is known a-priori, so they catch a bug <em>both</em> solvers share: scale equivariance — scaling every rate by k scales the optimum by exactly k (<span class="fn">metamorphic.ts:46,81–91</span>); permutation invariance (<span class="fn">metamorphic.ts:122–126</span>); monotone tightening — raising an SLO floor never lowers the optimum, and feasibility is downward-closed (<span class="fn">metamorphic.ts:143–156</span>); repair coherence — a repair from a feasible point is zero-distance, and repair's L1 never exceeds the distance to the from-scratch optimum (<span class="fn">metamorphic.ts:166–186</span>). Plus determinism-under-seed and monotonicity in the harness core (<span class="fn">harness.ts:186–218</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>The comparator + CI</b></td><td>equivalence on the honest surface — objective value + SLO satisfaction for optimize, total L1 for repair, the shortfall set for explain, the exact selection set for enumerate (<span class="fn">harness.ts:94–119</span>) — with a per-instance time budget (a correct-but-slow candidate FAILS, <span class="fn">harness.ts:73–76</span>) and a one-paste repro command per divergence (<span class="fn">harness.ts:129–132</span>). It runs as standing tests with seed rotation (<code>SDA_HARNESS_SEED</code> offsets each base seed into a disjoint region) and a DEEP lane (~707 tests, ~85 s) — <span class="fn">native/index.test.ts:65–75</span> — plus a live <code>referee</code> that throws on any incumbent-vs-native divergence (<span class="fn">native/index.test.ts:181–200</span>).</td></tr>
+</table>
+
+<h3>2.3 The engine-algebra property layer — the forward pass over adversarial designs</h3>
+<p>Below the solvers, the forward fixpoint and content algebra are fuzzed over random and adversarial designs with <code>fast-check</code>: the named engine laws — fixpoint converges, no NaN masquerades as converged, deterministic and order-independent, load-monotone, async decouples wait — hold over hundreds of generated real designs (<span class="fn">content/sda/src/laws.property.test.ts:35–107</span>, seed pinned at <span class="fn">:15</span>), and the robustness suite proves <code>instantiate</code>/<code>evaluate</code> never throw on cycles, self-loops, orphans and pathological configs (<span class="fn">robustness.property.test.ts:105–179</span>). The CPU-station primitive carries a 300-run byte-identity property: any node with no CPU config keeps exactly its original station (<span class="fn">cpu-station.e2e.test.ts:41–52</span>).</p>
+
+<h3>2.4 What is NOT verification-anchored — the honest gaps</h3>
+<p>Solidity requires naming these plainly; each is a real, addressable verification hole, not an oversight to hide.</p>
+<table>
+  <tr><th>Gap</th><th>What it means</th><th>Evidence / where</th></tr>
+  <tr><td><b><code>evaluate</code> and <code>evaluateBatch</code> are not oracle-graded</b></td><td>The hot-path forward evaluation and the Monte-Carlo batch are only smoke-tested through the harness, never differentially certified against the incumbent the way optimize/repair/explain/enumerate are — even though <code>evaluate</code> is what runs on every edit and underlies every other capability.</td><td><span class="fn">generator.ts:190</span> (numeric capability set excludes evaluate); smoke only at <span class="fn">native/index.test.ts:120–129</span></td></tr>
+  <tr><td><b>P–K verified only at SCV=0</b></td><td>The M/G/1 formula is differentially simulated only for deterministic service (M/D/1); no DES-vs-P–K test exists at an intermediate SCV (hyperexponential/lognormal service), so the general-variance case rests on the analytic reduction identity alone.</td><td><span class="fn">des.test.ts:71–88</span> (SCV=0 only)</td></tr>
+  <tr><td><b>No Kingman / G/G/c heavy-traffic form</b></td><td>Non-Markovian arrivals or general-variance multi-server waits have no closed-form oracle at all (<code>grep Kingman</code> = 0). The engine does not approximate G/G/c; where a design is genuinely G/G/c, the DES stands alone with no analytic check.</td><td>absent (honest)</td></tr>
+  <tr><td><b>No named Jackson product-form oracle</b></td><td>Multi-station networks are verified by <em>tandem decomposition</em> (Burke) and end-to-end Little's law, not against an open-Jackson-network product-form solution (<code>grep Jackson</code> = 0). Adequate for feed-forward DAGs; unproven for richer routing.</td><td>Burke-based instead: <span class="fn">response.test.ts</span>, <span class="fn">lag.test.ts</span></td></tr>
+  <tr><td><b>The critical-path cumulative fold has no direct DES differential</b></td><td><code>realCumulativeLatency</code> (<span class="fn">queueing.ts:203</span>) — the MAX-over-predecessors end-to-end latency the canvas shows — is checked at the per-hop level and via <code>responseLatency</code> composition, but the cumulative number itself is not cross-checked against a DES end-to-end measurement.</td><td>gap in the reviewed suite</td></tr>
+  <tr><td><b>Erlang-A only for exponential patience</b></td><td>The abandonment anchor uses exponential patience; the production case (a deterministic timeout / <code>maxQueueWaitMs</code>) is validated only qualitatively (the goodput "hump", monotonicity), with no closed-form oracle.</td><td>caveated at <span class="fn">retry.test.ts:97–102</span></td></tr>
+</table>
+<div class="callout"><b>Verification verdict.</b> <p style="margin-top:8px">The <em>capacity/queueing/tail</em> spine is strongly verified — closed-form-anchored and differentially tested across M/M/1, M/M/c, M/D/1, Burke tandems, Erlang-A, the NHPP sampler and the fluid limit — and the backward solvers are held to an executable specification with metamorphic laws and seed rotation. The gaps are specific and known: the hot-path <code>evaluate</code> lacks a differential oracle, P–K is unproven off SCV=0, and there is no G/G/c or Jackson form. Phase 1 (§12) fills the highest-value ones. Nothing here is a lie; several things are honestly unproven.</p></div>
+
+<h2><span class="no">3</span>Validation today — the calibration seed ("are they the RIGHT equations?")</h2>
+<p class="lead">Verification cannot tell you the model is right about the world — only that it is solved correctly. The <b>calibration harness</b> (<code>@sda/calibration</code>, TASK-93) is the seed of the validation half: a DATA corpus of measured ground-truth systems plus a deterministic fitter that predicts each with SDA's own engine, fits the tunable component-defaults, and reports the <b>residual</b> — the structural gap no tunable can remove (<span class="fn">calibration/src/index.ts:1–4</span>).</p>
+<h3>3.1 How it works — predict, fit, report the residual, guard against over-fit</h3>
+<table>
+  <tr><td style="white-space:nowrap"><b>Corpus (DATA)</b></td><td>each entry is a JSON file under <span class="fn">calibration/corpus/</span>: a saved <code>.sda.json</code> model, the workload sweep, the tunables (a component default treated as a free variable with a search range, or a <em>pinned</em> sourced hardware fact), and the measured ground truth with cited source URLs. A datapoint may be <code>measured: null</code> — unpublished — in which case the harness <b>predicts and reports but does NOT score</b> it (the tool must not invent a number to grade against) — <span class="fn">corpus.ts:52–85</span>.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Predict</b></td><td>the SAME content path the canvas uses: instantiate → evaluate → <code>nodeQueues</code> (analytic M/M/c) → <code>responseLatency</code>, plus a seeded DES corroboration for the tail (<span class="fn">predict.ts:1–5</span>). The capacity ceiling is read by linear extrapolation from a sub-saturation probe (<span class="fn">predict.ts:74–87</span>); a latency share is the numerator hop's sojourn over the operation's end-to-end response (<span class="fn">predict.ts:94–105</span>). Injection-resistant: a config key from the corpus is refused if it is a prototype-pollution vector (<span class="fn">predict.ts:33–36</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>Fit &amp; residual</b></td><td>a deterministic coordinate descent over a log-spaced grid (no RNG, fixed order) minimises the RMS of signed relative errors over every scored point (<span class="fn">fit.ts:41–132</span>). Two entries declaring the same <code>(selector, key)</code> SHARE one free variable, so a joint fit can be over-determined — which is exactly how an irreducible structural residual is surfaced (<span class="fn">corpus.ts:34–48</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>Leave-one-out</b></td><td>the honest over-fit guard: fit on the rest, report the error on the held-out entry, and state plainly whether the held-out tunables were actually constrained by the fold-in set (a genuine out-of-sample test) or fell back to catalog defaults (<span class="fn">fit.ts:178–204</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>Report, never apply</b></td><td>the harness READS, FITS and REPORTS but NEVER mutates a shipped default — applying a recommendation is a separate, owner-reviewed step, emitted as <span class="fn">PROPOSED-DEFAULTS.json</span> (<span class="fn">report.ts:1–5,199–211</span>). <code>pnpm calibrate</code> writes the report; <code>pnpm calibrate:check</code> adds a CI fidelity-regression gate against a pinned baseline (<span class="fn">run.ts:53–61</span>, <span class="fn">baseline.ts:27–37</span>).</td></tr>
+</table>
+<h3>3.2 The three corpus entries and their current residuals</h3>
+<div class="scroll">
+<table class="matrix">
+  <tr><th>Corpus entry</th><th>Scored metric</th><th>Measured</th><th>Out-of-box</th><th>Fitted residual</th><th>Ground-truth source</th></tr>
+  <tr><td>DeathStarBench — Social Network (11 Thrift services / Mongo / Redis)</td><td>MongoDB share of end-to-end latency (low load)</td><td>8.5 %</td><td>11.1 (+30.6 %)</td><td><span class="v-high">+0.4 %</span></td><td>Gan et al., ASPLOS 2019</td></tr>
+  <tr><td>TechEmpower — single database query</td><td>throughput ceiling</td><td>104,000 req/s</td><td>2,000 (−98.1 %)</td><td><span class="v-high">+0.5 %</span></td><td>TFB Round 22 (Citrine, 28 threads)</td></tr>
+  <tr><td>TechEmpower — 20 queries per request</td><td>throughput ceiling</td><td>5,900 req/s</td><td>100 (−98.3 %)</td><td><span class="v-high">−0.7 %</span></td><td>TFB Round 22</td></tr>
+</table>
+</div>
+<p>Aggregate post-fit error is <b>0.6 %</b> over the three scored points (<span class="fn">CALIBRATION-REPORT.md:9</span>). The standing test <span class="fn">calibration/src/harness.test.ts</span> pins this as a fidelity guard that fails on any residual regression beyond a 1.5-percentage-point tolerance (<span class="fn">baseline.ts:37,46–56</span>) — fidelity is guarded the way the solver oracle guards solver agreement.</p>
+<div class="callout"><b>The calibration <em>finding</em> — validation drove a real engine primitive.</b>
+<p style="margin-top:8px">The TechEmpower single-vs-20-query pair originally shared one <code>db.postgres</code> service time and could not fit both ceilings — a ~6 % irreducible residual that WAS the framework's per-request CPU, a resource the model could not express. Adding a separate CPU station (<code>cpuCores</code> + <code>cpuTimePerRequestMs</code>, an M/M/cores tier, <span class="fn">graph-read.ts:48</span>) let single-query bind on the framework CPU (~104.5k) and 20-query on the DB (5,858) independently — collapsing the aggregate from 5.2 % to 0.6 % (<span class="fn">baseline.ts:17–34</span>). This is validation working as intended: the residual pointed at a missing primitive, and closing it was physically grounded (the CPU width is the sourced 28 hardware threads), not an over-fit. Externally corroborated — TechEmpower later lifted the single-query result 25× with framework-side fixes, never touching the DB.</p></div>
+<div class="callout warn"><b>Honest limit of the seed — three systems is a beginning, and leave-one-out says so.</b>
+<p style="margin-top:8px">The full-fit aggregate (0.6 %) is excellent but the out-of-sample generalization is <b>12.1 %</b> (<span class="fn">CALIBRATION-REPORT.md:10</span>): holding out TechEmpower single-query reproduces a ~+13 % over-prediction because that point is the <em>only</em> one constraining the framework-CPU free variable, and DeathStarBench's tunable is disjoint from the TechEmpower fold-in set entirely (<span class="fn">harness.test.ts:67–86</span>). This is not a flaw in the harness — it is the harness being honest that three architectures with mostly-disjoint tunables cannot yet cross-validate each other. It is the single strongest argument for the corpus roadmap (§8): validation solidity is bounded by architecture diversity, and right now that diversity is thin.</p></div>
+
+<h2><span class="no">4</span>The organizing principle — three coverage axes</h2>
+<p class="lead">To make "what is proven, and what is not" a computable fact rather than a feeling, the claim surface is decomposed into three orthogonal axes. Every unit of evidence lands somewhere in their product, and every empty region is a visible gap.</p>
+<table>
+  <tr><th>Axis</th><th>What it enumerates</th><th>Grounded in</th><th>The evidence each unit needs</th></tr>
+  <tr><td><b>(a) Capabilities &amp; parameters</b></td><td>every question the tool answers and every knob that feeds it: 6 solver capabilities, 8 modeling families, the 43 registry keys (26 input knobs + 17 derived), the 6-member Transform family, and the load-stage/peak/transient primitives (§5).</td><td><span class="fn">capability/index.ts</span>, <span class="fn">registry.ts</span>, <span class="fn">behaviors.ts</span>, <span class="fn">instructions.ts</span>, <span class="fn">graph.ts</span></td><td>≥1 <b>analytic anchor</b> (verification) AND ≥1 <b>calibration case</b> (validation) — or an explicit <code>unvalidated</code> flag.</td></tr>
+  <tr><td><b>(b) Architectures</b></td><td>the corpus of real, measured systems SDA is held against — the shape diversity that makes over-fit visible and coverage real (§8).</td><td><span class="fn">calibration/corpus/*.json</span></td><td>a real model + a workload sweep + retrievable ground truth with a cited source.</td></tr>
+  <tr><td><b>(c) Metrics × regimes</b></td><td>the six metrics the tool reports crossed with the three load regimes where a model's behaviour differs qualitatively (§4.1).</td><td>the verdict &amp; sim seams (<span class="fn">verdict.ts</span>, <span class="fn">envelope.ts</span>, <span class="fn">system.ts</span>, <span class="fn">reliability.ts</span>, <span class="fn">two-tier.ts</span>)</td><td>an anchor and a measured point <em>in that regime</em> — a model right below the knee can be wrong past saturation.</td></tr>
+</table>
+<h3>4.1 Axis (c) in full — metrics × regimes, and where the evidence is thinnest</h3>
+<p>A capacity model that matches reality at ρ=0.3 tells you little about ρ=0.95; the tail explodes near the knee, not below it. So each metric is tracked in three regimes: <b>below-knee</b> (ρ ≲ 0.7, comfortable), <b>at-knee</b> (ρ ≈ 0.8–0.95, where queueing bites), and <b>past-saturation</b> (ρ ≥ 1, where the honest answer is drop/overflow/Infinity). The current state, honestly:</p>
+<div class="scroll">
+<table class="matrix">
+  <tr><th>Metric</th><th>below-knee</th><th>at-knee</th><th>past-saturation</th></tr>
+  <tr><td>Throughput ceiling</td><td><span class="cell c-ver">verified</span></td><td><span class="cell c-val">validated</span> TE 0.5–0.7%</td><td><span class="cell c-ver">verified</span> (overflow algebra)</td></tr>
+  <tr><td>p50 / p99 tail</td><td><span class="cell c-val">validated*</span> DES corrob.</td><td><span class="cell c-ver">verified</span> M/M/c, Burke</td><td><span class="cell c-ver">verified</span> ρ≥1⇒∞ honest</td></tr>
+  <tr><td>Bottleneck id / latency share</td><td><span class="cell c-val">validated</span> DSB 0.4%</td><td><span class="cell c-ver">verified</span></td><td><span class="cell c-ver">verified</span> (shift to binding tier)</td></tr>
+  <tr><td>Cost / bill</td><td><span class="cell c-ver">verified*</span> sourced pricing</td><td><span class="cell c-ver">verified*</span></td><td><span class="cell c-unv">UNVALIDATED</span> no real bill</td></tr>
+  <tr><td>Availability / nines</td><td><span class="cell c-ver">verified*</span> series-product</td><td>—</td><td><span class="cell c-unv">UNVALIDATED</span> no measured DR</td></tr>
+  <tr><td>Transient / peak survival</td><td><span class="cell c-ver">verified</span> fluid limit</td><td><span class="cell c-ver">verified</span></td><td><span class="cell c-unv">UNVALIDATED</span> no measured transient</td></tr>
+</table>
+</div>
+<p class="small">* <b>validated</b>* = the DES tail is corroborated but reported unscored (no published p99-vs-QPS curve yet in the corpus). <b>verified</b>* = the quantity is deterministic algebra (cost = driver × sourced unit price; availability = series product) whose "validation" is source-freshness, not a fit — see the tension in §11.3. The white-spaces jump out: cost, availability and transient survival are <em>verified but not validated</em>, and the whole past-saturation column for those three is empty. That is precisely the map the corpus roadmap is built to fill.</p>
+
+<h2><span class="no">5</span>Axis (a) in full — the capability &amp; parameter set, from the code</h2>
+<p class="lead">This is the enumeration the matrix rows are built from — the complete claim surface, with exact counts so the matrix cannot quietly omit a knob. Every count is grounded.</p>
+<div class="scroll">
+<table>
+  <tr><th>Family</th><th>Members</th><th>Grounded in</th></tr>
+  <tr><td><b>Solver capabilities</b> (6)</td><td>Evaluate (<span class="fn">evaluate.ts:55</span>), EvaluateBatch (<span class="fn">evaluate-batch.ts:44</span>), Optimize (<span class="fn">optimize.ts:134</span>), Repair (<span class="fn">repair.ts:50</span>), ExplainInfeasible (<span class="fn">explain-infeasible.ts:47</span>), Enumerate (<span class="fn">enumerate.ts:79</span>)</td><td><span class="fn">solver-contract/src/capability/index.ts:6–11</span></td></tr>
+  <tr><td><b>Modeling families</b> (8, the MCP "capabilities you can model" — the "~9")</td><td>queueing tail (M/M/c p99), redundancy/availability, act-as-a-queue (backlog), documented ceilings (outage caps), retry storms, realistic cost, latency composition, CPU-bound tier</td><td><span class="fn">app/mcp/src/instructions.ts:144–153</span></td></tr>
+  <tr><td><b>Registry keys</b> (43 = 26 input + 17 derived)</td><td>capacity/queueing (16 inputs: concurrency, perRequestDuration, cpuCores, cpuTimePerRequestMs, connectionPool, connectionHeldMs, maxQueueWaitMs, accountConcurrency, maxItemBytes, queueMode, drainRate, retention, maxBacklog, maxUnits, assumedRps, arrivalRate); cost/pricing (3: unitCost, egressUsdPerGb, vcpus); reliability/durability (4: deploymentMode, timeoutMs, retryCount, retryBackoffMs); scaling (replicas, latencyComposition, payloadBytes); derived (17: throughput, latency, tailLatency, availability, cost, durability, overflow &amp; family, requiredUnits, egressCost, goodputRps, errorRate, …)</td><td><span class="fn">content/sda/src/registry.ts:7–117</span></td></tr>
+  <tr><td><b>Transform family</b> (6, closed)</td><td>ratio, batch, cap, window, prob, generate (carries level + cycles + disable)</td><td><span class="fn">engine/core/src/graph.ts:73–86</span></td></tr>
+  <tr><td><b>Load-stage / peak primitives</b></td><td>Stage / Cycle atoms (<span class="fn">graph.ts:28,45</span>); the generator readers <code>cycleToProfile</code>, <code>generatorRate</code>, <code>derivedMean</code>, <code>derivedPeak</code> (<span class="fn">content/sda/src/load-stages.ts:110,132,223,237</span>); Tier-1 <code>timeSweep</code> (<span class="fn">time-sweep.ts:116</span>); Tier-2 <code>StressVerdict</code> + <code>twoTierEvaluation</code> (<span class="fn">two-tier.ts:65,386</span>); 6 shipped presets (<span class="fn">load-stages.ts:277,309</span>)</td><td>as cited</td></tr>
+</table>
+</div>
+<div class="callout warn"><b>The honest asymmetry this enumeration exposes.</b>
+<p style="margin-top:8px">Of the 8 modeling families and 26 input knobs, calibration currently touches <b>three tunables across two families</b>: <code>db.postgres.perRequestDuration</code>, <code>compute.service.cpuTimePerRequestMs</code> and <code>db.mongodb.connectionHeldMs</code> — i.e. the queueing-tail and CPU-bound families only (<span class="fn">CALIBRATION-REPORT.md:18–20</span>). The retry-storm, act-as-a-queue, redundancy, documented-ceilings, realistic-cost and latency-composition families have <b>zero calibration cases</b>. Every one is verified (it has an anchor test) but none is validated. The matrix must show that as five-plus <span class="cell c-unv">UNVALIDATED</span> families, in plain sight — that visibility is the deliverable.</p></div>
+
+<h2><span class="no">6</span>The coverage matrix — representation, data model, and generation (no drift)</h2>
+<p class="lead">The matrix is not a hand-maintained spreadsheet — that would rot within a week. It is a <b>generated artifact</b>, walked from the code and the corpus by a script, exactly as <span class="fn">docs/ALGORITHMS.md</span> (54 algorithms) and <span class="fn">docs/FEATURES.md</span> (20 features) are generated from <code>@algorithm</code>/<code>@feature</code> headers and asserted byte-identical by <span class="fn">scripts/generate-catalogs.test.ts</span>. That proven anti-drift mechanism is the template.</p>
+<h3>6.1 The cell data model</h3>
+<p>Each cell is one (capability-or-parameter × metric × regime) coordinate with its evidence. It is pure data, so the report, the freshness test and the CI gate all read one structure:</p>
+<pre>interface CoverageCell {
+  capability: string;         // e.g. 'queueingTail:p99' | 'cost:egress' | 'optimize'
+  metric: MetricKind;         // 'throughputCeiling'|'tail'|'cost'|'availability'|'bottleneck'|'transient'
+  regime: 'below-knee' | 'at-knee' | 'past-saturation';
+
+  verification: {
+    anchored: boolean;
+    oracle: 'analytic-closed-form' | 'solver-incumbent' | 'metamorphic' | 'property' | 'none';
+    test:  string | null;     // file:line of the @anchor test that proves it, or null
+  };
+  validation: {
+    calibrated: boolean;
+    corpusEntry: string | null;   // which calibration/corpus/*.json entry
+    errorPct:   number | null;    // post-fit residual %, or null if UNVALIDATED
+    source:     string | null;    // the ground-truth URL
+  };
+
+  // derived, never authored — the single source of a cell's colour:
+  status: 'validated'   // anchored AND calibrated (errorPct is a number)  -> GREEN
+        | 'verified'    // anchored, not yet calibrated                     -> AMBER
+        | 'unvalidated';// neither, OR a documented structural limit        -> GREY
+}</pre>
+<p>The rule is mechanical and unforgeable: <code>status = 'validated'</code> iff <code>verification.anchored &amp;&amp; validation.errorPct !== null</code>; <code>'verified'</code> iff anchored but not calibrated; else <code>'unvalidated'</code>. A cell can never be green on a promise — only on a residual number with a source URL behind it. A structural limit (§9) is a first-class <code>'unvalidated'</code> that additionally carries <code>unmodeled: true</code>, so the report can distinguish "not yet" from "never".</p>
+<h3>6.2 How it is generated — three walks, one emit</h3>
+<table>
+  <tr><td style="white-space:nowrap"><b>Walk 1 — the claim surface</b></td><td>enumerate the rows: the 6 capabilities (<span class="fn">capability/index.ts</span>), the 8 families (<span class="fn">instructions.ts</span>) and the 26 input knobs (<span class="fn">registry.ts</span>), crossed with the 6 metrics × 3 regimes. This is axis (a) × axis (c), read straight from the code so a new knob appears as a new UNVALIDATED row automatically.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Walk 2 — the anchors</b></td><td>collect the verification evidence from <code>@anchor</code> headers on the anchor tests (a new tag, sibling to <code>@algorithm</code>): each header names the capability/metric/regime it proves and the oracle it uses. A capability with no <code>@anchor</code> is emitted <code>verification.anchored: false</code> — the matrix cannot claim an anchor that no test carries.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Walk 3 — the residuals</b></td><td>read <span class="fn">calibration/corpus/*.json</span> + the fitted residuals from the calibration report structure (<span class="fn">report.ts:31–38</span>): each scored ground-truth point contributes <code>validation.errorPct</code>, <code>corpusEntry</code> and <code>source</code> to the cell it measures.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Emit</b></td><td><code>scripts/generate-coverage.mjs</code> writes <span class="fn">docs/COVERAGE.md</span> (the matrix) deterministically; a freshness test asserts the committed file is byte-identical to what the walks produce, so a capability added without an anchor-or-flag <b>fails CI</b> rather than passing silently — the same discipline <span class="fn">generate-catalogs.test.ts</span> already enforces.</td></tr>
+</table>
+<figure>
+<svg viewBox="0 0 720 236" role="img" aria-label="Three walks over the code and corpus feed one generator, which emits the coverage matrix and a fidelity report, guarded by a freshness test">
+  <!-- three source boxes -->
+  <rect x="16" y="34" width="196" height="52" rx="8" fill="#f5faf9" stroke="#0b6e6e"/>
+  <text x="114" y="55" text-anchor="middle" fill="#0e3540" font-family="Segoe UI,sans-serif" font-weight="600" font-size="12.5">Walk 1 · claim surface</text>
+  <text x="114" y="73" text-anchor="middle" fill="#4b5263" font-family="Cascadia Code,monospace" font-size="10.5">capability/index · registry · instructions</text>
+  <rect x="16" y="94" width="196" height="52" rx="8" fill="#fdf7ef" stroke="#b4530a"/>
+  <text x="114" y="115" text-anchor="middle" fill="#0e3540" font-family="Segoe UI,sans-serif" font-weight="600" font-size="12.5">Walk 2 · anchors</text>
+  <text x="114" y="133" text-anchor="middle" fill="#4b5263" font-family="Cascadia Code,monospace" font-size="10.5">@anchor headers on tests</text>
+  <rect x="16" y="154" width="196" height="52" rx="8" fill="#fff" stroke="#8a8577"/>
+  <text x="114" y="175" text-anchor="middle" fill="#0e3540" font-family="Segoe UI,sans-serif" font-weight="600" font-size="12.5">Walk 3 · residuals</text>
+  <text x="114" y="193" text-anchor="middle" fill="#4b5263" font-family="Cascadia Code,monospace" font-size="10.5">corpus/*.json · calibration report</text>
+  <!-- arrows to generator -->
+  <line x1="212" y1="60" x2="292" y2="112" stroke="#c9c4b8" stroke-width="1.4" marker-end="url(#g1)"/>
+  <line x1="212" y1="120" x2="292" y2="120" stroke="#c9c4b8" stroke-width="1.4" marker-end="url(#g1)"/>
+  <line x1="212" y1="180" x2="292" y2="128" stroke="#c9c4b8" stroke-width="1.4" marker-end="url(#g1)"/>
+  <defs><marker id="g1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1,1 L7,4 L1,7 Z" fill="#8a8577"/></marker></defs>
+  <!-- generator -->
+  <rect x="296" y="94" width="150" height="52" rx="8" fill="#0e3540"/>
+  <text x="371" y="115" text-anchor="middle" fill="#fff" font-family="Segoe UI,sans-serif" font-weight="600" font-size="12.5">generate-coverage</text>
+  <text x="371" y="133" text-anchor="middle" fill="#cfe3e3" font-family="Cascadia Code,monospace" font-size="10.5">deterministic emit</text>
+  <line x1="446" y1="120" x2="512" y2="120" stroke="#8a8577" stroke-width="1.4" marker-end="url(#g1)"/>
+  <!-- outputs -->
+  <rect x="516" y="86" width="188" height="30" rx="7" fill="#e9f5f2" stroke="#0b6e6e"/>
+  <text x="610" y="105" text-anchor="middle" fill="#0b6e6e" font-family="Cascadia Code,monospace" font-size="11">docs/COVERAGE.md</text>
+  <rect x="516" y="124" width="188" height="30" rx="7" fill="#e9f5f2" stroke="#0b6e6e"/>
+  <text x="610" y="143" text-anchor="middle" fill="#0b6e6e" font-family="Cascadia Code,monospace" font-size="11">docs/FIDELITY.md</text>
+  <!-- freshness guard -->
+  <rect x="296" y="176" width="408" height="34" rx="7" fill="#fbe7e7" stroke="#b3261e" stroke-dasharray="4 3"/>
+  <text x="500" y="197" text-anchor="middle" fill="#b3261e" font-family="Segoe UI,sans-serif" font-weight="600" font-size="11.5">freshness test — committed file must equal the emit, else CI fails (no drift)</text>
+  <line x1="371" y1="146" x2="371" y2="176" stroke="#b3261e" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <text x="360" y="24" fill="#0e3540" font-family="Segoe UI,sans-serif" font-weight="600" font-size="14" text-anchor="middle">The map is generated, never hand-written</text>
+</svg>
+<figcaption><b>Figure 2 — three walks, one emit, one guard.</b> The matrix is read out of the code (the claim surface), the anchor tests (verification) and the calibration corpus (validation), merged by a deterministic generator, and pinned by a freshness test that fails CI if the committed file drifts from the emit — the exact mechanism that already keeps <span class="fn">docs/ALGORITHMS.md</span> honest. Nobody edits the matrix by hand, so the matrix cannot lie.</figcaption>
+</figure>
+<div class="callout"><b>Why generation is the whole point.</b> <p style="margin-top:8px">A hand-kept matrix drifts the moment someone adds a knob and forgets the row; then the map lies, which is worse than no map. A generated matrix inverts the incentive: the <em>only</em> way to make a cell green is to write the anchor test and the calibration case that the walks will find. The matrix becomes a forcing function — you cannot ship a capability into it without either the evidence or an explicit, visible <code>UNVALIDATED</code>. The map cannot lie because nobody writes the map by hand.</p></div>
+
+<h2><span class="no">7</span>The fidelity report — the published deliverable</h2>
+<p class="lead">The coverage matrix is the ledger; the <b>fidelity report</b> is its published face — the artifact that gives an architect an honest sense of how solid the tool is, in one glance and then in full detail. It extends the existing <span class="fn">CALIBRATION-REPORT.md</span> from "three residuals" to a whole-tool fidelity picture, generated by <code>pnpm calibrate</code> + <code>pnpm coverage</code>, living beside its inputs under <span class="fn">docs/</span> (a candidate <span class="fn">docs/FIDELITY.md</span>, or an HTML twin for the deliverable surface).</p>
+<h3>7.1 The four parts</h3>
+<table>
+  <tr><td style="white-space:nowrap"><b>The headline</b></td><td>one honest sentence: <em>"X of Y capabilities calibrated · aggregate fidelity Z % · N documented structural gaps · M architectures in corpus."</em> Today that reads, truthfully: <b>2 of 8 modeling families calibrated · aggregate fidelity 0.6 % (over 3 scored points) · out-of-sample 12.1 % · 3 architectures · N structural gaps documented.</b> The headline never averages away the gaps — the unvalidated count sits right next to the fidelity %.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Per-capability</b></td><td>a row per capability/family: anchor ✓/✗ (with the oracle), the calibration error % or <code>UNVALIDATED</code>, and the corpus entry + source. Reusing the report's existing per-entry table shape (<span class="fn">report.ts:144–169</span>), extended left with the anchor column and down with the un-calibrated families.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Per-metric×regime</b></td><td>the §4.1 grid, generated — six metrics × three regimes, each cell coloured by <code>status</code>, so the white-spaces (cost/availability/transient past-saturation) are literally visible as grey.</td></tr>
+  <tr><td style="white-space:nowrap"><b>The residual &amp; structural-limits map</b></td><td>the honest tail: the fitted residual per scored point (the structural gap that remains — <span class="fn">report.ts:191–195</span>), the leave-one-out generalization, and the §9 permanent-unmodeled list. This is where "we know exactly what is NOT proven" is written down.</td></tr>
+</table>
+<h3>7.2 Format &amp; provenance discipline</h3>
+<p>Generated, deterministic, reproducible with one command (the <code>@algorithm</code>/pricing-source idiom already in the codebase). Every fidelity number carries its basis label the way SDA already labels every rendered number — <code>measured (transient)</code> vs <code>analytic (quasi-static)</code> (<span class="fn">two-tier.ts:61</span>, <span class="fn">time-sweep.ts</span>) — so no fidelity figure is ever shown without saying what evidence produced it. The report RECOMMENDS but never applies (a shipped default changes every design's numbers — <span class="fn">report.ts:1–5</span>); the fidelity report inherits that firewall.</p>
+
+<h2><span class="no">8</span>Axis (b) — the architecture corpus roadmap</h2>
+<p class="lead">Validation solidity is bounded by architecture diversity (the 12.1 % leave-one-out proves it). The roadmap is a curated ~14-system corpus spanning the archetypes, the datastore families and — deliberately — the white-spaces the matrix exposes: fan-out tails, cache hit-rate dynamics, cost-vs-real-bill, event-driven/streaming, and multi-region availability. Each entry is real work: research the system, model it in SDA, and find retrievable ground truth. The table is honest about which candidates likely have published numbers and which are speculative.</p>
+<div class="scroll">
+<table class="matrix">
+<tr><th>#</th><th>Archetype</th><th>Candidate &amp; likely source</th><th>Newly covers (capability · metric · regime)</th><th>Ground truth</th></tr>
+<tr><td>1</td><td>Microservices broadcast</td><td>DeathStarBench Social Network — ASPLOS 2019</td><td>bottleneck id · latency share · below-knee</td><td><span class="tag done">shipped</span> retrievable</td></tr>
+<tr><td>2</td><td>Web framework, CPU-bound</td><td>TechEmpower single-query — TFB Round 22</td><td>throughput ceiling · CPU tier · at-knee</td><td><span class="tag done">shipped</span> retrievable</td></tr>
+<tr><td>3</td><td>Web framework, DB-bound</td><td>TechEmpower 20-query — TFB Round 22</td><td>throughput ceiling · pool · at-knee</td><td><span class="tag done">shipped</span> retrievable</td></tr>
+<tr><td>4</td><td>Cache hit-rate dynamics</td><td>TechEmpower <em>cached-queries</em> / a CDN cache case (Cloudflare cache-ratio posts)</td><td>hit-ratio → effective service time · tail · below-knee</td><td><span class="tag keep">likely</span> (TFB cached test is published; a clean CDN capacity curve is harder → partly speculative)</td></tr>
+<tr><td>5</td><td>Event-driven / streaming</td><td>Kafka throughput benchmark — Kreps "2M writes/s" blog; OpenMessaging benchmark</td><td>act-as-a-queue · backlog/drain · past-saturation</td><td><span class="tag keep">likely</span> retrievable (published write-rate + latency)</td></tr>
+<tr><td>6</td><td>In-memory datastore</td><td>Redis single-node — redis-benchmark / memtier published ops/s</td><td>queueing tail · ceiling + p99 · at-knee</td><td><span class="tag keep">likely</span> retrievable</td></tr>
+<tr><td>7</td><td>Wide-column datastore</td><td>Cassandra / ScyllaDB — vendor + academic benchmarks</td><td>write capacity · pool · at-knee</td><td><span class="tag keep">likely</span> retrievable</td></tr>
+<tr><td>8</td><td>Managed NoSQL capacity + bill</td><td>DynamoDB — AWS documented per-partition limits (1k WCU / 3k RCU) + deterministic pricing</td><td>documented ceilings · cost/bill · past-saturation</td><td><span class="tag keep">likely</span> (limits + price retrievable; a real workload's bill partly speculative)</td></tr>
+<tr><td>9</td><td>Read fan-out tail</td><td>Discord message history on Cassandra/ScyllaDB — Discord engineering blogs</td><td>fan-out · p99 tail · at-knee</td><td><span class="tag new">partial</span> (node counts &amp; p99 published; a QPS-vs-p99 curve is not → speculative absolutes)</td></tr>
+<tr><td>10</td><td>Serverless concurrency + cold start</td><td>AWS Lambda — documented burst/account-concurrency ceilings; cold-start studies (USENIX ATC 2018)</td><td>documented ceilings + retry storms · throughput · past-saturation</td><td><span class="tag keep">likely</span> (limits retrievable; cold-start distributions from literature)</td></tr>
+<tr><td>11</td><td>Published cloud bill</td><td>A company's public cost breakdown + AWS Pricing (deterministic)</td><td>realistic cost · cost/bill · all regimes</td><td><span class="tag new">partial</span> (pricing exact; matching a real bill's workload is the hard, partly-speculative part)</td></tr>
+<tr><td>12</td><td>Multi-region / DR</td><td>An AWS Well-Architected DR reference (tiers, RPO/RTO) + published per-service SLAs</td><td>redundancy · availability/nines · —</td><td><span class="tag new">partial</span> (SLA nines retrievable; measured end-to-end availability rare → validated against SLA, not incidents)</td></tr>
+<tr><td>13</td><td>CQRS / event-sourcing</td><td>The shipped CQRS example + a documented reference architecture</td><td>latency composition · read/write split · below-knee</td><td><span class="tag gone">speculative</span> (few public ground-truth curves)</td></tr>
+<tr><td>14</td><td>Managed web stack</td><td>ALB → Fargate → Aurora (existing content catalog case)</td><td>end-to-end tail · cost · at-knee</td><td><span class="tag gone">speculative</span> (full ground-truth curve unlikely; useful for shape diversity, scored where possible)</td></tr>
+</table>
+</div>
+<p class="small"><b>Retrievability legend:</b> <span class="tag done">shipped</span> already in corpus · <span class="tag keep">likely</span> a primary source with the number probably exists · <span class="tag new">partial</span> some quantities retrievable, others must be <code>measured: null</code> · <span class="tag gone">speculative</span> included for architecture diversity (the over-fit guard) but likely unscored. The honest discipline: an entry ships with whatever it can retrieve, and every unpublished quantity is <code>measured: null</code> — predicted and reported for context, never scored (<span class="fn">corpus.ts:54–58</span>). A speculative entry still earns its place by adding a distinct topology to the leave-one-out fold-in set, which is how it shrinks the 12.1 %.</p>
+
+<h2><span class="no">9</span>Known structural limits — what SDA will NOT model, permanently</h2>
+<p class="lead">Honesty about boundaries is what keeps the fidelity report from being silently wrong at the edges. These are not gaps to close — they are things SDA deliberately does not model, flagged <code>unmodeled</code> so the report is explicit about where its predictions stop meaning anything. The calibration report already names several (<span class="fn">CALIBRATION-REPORT.md:70</span>: "the DEEP CPU economics … stays deliberately out of domain, flagged unmodeled").</p>
+<table>
+  <tr><th>Not modeled (permanent)</th><th>Why it is out of domain</th></tr>
+  <tr><td><b>Deep allocator / GC / lock-contention economics</b></td><td>SDA models a tier as an M/M/c station with a service time and a core count; it does not model heap pressure, GC pauses, false sharing or lock convoys. The fitted per-request CPU time <em>absorbs</em> their average, but the dynamics (a GC pause that spikes p99 under memory pressure) are outside the queueing abstraction — named unmodeled at <span class="fn">CALIBRATION-REPORT.md:70</span>.</td></tr>
+  <tr><td><b>Detailed consistency / consensus protocols</b></td><td>SDA propagates a qualitative guarantee token over a lattice (<span class="fn">engine/core/src/lattice.ts</span>) — it says "this flow's end-to-end consistency is X and here is the weakening hop." It does not simulate Raft/Paxos round-trips, quorum read/write latencies as a function of replica placement, or the CAP trade under partition. Guarantees are a <em>type</em>, not a timed protocol.</td></tr>
+  <tr><td><b>Network-partition dynamics</b></td><td>Availability is a series/parallel product with documented uplifts per deployment mode (<span class="fn">behaviors.ts:184–195</span>); it is not a partition-and-heal simulation. Split-brain, failover storms and partial-partition behaviour are not modeled — the tool answers steady-state availability nines, not partition transients.</td></tr>
+  <tr><td><b>Cache-eviction internals</b></td><td>A cache can be modeled as a hit-ratio that scales effective service time (roadmap #4), but LRU/LFU/ARC eviction dynamics, working-set shifts and cold-cache stampedes are not simulated. The hit ratio is an input, not an emergent property of a modeled eviction policy.</td></tr>
+  <tr><td><b>Two in-series resources as a true tandem</b></td><td>Where a tier binds on the MIN of two stations (DB vs framework CPU), SDA takes the binding minimum, not a full tandem-network interaction — explicitly flagged at <span class="fn">CALIBRATION-REPORT.md:70</span> as out of domain. Adequate for capacity; not a model of coupled queueing between the two.</td></tr>
+</table>
+<div class="callout"><b>The rule.</b> <p style="margin-top:8px">A structural limit is a permanent <span class="cell c-unv">UNVALIDATED · unmodeled</span> cell — it never turns green, and the fidelity report lists it under "what no tunable can remove, ever." Where a design genuinely needs one of these, SDA's honest output is <code>unknown</code>, never a fabricated number — the same line the tool already holds everywhere. Making these explicit is what lets the rest of the report claim solidity without over-claiming reach.</p></div>
+
+<h2><span class="no">10</span>The discipline — the CI gate, the landing rule, and the over-fit guards</h2>
+<p class="lead">A strategy is only as real as the routine that enforces it. Three mechanisms turn V&amp;V from a document into a standing property of the codebase.</p>
+<table>
+  <tr><td style="white-space:nowrap"><b>The CI fidelity gate</b></td><td><code>pnpm calibrate:check</code> already fails on any residual regression beyond 1.5 pp against the pinned baseline (<span class="fn">run.ts:53–61</span>, <span class="fn">baseline.ts:46–56</span>), and the standing test <span class="fn">harness.test.ts</span> runs it under <code>pnpm test</code>. Phase 1 adds <code>pnpm coverage</code>'s freshness assertion to the same gate: fidelity cannot silently regress, and the matrix cannot silently drift.</td></tr>
+  <tr><td style="white-space:nowrap"><b>The landing rule</b></td><td>every new capability lands with (a) an <code>@anchor</code>-tagged analytic anchor test AND (b) a calibration case — OR an explicit <code>UNVALIDATED</code> flag in the matrix. Because the matrix is generated (§6), (a)-or-flag is mechanically enforced: an un-anchored capability that is not flagged fails the freshness test. This is the forcing function that keeps the map complete.</td></tr>
+  <tr><td style="white-space:nowrap"><b>The over-fit guards</b></td><td>four, layered: (1) <b>train/test split</b> — leave-one-out is reported alongside the full fit, and the honest 12.1 % is not hidden (<span class="fn">fit.ts:178–204</span>); (2) <b>fit, don't apply</b> — tunables are recommended in <span class="fn">PROPOSED-DEFAULTS.json</span> for owner review, never written into shipped content (<span class="fn">report.ts:199–211</span>); (3) <b>residual-as-output</b> — the goal is the residual, not a match, so a suspiciously-perfect fit on few points is read as under-constraint, not success; (4) <b>architectures &gt; free variables</b> — the corpus roadmap (§8) is sized so the number of distinct architectures grows faster than the number of shared free variables, keeping the fit over-determined. Guard (4) is the one the current corpus fails, and the one the roadmap exists to fix.</td></tr>
+</table>
+
+<h2><span class="no">11</span>The three hardest tensions</h2>
+<h3>11.1 Over-fit with few systems — the coverage paradox</h3>
+<p>Every new capability that needs a calibration case tends to introduce a new free variable (a new service time, a new pool size). If the corpus grows one architecture per new tunable, the fit stays exactly as under-determined as it is today — three points, three shared free variables, 12.1 % out-of-sample. The tension is that <em>breadth</em> (more families calibrated) and <em>depth</em> (each family over-determined) pull against each other with a fixed research budget. The honest resolution is guard (4) as a hard rule: a family is not marked <span class="cell c-val">validated</span> until at least two architectures share its tunable, so the fit for that tunable is over-determined and the leave-one-out for it is a genuine out-of-sample test. Until then it is <span class="cell c-ver">verified</span> with a single sourced point — anchored, plausibly-calibrated, but honestly not cross-validated. The matrix distinguishes those two states so "validated" always means "over-determined," never "matched once."</p>
+<h3>11.2 Retrievable ground truth — most systems publish ratios, not curves</h3>
+<p>The deepest practical obstacle is that real published systems rarely give a clean absolute p99-vs-QPS or throughput-ceiling curve. DeathStarBench — the standard benchmark — publishes <em>relative</em> shares and ratios, so the corpus honestly marks its mixed-workload ceiling <code>measured: null</code> and scores only the one clean latency-share anchor (<span class="fn">deathstarbench-social.json:38–41</span>). This is not a defect to engineer around; it is a fact of the source material. The resolution is to make <code>measured: null</code> a first-class, respected state — the harness predicts and reports it for context but refuses to score it (the tool must not invent a number to grade against) — and to gate corpus growth on retrievability, preferring benchmark suites that publish absolutes (TechEmpower, TFB cached, redis-benchmark, OpenMessaging) over prestige systems that publish only prose. Speculative entries still earn inclusion for topology diversity, but never inflate the scored fidelity number.</p>
+<h3>11.3 Capabilities with no measurable real-world analog</h3>
+<p>Some capabilities have no "measured system to fit" in the queueing sense, and forcing a fit-error onto them would itself be a lie. <b>Cost</b> is deterministic: <code>cost = driver × sourced unit price</code> (<span class="fn">behaviors.ts:342</span>) — there is no residual to fit, only a source to keep fresh; "validation" for cost means the unit price matches the vendor's published rate today, not that a regression converged. <b>Availability</b> is a series product against published SLAs (<span class="fn">reliability.ts</span>); measured end-to-end availability of a real DR setup is rarely published, so it is validated against the SLA nines the vendor commits to, not against observed incidents. <b>Delivery guarantees</b> are qualitative tokens over a lattice — there is no numeric ground truth at all. The resolution is that the matrix carries a fourth evidence kind beside anchor/residual: <code>sourced</code> — a cell whose correctness is a cited, current source rather than a fitted error. It is honestly <em>not</em> the same as a calibrated residual, and the fidelity report must not blend them into one "fidelity %." A cost cell is green when its price source is current; a queueing cell is green when its residual is small; the report says which is which.</p>
+
+<h2><span class="no">12</span>Phasing — framework first, then corpus in waves you watch grow</h2>
+<p>Ordered so the smallest honest slice ships first and each phase makes the next cheaper. Effort is stated honestly per phase.</p>
+<figure>
+<svg viewBox="0 0 720 260" role="img" aria-label="Across phases the number of calibrated capability families rises toward eight while the number of unvalidated white-spaces falls and out-of-sample error drops from twelve percent">
+  <line class="axis" x1="60" y1="30" x2="60" y2="200"/><line class="axis" x1="60" y1="200" x2="690" y2="200"/>
+  <text class="tick" x="52" y="204" text-anchor="end">0</text><text class="tick" x="52" y="118" text-anchor="end">4</text><text class="tick" x="52" y="36" text-anchor="end">8</text>
+  <text class="lbl" x="24" y="120" transform="rotate(-90 24 120)" text-anchor="middle">families</text>
+  <!-- x groups: now, Wave A, Wave B, Wave C -->
+  <!-- bars: calibrated (green) rising, unvalidated (grey) falling; each group two bars -->
+  <g font-family="Segoe UI,sans-serif">
+    <!-- now: calibrated 2, unvalidated 6 -->
+    <rect x="96"  y="158" width="34" height="42"  fill="#2f7d4f"/><rect x="134" y="72"  width="34" height="128" fill="#d9d3c7"/>
+    <text x="151" y="220" text-anchor="middle" class="lbl">now (P1)</text>
+    <!-- Wave A: calibrated ~4, unvalidated ~4 -->
+    <rect x="246" y="115" width="34" height="85"  fill="#2f7d4f"/><rect x="284" y="115" width="34" height="85"  fill="#d9d3c7"/>
+    <text x="301" y="220" text-anchor="middle" class="lbl">Wave A</text>
+    <!-- Wave B: calibrated ~6, unvalidated ~2 -->
+    <rect x="396" y="94"  width="34" height="106" fill="#2f7d4f"/><rect x="434" y="158" width="34" height="42"  fill="#d9d3c7"/>
+    <text x="451" y="220" text-anchor="middle" class="lbl">Wave B</text>
+    <!-- Wave C: calibrated ~8, unvalidated structural-only -->
+    <rect x="546" y="40"  width="34" height="160" fill="#2f7d4f"/><rect x="584" y="182" width="34" height="18"  fill="#d9d3c7"/>
+    <text x="601" y="220" text-anchor="middle" class="lbl">Wave C</text>
+  </g>
+  <!-- out-of-sample % line (right axis, schematic) -->
+  <polyline fill="none" stroke="#b4530a" stroke-width="2.2" stroke-dasharray="1 0" points="151,64 301,96 451,132 601,168"/>
+  <circle cx="151" cy="64" r="4" fill="#fff" stroke="#b4530a" stroke-width="2"/><circle cx="301" cy="96" r="4" fill="#fff" stroke="#b4530a" stroke-width="2"/><circle cx="451" cy="132" r="4" fill="#fff" stroke="#b4530a" stroke-width="2"/><circle cx="601" cy="168" r="4" fill="#fff" stroke="#b4530a" stroke-width="2"/>
+  <text x="151" y="56" text-anchor="middle" fill="#b4530a" font-family="Segoe UI,sans-serif" font-size="10.5">LOO 12.1%</text>
+  <text x="612" y="164" fill="#b4530a" font-family="Segoe UI,sans-serif" font-size="10.5">↓ (target)</text>
+  <!-- legend -->
+  <rect x="470" y="30" width="12" height="12" fill="#2f7d4f"/><text x="488" y="40" class="lbl">calibrated families</text>
+  <rect x="470" y="48" width="12" height="12" fill="#d9d3c7"/><text x="488" y="58" class="lbl">unvalidated white-spaces</text>
+  <line x1="470" y1="72" x2="482" y2="72" stroke="#b4530a" stroke-width="2.2"/><text x="488" y="76" class="lbl">out-of-sample error (direction, not a promise)</text>
+</svg>
+<figcaption><b>Figure 3 — solidity you watch grow.</b> The only grounded bars are <em>now</em> (2 of 8 families calibrated, out-of-sample 12.1 % — §3.2). The later groups show the intended <em>direction</em>, not promised numbers: each wave calibrates more families, shrinks the unvalidated white-spaces toward the residue of permanent structural limits (§9), and drives the leave-one-out error down as the corpus diversifies. The fidelity report's headline is exactly these quantities — a number the owner watches move, not a claim.</figcaption>
+</figure>
+<ol class="build">
+  <li><b>The V&amp;V framework.</b> <span class="tag new">P1</span> The coverage-matrix data model (§6.1) + <code>scripts/generate-coverage.mjs</code> emitting <span class="fn">docs/COVERAGE.md</span>, freshness-asserted like the algorithm catalog; the generated fidelity report (§7) extending <span class="fn">CALIBRATION-REPORT.md</span>; and an analytic-anchor pass filling the highest-value verification gaps (§2.4) — an <code>evaluate</code> differential oracle, a P–K test at intermediate SCV, a <code>realCumulativeLatency</code> end-to-end DES differential. <em>Effort: moderate — mostly wiring the walks over structures that already exist (registry, capability index, corpus, report), plus ~3 anchor tests. No new solver math.</em> Gate: the matrix generates green-where-evidence and grey-everywhere-else; CI fails on drift or fidelity regression.</li>
+  <li><b>Corpus Wave A — the highest-value white-spaces.</b> <span class="tag new">P2</span> Roadmap #5 Kafka (streaming/backlog), #6 Redis + #7 Cassandra (datastore capacity + tail), #4 cache hit-rate. Each: research → model → retrieve ground truth → land with its residual. <em>Effort: high — this is real modeling + sourcing work, ~1 system per focused slice.</em> Gate: each family flips from <span class="cell c-unv">UNVALIDATED</span> to <span class="cell c-ver">verified</span> or, with two architectures, <span class="cell c-val">validated</span>; the fidelity headline's calibrated-family count rises.</li>
+  <li><b>Corpus Wave B — cost, availability, serverless.</b> <span class="tag new">P2</span> #8 DynamoDB (documented ceilings + bill), #10 Lambda (concurrency + cold start), #11 a published bill, #12 a DR reference. Introduces the <code>sourced</code> evidence kind (§11.3) for cost/availability. <em>Effort: high; some quantities land <code>measured: null</code> honestly.</em> Gate: the cost/availability past-saturation white-spaces stop being empty; the fidelity report distinguishes sourced from fitted.</li>
+  <li><b>Corpus Wave C — fan-out, CQRS, multi-region diversity.</b> <span class="tag new">P3</span> #9 Discord fan-out tail, #13 CQRS, #14 managed web stack — chosen for topology diversity to drive the leave-one-out generalization down. <em>Effort: high, and partly speculative — scored where retrievable, included for the over-fit guard where not.</em> Gate: leave-one-out RMS falls materially below today's 12.1 % as the fold-in set diversifies.</li>
+  <li><b>Each wave ends with a published fidelity report.</b> <span class="tag keep">every wave</span> Regenerate <span class="fn">docs/FIDELITY.md</span>; the headline's "X of Y calibrated · aggregate Z % · N gaps · M architectures" is the number the owner watches grow. Solidity becomes a tracked metric, not a claim — the point of the whole exercise.</li>
+</ol>
+
+<h2><span class="no">13</span>Open questions for the owner</h2>
+<p><span class="q">1. Where does the fidelity report live?</span> A new generated <span class="fn">docs/FIDELITY.md</span> (+ an HTML twin for the deliverable surface), or fold the coverage matrix and per-metric grid into the existing <span class="fn">CALIBRATION-REPORT.md</span>? The former keeps calibration (validation) and coverage (verification+validation) as separate artifacts; the latter is one file. Recommendation: separate — the fidelity report reads from the calibration report, so it should not be it.</p>
+<p><span class="q">2. Is a single "aggregate fidelity %" the right headline, given it averages heterogeneous metrics?</span> A capacity residual and a latency-share residual are not the same kind of error, and cost has no residual at all. Options: (a) one aggregate % over queueing-family scored points only, with the other families as an explicit calibrated-fraction; (b) a small vector (capacity X %, tail Y %, N sourced, K unvalidated). Recommendation: (b) — a vector is more honest than a blended scalar, and the tool's whole ethos is not blending a violation away.</p>
+<p><span class="q">3. Does a <code>sourced</code> cost/availability cell count toward "calibrated"?</span> §11.3 argues it is a distinct evidence kind — green when its source is current, not when a fit converged. Confirm it appears as its own column ("sourced") rather than being counted in the calibrated fraction, so the headline never implies a fit that did not happen.</p>
+<p><span class="q">4. What is the corpus growth commitment?</span> A fixed wave of 3–4 systems per milestone (predictable solidity growth), or opportunistic as retrievable ground truth surfaces (honest but lumpy)? The over-fit guard (§10) wants steady architecture growth; the retrievability tension (§11.2) makes it lumpy. Recommendation: commit to the family-coverage <em>order</em> (Wave A→C), let the rate float with retrievability.</p>
+<p><span class="q">5. Do speculative (<code>measured: null</code>-heavy) entries belong in the corpus?</span> They add topology diversity for the leave-one-out guard but score nothing. Include them (they shrink the 12.1 % by diversifying the fold-in set) or keep the corpus scored-only (cleaner, but slower to over-determine)? Recommendation: include, clearly badged, never counted in the scored aggregate.</p>
+<p><span class="q">6. CI budget for the growing corpus.</span> <code>calibrate:check</code> runs the full fit each CI; the standing guard already turns DES corroboration off for speed (<span class="fn">harness.test.ts:13–15</span>). With 14 systems and DES tails, is a fit-only gate in CI + a full report (with DES) nightly the right split? Recommendation: yes — mirror the solver harness's DEEP-lane pattern (a fast standing gate, a heavy nightly).</p>
+
+<div class="callout" style="border-left-color:#4b5263;margin-top:40px">
+<b>Provenance &amp; guardrails.</b>
+<p style="margin-top:8px" class="small">This is a strategy document — no code was changed, no owner example under <span class="fn">examples/</span> was touched, nothing was committed, and nothing was published. Every claim about the current codebase is grounded in a named <code>file:line</code> at HEAD <code>adc55bf</code>, gathered by reading the calibration package (<span class="fn">calibration/src/*</span>), the analytic and DES sources (<span class="fn">engine/sim/src/analytic.ts</span>, <span class="fn">des.ts</span>, <span class="fn">profile.ts</span>), the differential and property test suites, the solver oracle harness (<span class="fn">engine/solver-contract/src/harness/*</span>), the capability layer (<span class="fn">engine/solver-contract/src/capability/*</span>), the registry and behaviors (<span class="fn">content/sda/src/registry.ts</span>, <span class="fn">behaviors.ts</span>, <span class="fn">graph-read.ts</span>, <span class="fn">queueing.ts</span>), the MCP surface (<span class="fn">app/mcp/src/instructions.ts</span>), and the generated catalogs plus their freshness test (<span class="fn">docs/ALGORITHMS.md</span>, <span class="fn">scripts/generate-catalogs.test.ts</span>). External claims — queueing theory (Erlang, Little, Pollaczek–Khinchine, Burke), the roadmap's candidate systems and their likely sources — are attributed and, where a specific figure would need a citation I could not verify at this moment, hedged as "likely retrievable" rather than asserted. The current, honest state is stated without inflation: capacity/tail is strongly verified and beginning to be validated (0.6 % over three systems, but 12.1 % out-of-sample), while cost, availability and transient survival are verified-only and openly UNVALIDATED. The strategy's whole purpose is to make that map complete, generated so it cannot drift, and honest so a serious architect can trust exactly what it claims — and see exactly what it does not.</p>
+</div>
+
+</div>
+</body>
+</html>

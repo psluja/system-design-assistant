@@ -1,0 +1,55 @@
+{
+  "_comment": "RECOMMENDATION ONLY (TASK-93 Job 3). These are the component-default values that best fit the calibration corpus. They are NOT applied — changing a shipped content default changes every design's numbers, which is a separate owner-reviewed step. Regenerate with `pnpm calibrate`.",
+  "generatedBy": "pnpm calibrate",
+  "aggregateErrorPct": 3.1201,
+  "tunables": [
+    {
+      "selector": "cache.redis",
+      "key": "throughput",
+      "unit": "op/s",
+      "catalogDefault": 100000,
+      "recommended": 184375,
+      "note": "Redis single-node capacity ceiling (op/s) — the value nodeQueues reads for rho, with connectionPool/connectionHeldMs kept equal to it for the tail. Catalog default 100,000 op/s is an ESTIMATE (redis.io: 'single-threaded ~100k+ ops/s on one core'). SHARED with the LPUSH entry: one capacity must reproduce both the SET (180,180 op/s) and LPUSH (188,324 op/s) ceilings, so the fit is over-determined and the residual is the honest command-to-command spread one capacity value cannot remove."
+    },
+    {
+      "selector": "compute.service",
+      "key": "cpuTimePerRequestMs",
+      "unit": "ms",
+      "catalogDefault": 1,
+      "recommended": 0.267846,
+      "note": "The framework's per-request CPU time (parse + route + query issue + JSON serialize). A fittable ESTIMATE (no published per-request CPU figure). Catalog default 1 ms is a generous, uncalibrated placeholder (framework does not bind out of the box); the fit drives it so cores/cpuTime = the measured 104,000 req/s single-query ceiling. SHARED with the 20-query entry but INERT there (the DB, at ceiling/20 = 5,900, binds far below the framework's CPU), so it is constrained only by this single-query point — the framework-CPU degree of freedom the DB-only model lacked."
+    },
+    {
+      "selector": "db.mongodb",
+      "key": "connectionHeldMs",
+      "unit": "ms",
+      "catalogDefault": 5,
+      "recommended": 3.73626,
+      "note": "MongoDB per-operation service time (the M/M/c connection hold time the analytic twin and DES both read). It IS the numerator of the latency-share metric — at low load a Mongo hop's sojourn ~= this held time. Fitting it slides the predicted share toward the measured 8.5%."
+    },
+    {
+      "selector": "db.postgres",
+      "key": "perRequestDuration",
+      "unit": "ms",
+      "catalogDefault": 50,
+      "recommended": 0.238977,
+      "note": "PostgreSQL per-query service time. Catalog default 50 ms is a mixed-OLTP query; the TFB World read is a cache-resident indexed single-row read (~0.24 ms). The dominant out-of-box miss (~210x). SHARED with the 20-query entry — the 20-query point anchors it (118,000 q/s = 5,900 x 20); at single-query the DB no longer has to also explain the ceiling because the framework CPU now binds first."
+    },
+    {
+      "selector": "queue.rabbitmq",
+      "key": "throughput",
+      "unit": "msg/s",
+      "catalogDefault": 20000,
+      "recommended": 93188.2,
+      "note": "RabbitMQ single-node classic-queue write capacity (msg/s) — the value nodeQueues reads for rho. Catalog default 20,000 msg/s is an ESTIMATE ('self-managed RabbitMQ on a VM'); the measured classic-queue ceiling (88,534 msg/s, AMQP 0.9.1) is ~4.4x higher, so the fit corrects it to the vendor's own measured write ceiling. SHARED with the AMQP 1.0 entry: one capacity must reproduce BOTH the AMQP 0.9.1 (88,534) and AMQP 1.0 (99,413) ceilings on the same broker/queue, so the fit is over-determined and the residual is the honest protocol spread one capacity value cannot remove."
+    },
+    {
+      "selector": "stream.kafka",
+      "key": "throughput",
+      "unit": "msg/s",
+      "catalogDefault": 100000,
+      "recommended": 798556,
+      "note": "Kafka cluster aggregate write capacity (msg/s) — the value nodeQueues reads for rho. Catalog default 100,000 msg/s is an ESTIMATE ('self-managed Kafka on a VM cluster'); the measured 3-broker write ceiling is ~8x higher. SHARED with the 3x-async entry: one aggregate throughput must reproduce both the no-replication (821,557) and 3x-async (786,980) write ceilings, so the fit is over-determined and the residual is the honest replication overhead one capacity value cannot capture."
+    }
+  ]
+}

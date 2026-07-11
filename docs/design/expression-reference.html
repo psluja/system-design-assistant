@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Relation Expression Language — grammar, semantics, cookbook · SDA Reference</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:740px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{background:#1d2330;color:#e7e4da;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:18px 0;font:13px/1.62 "Cascadia Code",Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  pre .c{color:#7f8ba3;font-style:italic}
+  pre .k{color:#6fb3ff}
+  pre .t{color:#8fe3c0}
+  pre .s{color:#e0b070}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14.5px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:10px 13px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.now{background:#e9f5f2;color:#0b6e6e}
+  .tag.warn{background:#fbe7e7;color:#a33}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:13px}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+  .rc{font:600 12px/1 "Segoe UI",sans-serif;color:var(--accent2);letter-spacing:.06em}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>The Relation Expression Language</h1>
+  <div class="sub">A component in SDA has no code. Its entire behaviour is a handful of one-line arithmetic strings &mdash; its <b>relations</b> &mdash; and this document is their reference: the exact grammar the parser accepts (and what it refuses, with the real error messages), what an expression <em>means</em> when the engine runs it, a cookbook of twelve proven patterns lifted from the shipped catalogs, and the honest boundary of what this language must never be asked to model.</div>
+  <div class="meta">SDA reference · 2026-07-05 · the manifest <span style="text-transform:none">relations.expr</span> language · grounded line-by-line in the shipping parser, evaluator and catalogs</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design &mdash; load, latency, availability, cost &mdash; against declared requirements, live on every edit. Every building block on the canvas is described by a <b>manifest</b>: a pure-JSON data record of its ports, its configuration knobs, its SLO bands, and its <b>relations</b>. A relation is one line of arithmetic &mdash; for example <code>concurrency / (perRequestDuration / 1000)</code> &mdash; that tells the engine how one quantity of the block is derived from others. This reference is for the architect who opens the <b>&#9998; component editor</b> (the pencil button in the palette, or &ldquo;&#9998; Edit type&rdquo; on a selected node) to author a custom component, reaches the <code>relations</code> array, and asks: <em>what language is this, and what can I model with it?</em></p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>manifest</b></td><td>the pure-JSON description of one component type: <code>ports</code> (typed connectors), <code>config</code> (numeric knobs with defaults and units), <code>relations</code> (derived quantities &mdash; the subject of this document), <code>bands</code> (built-in SLO checks). Manifests reference a shared vocabulary by id and never each other.</td></tr>
+  <tr><td style="white-space:nowrap"><b>registry key</b></td><td>a governed name for one kind of quantity &mdash; <code>throughput</code>, <code>latency</code>, <code>cost</code>, <code>concurrency</code> &mdash; declared once with its unit and its composition algebra. Every key a manifest mentions must exist in the registry; there are no free-form fields.</td></tr>
+  <tr><td style="white-space:nowrap"><b>relation</b></td><td>one entry of a manifest's <code>relations</code> array: <code>{ key, reads, expr }</code>. <code>key</code> is the registry key it produces, <code>expr</code> is the expression string this document specifies, <code>reads</code> declares which keys it consumes.</td></tr>
+  <tr><td style="white-space:nowrap"><b>node · wire</b></td><td>a placed instance of a component on the canvas, and a typed connection between two ports. Values flow along wires; a relation only ever computes within its own node.</td></tr>
+  <tr><td style="white-space:nowrap"><b>inflow · self · outflow</b></td><td>the three reference primitives of the language: what arrives from upstream, this node's own value, and what downstream consumers pull. Defined precisely in &sect;3.1.</td></tr>
+  <tr><td style="white-space:nowrap"><b>fixpoint</b></td><td>how the engine evaluates: all relations of all nodes become one equation system, solved by iterating until the values stop changing. Authoring order never matters (&sect;3.3).</td></tr>
+  <tr><td style="white-space:nowrap"><b>band · verdict</b></td><td>a band is a declared acceptable range on a key (an SLO); a verdict is the honest read-back: <code>ok</code> / <code>warning</code> / <code>violation</code> / <code>unknown</code> / <code>did-not-converge</code>. Uncertainty is a value, never a guess.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>What this language is &mdash; and why it is deliberately small</h2>
+<p class="lead">The expression language is a closed arithmetic subset: numbers, key references (in three flavours), <code>+&nbsp;&minus;&nbsp;&times;&nbsp;&divide;</code>, unary minus, n-ary <code>min</code>/<code>max</code>, and comparisons that yield <code>1</code> or <code>0</code>. Nothing else &mdash; no loops, no conditionals, no user functions, no exponent, no strings. That smallness is not a temporary limitation; it is the design, and it buys three guarantees.</p>
+
+<h3>1.1 Pure data, no dependency hell</h3>
+<p>A component's behaviour must survive being serialized, exported, versioned and re-imported as plain JSON. An expression string over registry-key <em>names</em> is exactly that: it references the shared vocabulary by id and can never import, call into, or depend on another component. The manifest contract (backlog doc-3 &sect;1) states the consequence plainly: a component affects the world in exactly two ways &mdash; its relations (its arithmetic) and its ports (what it connects to). The engine never &ldquo;understands&rdquo; a component; it evaluates the relations and matches the ports. <code>throughput = concurrency / (perRequestDuration / 1000)</code> <em>is</em> what a serverless function does &mdash; there is no hidden semantics behind the string.</p>
+
+<h3>1.2 Solver-invertible by construction</h3>
+<p>SDA does not only run your arithmetic <em>forward</em> (given the knobs, compute the throughput). Its search modes &mdash; <em>optimize</em>, <em>repair</em>, <em>synthesize</em> &mdash; run it <em>backward</em>: free a knob, add an objective, and let an exact solver (MiniZinc) find the smallest <code>concurrency</code> that still meets the SLO. Every operator in the language was admitted because a mixed-integer solver can invert it: linear arithmetic, <code>min</code>/<code>max</code>, and 0/1 indicator comparisons all translate cleanly. This is why there is no exponent: when the catalog needed availability-by-redundancy it deliberately chose a sourced step function over the parallel-machines formula <code>1&minus;(1&minus;a)&#8319;</code>, because &ldquo;the relation language has no exponent for [it], and [a] variable exponent is hostile to the MIP solver&rdquo; (<span class="path">content/sda/src/behaviors.ts</span>, <code>availabilityByDeployment</code>). A richer language would make your component pretty in the forward pass and a dead weight in every search.</p>
+
+<h3>1.3 One meaning, three compilers &mdash; the differential guarantee</h3>
+<p>Because the operator set is closed, the <em>whole</em> numeric surface of every design &mdash; built-in and custom components alike &mdash; is expressible in three independent execution engines, and SDA tests that they agree rather than hoping:</p>
+<table>
+  <tr><th>Compiler</th><th>Where it runs</th><th>Agreement proven by</th></tr>
+  <tr><td><b>JS evaluator</b> (float64)</td><td>the hot path: every edit, live verdicts (<span class="path">engine/solve/src/relation/evaluate.ts</span>)</td><td>the reference &mdash; the other two are measured against it</td></tr>
+  <tr><td><b>MiniZinc emission</b></td><td>the cold path: exact optimize / repair / synthesize (<span class="path">engine/solve/src/minizinc/project.ts</span>)</td><td><span class="path">engine/solve/src/minizinc/differential.test.ts</span> (forward eval vs the native solver; &ldquo;a disagreement is a P0 &mdash; it means the tool would lie&rdquo;), <span class="path">.../transform.differential.test.ts</span> (wire-transform arithmetic), <span class="path">.../chain.property.test.ts</span> (property-tested simplification on random expression trees)</td></tr>
+  <tr><td><b>Stack-machine bytecode &rarr; WGSL</b> (fp32)</td><td>the GPU batch path: Monte-Carlo uncertainty at one scenario per GPU invocation (<span class="path">engine/solver-contract/src/gpu/compile.ts</span>, <span class="path">.../webgpu.ts</span>)</td><td><span class="path">engine/solver-contract/src/gpu/fp32.test.ts</span> (deviceless fp32 emulation of the exact kernel arithmetic) and <span class="path">.../gpu/differential.test.ts</span> (a real WebGPU device vs the float64 reference across a seeded corpus; skips with an honest marker when no device exists, never silently)</td></tr>
+</table>
+<p>The GPU compiler makes the closedness argument concrete: its decline reasons are all <em>structural</em> (too many cells, a build error) &mdash; there is deliberately no &ldquo;unsupported arithmetic&rdquo; reason, &ldquo;the Expr op set is fully expressible&rdquo; (<span class="path">engine/solver-contract/src/gpu/compile.ts</span>, <code>DeclineReason</code>). Every construct you are allowed to write is guaranteed to mean the same thing in all three engines. That guarantee is the price of admission for new operators, which is why the language grows only by a deliberate meta-model evolution (the closed-framework rule, doc-3 &sect;0) &mdash; never by a shortcut.</p>
+
+<h2><span class="no">2</span>The grammar &mdash; everything the parser accepts</h2>
+<p class="lead">The parser is ~190 lines of recursive descent (<span class="path">engine/solve/src/relation/parse.ts</span>), and this section is its complete surface. Every row's example is a real expression from a shipped catalog, cited to its file.</p>
+
+<h3>2.1 The constructs</h3>
+<table>
+  <tr><th>Construct</th><th>Syntax</th><th>Real catalog example</th><th>Where</th></tr>
+  <tr><td><b>Number</b></td><td>decimal digits and a dot: <code>1000</code>, <code>0.0001</code>, <code>.5</code></td><td><code>&hellip; / 1000000000</code> &mdash; bytes to GB in the egress-cost relation</td><td><span class="path">content/sda/src/behaviors.ts</span> (<code>EGRESS</code>)</td></tr>
+  <tr><td><b>Key reference</b> (plain)</td><td>an identifier: <code>[A-Za-z_][A-Za-z0-9_]*</code></td><td><code>concurrency / (perRequestDuration / 1000)</code></td><td><span class="path">content/sda/src/catalog.ts</span> (the Lambda archetype)</td></tr>
+  <tr><td><b><code>self(key)</code></b></td><td>this node's <em>own</em> value for <code>key</code></td><td><code>self(unitCost)</code> &mdash; the flat monthly price</td><td><span class="path">content/sda/src/behaviors.ts</span> (<code>flatCost</code>)</td></tr>
+  <tr><td><b><code>inflow(key)</code></b></td><td>the value arriving from upstream</td><td><code>inflow(throughput) * self(unitCost)</code> &mdash; pay-per-use cost rises with traffic</td><td><span class="path">content/sda/src/behaviors.ts</span> (<code>payPerUseCost</code>)</td></tr>
+  <tr><td><b><code>outflow(key)</code></b></td><td>the demand pulled by downstream consumers</td><td><code>outflow(throughput)</code> &mdash; a queue's wired consumer drain</td><td><span class="path">content/sda/src/common.ts</span> (<code>QUEUE_REL</code>)</td></tr>
+  <tr><td><b>Arithmetic</b></td><td><code>+</code> <code>-</code> <code>*</code> <code>/</code>, left-associative</td><td><code>inflow(throughput) * payloadBytes * egressUsdPerGb * 2592000 / 1000000000</code></td><td><span class="path">content/sda/src/behaviors.ts</span> (<code>EGRESS</code>)</td></tr>
+  <tr><td><b>Unary minus</b></td><td><code>-x</code> (nests: <code>--x</code> is legal)</td><td>no shipped catalog relation uses it today; subtraction covers every current need (a synthetic example: <code>-latency</code>)</td><td>&mdash;</td></tr>
+  <tr><td><b><code>min(&hellip;)</code> / <code>max(&hellip;)</code></b></td><td>one or more comma-separated arguments</td><td><code>max(0, (inflow(throughput) + self(assumedRps)) - self(throughput))</code></td><td><span class="path">content/sda/src/behaviors.ts</span> (<code>OVERFLOW</code>)</td></tr>
+  <tr><td><b>Comparison</b> &rarr; <code>1</code>/<code>0</code></td><td><code>&lt;=</code> <code>&lt;</code> <code>&gt;=</code> <code>&gt;</code> <code>==</code>; at most one per parenthesis level</td><td><code>(deploymentMode &gt;= 1)</code> &mdash; a 0/1 gate selecting the Multi-AZ SLA step</td><td><span class="path">content/sda/src/behaviors.ts</span> (<code>availabilityByDeployment</code>)</td></tr>
+  <tr><td><b>Parentheses</b></td><td><code>( expr )</code> &mdash; grouping, and the only way to nest comparisons</td><td><code>drainRate * (outflow(throughput) &lt;= 0.0001)</code></td><td><span class="path">content/sda/src/common.ts</span> (<code>QUEUE_REL</code>)</td></tr>
+</table>
+
+<p>Precedence, loosest to tightest: <b>comparison</b> &rarr; <b><code>+</code> <code>&minus;</code></b> &rarr; <b><code>*</code> <code>/</code></b> &rarr; <b>unary minus</b> &rarr; <b>primary</b> (number, reference, call, parentheses). So <code>a + b * c &gt;= d</code> parses as <code>(a + (b*c)) &gt;= d</code>, and <code>-a * b</code> as <code>(-a) * b</code>. Whitespace (spaces, tabs, newlines) is free between tokens &mdash; <code>inflow (throughput)</code> parses the same as <code>inflow(throughput)</code>.</p>
+
+<h3>2.2 What the parser rejects &mdash; verified against the real implementation</h3>
+<p>Every row below was run through the shipping parser; the error text is the exact message you will see (surfaced by the evaluate pass as <code>node &lt;id&gt; key &lt;key&gt;: &lt;message&gt;</code>).</p>
+<table>
+  <tr><th>You write</th><th>Result</th><th>Why / what to do instead</th></tr>
+  <tr><td class="mono">a = b</td><td><code>single "=" is not valid (use "==")</code></td><td>assignment does not exist; a relation's target is its <code>key</code> field, and equality is <code>==</code>.</td></tr>
+  <tr><td class="mono">a != b</td><td><code>unexpected character "!"</code></td><td>no not-equal. Compose gates: <code>(a &lt; b) + (a &gt; b)</code> is 1 exactly when they differ.</td></tr>
+  <tr><td class="mono">a % b&ensp;·&ensp;a ^ 2&ensp;·&ensp;a ** 2</td><td><code>unexpected character</code> / <code>unexpected token</code></td><td>no modulo, no exponent (&sect;1.2). Fixed small powers can be spelled out: <code>a * a</code>.</td></tr>
+  <tr><td class="mono">sqrt(x)&ensp;·&ensp;abs(x)&ensp;·&ensp;pow(x,2)</td><td><code>unknown function "sqrt" (the only callables are min, max, inflow, outflow, self)</code></td><td>the callable set is closed; the error names the offending token and lists all five (it used to be a generic <code>unexpected trailing input</code>). A typo'd builtin (<code>mni(&hellip;)</code>) gets the same guidance. An absolute value is <code>max(x, -x)</code>.</td></tr>
+  <tr><td class="mono">a &lt; b &lt; c</td><td><code>unexpected trailing input</code></td><td>one comparison per level. Multiply gates: <code>(a &lt; b) * (b &lt; c)</code>.</td></tr>
+  <tr><td class="mono">1e6&ensp;·&ensp;1_000&ensp;·&ensp;0x10</td><td><code>unexpected trailing input</code></td><td>only plain decimal literals. Write <code>1000000</code>.</td></tr>
+  <tr><td class="mono">1.2.3</td><td><code>bad number "1.2.3"</code></td><td>one dot per number.</td></tr>
+  <tr><td class="mono">min()</td><td><code>unexpected token</code></td><td><code>min</code>/<code>max</code> need at least one argument.</td></tr>
+  <tr><td class="mono">self(2)&ensp;·&ensp;self(inflow(x))</td><td><code>self() expects a key name</code> / <code>expected ")" after self(key)</code></td><td>the argument of <code>inflow</code>/<code>outflow</code>/<code>self</code> is a bare key name, never an expression.</td></tr>
+  <tr><td class="mono">inflow(a.b)</td><td><code>unexpected character "."</code></td><td>identifiers have no dots &mdash; keys are single names; there is no path syntax and no way to name another node (&sect;5).</td></tr>
+  <tr><td class="mono">if a then b else c endif&ensp;·&ensp;a ? b : c&ensp;·&ensp;not a&ensp;·&ensp;a and b</td><td>rejected</td><td>no conditionals, no boolean operators. Branching is arithmetic over 0/1 gates &mdash; the piecewise recipe (&sect;4, R9).</td></tr>
+  <tr><td class="mono">"text"</td><td><code>unexpected character """</code></td><td>the language is numeric only. Categorical facts (consistency, ordering, delivery guarantees) live in the guarantee system, not in relations (&sect;5).</td></tr>
+</table>
+
+<div class="callout warn"><b>One honest gotcha: the built-in names are not reserved words.</b> <code>inflow + 1</code>, <code>min * 2</code>, or a bare <code>self</code> all <em>parse</em> &mdash; without the <code>(</code> the name is read as an ordinary key reference named <code>inflow</code>/<code>min</code>/<code>self</code>. The mistake is then caught one stage later, at the network build, as <code>unknown key "inflow"</code> (no such registry key exists). If you meant the primitive, the parenthesis is what selects it.</div>
+
+<h2><span class="no">3</span>Semantics &mdash; what an expression means when it runs</h2>
+<p class="lead">A relation is one equation in a system. The engine compiles every node's relations, configs and wires into one flat <em>cell network</em> and solves the whole thing to a fixpoint (<span class="path">engine/solve/src/network/build.ts</span>, <span class="path">engine/solve/src/fixpoint/solve.ts</span>). You author locally; the meaning is global. Three rules cover it: how references resolve, how your value combines with the network, and how the system settles.</p>
+
+<h3>3.1 Reference resolution &mdash; the four ways to name a value</h3>
+<p>Inside a relation on node <b>N</b>, a reference to key <b>j</b> resolves by exactly these rules (<span class="path">engine/solve/src/network/build.ts</span>, <code>resolve</code>):</p>
+<table>
+  <tr><th>Form</th><th>Resolves to</th><th>Use it for</th></tr>
+  <tr><td><b><code>j</code></b> (plain)</td><td>N's own <b>config</b> value of <code>j</code> if the node declares one; otherwise the value <b>arriving from upstream</b>. A node-local key (one the registry marks as never flowing, e.g. <code>requiredUnits</code>) always resolves to N's own value.</td><td>reading your own knobs: <code>concurrency</code>, <code>drainRate</code>, <code>deploymentMode</code>. The config-first rule is what makes this safe and readable.</td></tr>
+  <tr><td><b><code>inflow(j)</code></b></td><td>the aggregate of upstream nodes' emitted <code>j</code> across N's incoming wires &mdash; the demand <b>offered to</b> N, read <em>before</em> N clamps anything to its capacity. Wire transforms (fan-out ratios, batching, caps) have already been applied.</td><td>anything driven by offered load: pay-per-use cost, Little's-law demand, overflow.</td></tr>
+  <tr><td><b><code>self(j)</code></b></td><td>N's <b>own local</b> value of <code>j</code>: its relation for <code>j</code> if it declares one, else its config &mdash; independent of anything incoming. This is how one relation reads another relation of the same node.</td><td>reading your own <em>capacity</em> where a plain ref would read the incoming value instead &mdash; the distinction that decides correctness in the overflow and queue recipes (&sect;4, R4/R7).</td></tr>
+  <tr><td><b><code>outflow(j)</code></b></td><td>the sum of the <code>j</code> emitted by N's <b>downstream</b> nodes &mdash; the demand consumers actually pull from N.</td><td>drain-side logic: a queue asking &ldquo;how fast is my wired consumer taking work?&rdquo;</td></tr>
+</table>
+<p>A reference that resolves to nothing &mdash; a name that is no node's config, no relation, and no key in play anywhere in the design &mdash; fails the build with <code>unknown key "&lt;name&gt;"</code>, named to your node and key. Note the message is the same whether the name is a typo or a <code>self()</code> on a key the node genuinely has no local definition for.</p>
+
+<h3>3.2 Your value inside the network &mdash; the registry algebra</h3>
+<p>Your relation computes node N's <em>local</em> contribution to key <code>k</code>. What N then <em>emits</em> downstream is the combination of that local value with what arrived, by the algebra the registry declares for the key &mdash; the same declaration that fixes its unit:</p>
+<table>
+  <tr><th>Key (registry)</th><th>Unit</th><th>Algebra along a path</th><th>So a node's emitted value is</th></tr>
+  <tr><td><code>throughput</code></td><td>req/s</td><td><code>min</code> down the path, <code>sum</code> at a fan-in; carried across async wires</td><td><code>min(your capacity, offered load)</code> &mdash; the bottleneck clamp</td></tr>
+  <tr><td><code>latency</code></td><td>ms</td><td><code>sum</code> on the synchronous path; an async hop cuts the caller's wait</td><td>your per-hop latency added to upstream's</td></tr>
+  <tr><td><code>availability</code>, <code>durability</code></td><td>ratio</td><td><code>product</code></td><td>your ratio multiplied in &mdash; every dependency must be up</td></tr>
+  <tr><td><code>cost</code>, <code>egressCost</code></td><td>USD/month</td><td><code>sum</code>, sync or async</td><td>your monthly line added to the design's bill</td></tr>
+  <tr><td><code>overflow</code></td><td>req/s</td><td><code>max</code></td><td>the worst rejection at-or-upstream of this point</td></tr>
+  <tr><td><code>backlog</code></td><td>msg/s</td><td><code>sum</code></td><td>net queue growth added up</td></tr>
+</table>
+<p>Two consequences worth internalizing. First, you never write the cross-node plumbing &mdash; declaring a <code>throughput</code> relation is enough for the min-clamp, the fan-in summing and the async-carry to happen around it. Second, a node with no incoming wire simply <em>is</em> its local value (a traffic source is not zeroed by an empty fan-in), and an empty inflow reads as the algebra's identity: <code>0</code> for sum, <code>1</code> for product, <code>+&infin;</code> for min, <code>&minus;&infin;</code> for max. That <code>+&infin;</code> is legitimate (&ldquo;no inbound constraint&rdquo;) &mdash; and it is why capacity must be read with <code>self()</code>, not a plain ref, in any relation that might run on an unwired node (&sect;3.4).</p>
+
+<h3>3.3 Evaluation &mdash; a fixpoint, so order never matters</h3>
+<p>All cells are solved together by Kleene iteration from zero (Gauss-Seidel sweeps, at most 1,000 iterations, convergence at 1e-9; <span class="path">engine/solve/src/fixpoint/solve.ts</span>). Practical meaning for an author:</p>
+<ul>
+  <li><b>Declaration order is irrelevant.</b> Relations may read each other (via <code>self()</code>) in any order, across the <code>relations</code> array and across nodes; the solver settles the system, not a script.</li>
+  <li><b>Cycles are allowed if monotone.</b> A feedback loop built from <code>min</code>/<code>max</code>/<code>+</code>/non-negative multiplication settles on the natural (least) steady state &mdash; the same one the MiniZinc encoding provably finds (backlog doc-4 &sect;3a, Knaster&ndash;Tarski). Non-monotone feedback (retry amplification, hysteresis) has no such guarantee and belongs to the simulator, not to relations (&sect;5).</li>
+  <li><b>Arithmetic is IEEE-754 float64</b> on the hot path; comparisons yield exactly <code>1</code> or <code>0</code>. The cold and GPU paths agree by the differential contract (&sect;1.3).</li>
+</ul>
+
+<h3>3.4 Honesty at the edges &mdash; division by zero, infinity, NaN</h3>
+<p>The tool must not lie, and the language's edge cases are wired into that rule rather than papered over:</p>
+<table>
+  <tr><th>Situation</th><th>Value</th><th>What the engine does</th></tr>
+  <tr><td><code>x / 0</code> with <code>x &gt; 0</code></td><td><code>+&infin;</code></td><td>legitimate &mdash; infinity is a valid lattice value (it is also the empty-min identity). Downstream <code>min</code> absorbs it.</td></tr>
+  <tr><td><code>0 / 0</code>, or <code>0 * &infin;</code></td><td><code>NaN</code></td><td>the whole evaluation is marked <b>not converged</b>: any NaN anywhere flips the result to the honest <code>did-not-converge</code> verdict (<span class="path">engine/solve/src/fixpoint/solve.ts</span>). No partial number is ever shown as truth.</td></tr>
+  <tr><td>a value nobody computes (an SLO on a key with no relation)</td><td>&mdash;</td><td>the verdict is <code>unknown</code>, pointing at what would answer it &mdash; never a default, never a guess (<span class="path">engine/core/src/verdict.ts</span>).</td></tr>
+</table>
+<div class="callout"><b>A real NaN war story, preserved in the catalog.</b> The queue-backlog relation once read the node's ingest ceiling with a plain <code>throughput</code> ref. On a store whose throughput is a relation (not config), the plain ref resolved to the <em>incoming</em> value &mdash; <code>+&infin;</code> when disconnected &mdash; and <code>queueMode&nbsp;&times;&nbsp;&hellip;</code> produced <code>0&nbsp;&middot;&nbsp;&infin;&nbsp;=&nbsp;NaN</code>: an honest but useless <code>did-not-converge</code> on an idle node. The fix is the <code>self()</code> primitive, and the comment stands in the source as the cautionary tale (<span class="path">content/sda/src/common.ts</span>, <code>QUEUE_REL</code>). Rule of thumb: <b>capacity reads are <code>self()</code> reads.</b></div>
+
+<h3>3.5 Units &mdash; the discipline is yours</h3>
+<p>The language is unit-blind: a number is a number, and no dimensional analysis runs over your expression. The registry documents each key's unit (<code>perRequestDuration</code> in ms, <code>throughput</code> in req/s, <code>cost</code> in USD/month, <code>payloadBytes</code> in bytes), and the author converts explicitly at the point of use. The shipped catalogs model the discipline:</p>
+<ul>
+  <li>milliseconds to seconds: <code>concurrency / (perRequestDuration / 1000)</code> &mdash; req/s needs seconds;</li>
+  <li>bytes to gigabytes and a month of seconds: <code>inflow(throughput) * payloadBytes * egressUsdPerGb * 2592000 / 1000000000</code> &mdash; req/s &times; bytes &times; USD/GB, normalized to USD/month with an explicit 30-day constant;</li>
+  <li>a comment-worthy constant is a named constant in the authoring source, never a bare magic number in the string (the catalogs interpolate <code>MONTH_SECONDS</code> at build time).</li>
+</ul>
+
+<h3>3.6 Which keys a relation should produce</h3>
+<p>A relation's <code>key</code> must be a registry key, and the meaningful targets are the registry's <em>derived</em> keys &mdash; the quantities the engine computes and the verdict layer judges. The natural targets, with the role each plays:</p>
+<table>
+  <tr><th>Target key</th><th>You are declaring</th></tr>
+  <tr><td><code>throughput</code></td><td>this component's capacity (the ceiling the min-clamp and the search's headroom rule read)</td></tr>
+  <tr><td><code>cost</code>, <code>egressCost</code></td><td>its monthly bill lines &mdash; always multiplying a visible <code>unitCost</code>-style knob, never a buried literal, and always reading the same knob that grows capacity (a free capacity dial would let the optimizer meet SLOs for $0)</td></tr>
+  <tr><td><code>availability</code>, <code>durability</code></td><td>its published or derived ratio</td></tr>
+  <tr><td><code>overflow</code>, <code>backlog</code>, <code>concurrencyOverflow</code>, <code>poolOverflow</code>, <code>payloadOverflow</code></td><td>a violation quantity: zero when healthy, positive when a documented limit is exceeded &mdash; pair it with a <code>max: 0</code> band so it becomes a verdict</td></tr>
+  <tr><td><code>requiredUnits</code>, <code>concurrencyNeeded</code>, <code>poolConnectionsNeeded</code></td><td>demand-implied sizing, for read-back and for the overflow pair</td></tr>
+</table>
+<p>The <code>reads</code> array is declared metadata: the engine parses your <code>expr</code> and resolves its references from the string itself, so a stale <code>reads</code> does not change the math &mdash; but tooling trusts it (the design-doc generator finds a cost relation's driver by scanning <code>reads</code>; the catalog integrity suite asserts every listed key is governed). Keep <code>reads</code> exactly the set of keys the expression references.</p>
+
+<h2><span class="no">4</span>The cookbook &mdash; twelve proven patterns</h2>
+<p class="lead">Every recipe below ships in a production catalog today. Each gives the expression, what it says in plain words, and where it lives &mdash; copy the shape, swap the numbers.</p>
+
+<h3><span class="rc">R1</span> · Capacity from concurrency and service time</h3>
+<pre>throughput = concurrency / (perRequestDuration / 1000)</pre>
+<p>Little's law read as a ceiling: a box that can hold <code>concurrency</code> requests in flight, each occupying it for <code>perRequestDuration</code> milliseconds, completes at most <code>concurrency / serviceSeconds</code> per second. This is the single most-used relation in the project &mdash; the serverless function, the app server, the search cluster and the stores all declare it (<span class="path">content/sda/src/catalog.ts</span>, <span class="path">common.ts</span>, <span class="path">voice.ts</span>).</p>
+
+<h3><span class="rc">R2</span> · Horizontal scaling with replicas</h3>
+<pre>throughput = concurrency / (perRequestDuration / 1000) * replicas</pre>
+<p>The same per-instance ceiling times a count knob. Because <code>replicas</code> is an ordinary config the search can free, <em>optimize</em> can size the fleet against an SLO &mdash; and because the cost relation reads the same knob (R7), scaling out is never free (<span class="path">content/sda/src/common.ts</span>, the replicated app server).</p>
+
+<h3><span class="rc">R3</span> · A Little's-law resource pool &mdash; demand vs budget</h3>
+<pre>poolConnectionsNeeded = inflow(throughput) * (self(connectionHeldMs) / 1000)
+poolOverflow          = max(0, self(poolConnectionsNeeded) - self(connectionPool))</pre>
+<p>Two relations working as a pair. The first is Little's law run <em>forward</em>: offered load times hold-time equals connections the load implies. The second compares demand to the budget and reports only the excess, floored at zero; a <code>max: 0</code> band on <code>poolOverflow</code> turns it into a verdict. Note the composition: the second relation reads the first through <code>self()</code> &mdash; same-node relations chain freely (<span class="path">content/sda/src/behaviors.ts</span>, <code>connectionPool</code>; the identical shape covers the Lambda account-concurrency quota via <code>concurrencyNeeded</code>/<code>concurrencyOverflow</code>).</p>
+
+<h3><span class="rc">R4</span> · The universal overflow balance</h3>
+<pre>overflow = max(0, (inflow(throughput) + self(assumedRps)) - self(throughput))</pre>
+<p>Offered minus served, floored at zero: what arrives from upstream, plus what this node originates itself (<code>assumedRps</code>, default 0), minus what it actually emits. Every catalog component that receives work carries exactly this relation &mdash; applied by one wrapper, never hand-copied &mdash; so no component can silently forget its own saturation. The critical touch is <code>self(throughput)</code>: the node's <em>own</em> served value, not the incoming one (<span class="path">content/sda/src/behaviors.ts</span>, <code>OVERFLOW</code> / <code>withOverflow</code>).</p>
+
+<h3><span class="rc">R5</span> · Capacity that emerges from a budget</h3>
+<pre>throughput = self(connectionPool) / (self(connectionHeldMs) / 1000)</pre>
+<p>R1 inverted onto a pool: if every pooled connection is held for <code>connectionHeldMs</code>, the proxy passes at most <code>pool / heldSeconds</code> req/s. The component declares no throughput number at all &mdash; its ceiling <em>emerges</em> from the same two knobs its overflow pair (R3) checks, so the two can never disagree (<span class="path">content/sda/src/common.ts</span>, the RDS-proxy manifest).</p>
+
+<h3><span class="rc">R6</span> · Queue backlog with a wired-consumer drain gate</h3>
+<pre>backlog = queueMode * max(0, min(inflow(throughput), self(throughput))
+          - (outflow(throughput) + drainRate * (outflow(throughput) &lt;= 0.0001)))</pre>
+<p>The densest shipped expression, and every primitive earns its place. Ingest is what producers write, capped by the queue's own ceiling: <code>min(inflow, self)</code>. Drain is what the wired consumer actually pulls: <code>outflow(throughput)</code> &mdash; but when no consumer is connected the outflow is ~0, and the indicator gate <code>(outflow &lt;= 0.0001)</code> flips to 1, substituting the manual <code>drainRate</code> knob as the fallback. The <code>queueMode</code> 0/1 knob switches the whole relation off for components not used as a queue, and the <code>max(0,&nbsp;&hellip;)</code> floor reports only growth. Read it as: <em>backlog grows at ingest minus drain, where a wired consumer always outranks the manual knob</em> (<span class="path">content/sda/src/common.ts</span>, <code>QUEUE_REL</code>).</p>
+
+<h3><span class="rc">R7</span> · The four cost shapes &mdash; and the never-free-capacity rule</h3>
+<pre>cost = self(unitCost)                       <span class="c">// flat: no sizable knob — you scale by swapping the box</span>
+cost = self(throughput) * self(unitCost)    <span class="c">// provisioned: you pay for the ceiling you reserve</span>
+cost = replicas * self(unitCost)            <span class="c">// per-driver: replicas / requiredUnits / concurrency</span>
+cost = inflow(throughput) * self(unitCost)  <span class="c">// pay-per-use: ~0 at rest, rises with traffic</span></pre>
+<p>One mechanism, four billing realities: a visible base rate (<code>unitCost</code>, always a config knob, never a literal buried in the string) times the driver that matches how the real service charges. The cardinal rule: whatever knob grows a node's capacity, its cost relation <b>must read that same knob</b> &mdash; otherwise the backward search meets your SLO by turning a free dial, and every cost figure becomes fiction (<span class="path">content/sda/src/behaviors.ts</span>, <code>flatCost</code> / <code>provisionedCost</code> / <code>costPer</code> / <code>payPerUseCost</code>).</p>
+
+<h3><span class="rc">R8</span> · The surcharge wrapper &mdash; multiply a base by a stepped factor</h3>
+<pre>cost = (<i>base cost expression</i>) * (1 + 1 * (deploymentMode &gt;= 1) + 0.3 * (deploymentMode &gt;= 2))</pre>
+<p>Redundancy is not free: flipping a database to Multi-AZ doubles the bill (the billed standby), multi-region adds ~30% more. The pattern wraps the <em>existing</em> cost expression in parentheses &mdash; so its own arithmetic binds first &mdash; and multiplies by a factor built from cumulative indicator gates. The base model (what the cost multiplies) stays untouched; the surcharge layers on (<span class="path">content/sda/src/behaviors.ts</span>, <code>withDeploymentCost</code>).</p>
+
+<h3><span class="rc">R9</span> · Piecewise values via indicator gates &mdash; the if-statement this language doesn't have</h3>
+<pre>availability = 0.995 + 0.0045 * (deploymentMode &gt;= 1) + 0 * (deploymentMode &gt;= 2)</pre>
+<p>A step function in an integer knob: the single-AZ baseline, plus the <em>uplift</em> to the Multi-AZ SLA when the mode reaches 1, plus the further uplift at mode 2. Each comparison is 1 or 0, so exactly the steps at-or-below the current mode contribute. This is the general recipe for &ldquo;if mode is X, the value is Y&rdquo;: encode <em>differences between consecutive steps</em>, gated on <code>&gt;=</code>, and any mode picks up the cumulative sum. Prefer gates on integer-valued knobs with <code>&gt;=</code>/<code>&lt;=</code>; <code>==</code> is exact floating-point equality and belongs only on values that are genuinely integers (<span class="path">content/sda/src/behaviors.ts</span>, <code>availabilityByDeployment</code>).</p>
+
+<h3><span class="rc">R10</span> · Cap and floor</h3>
+<pre>value = min(x, ceiling)      <span class="c">// cap: never exceed a limit — e.g. min((capacity expr), self(assumedRps))</span>
+value = max(0, x)            <span class="c">// floor: report only the excess / never go negative</span></pre>
+<p>The two bread-and-butter clamps. The engine itself uses the cap when a traffic source declares an origin &mdash; its emitted throughput becomes <code>min((its capacity relation), self(assumedRps))</code>, so a source never emits more than it could serve (<span class="path">content/sda/src/manifest.ts</span>, the origin fold). The floor appears in every overflow-style relation (R3, R4, R6): a healthy design reads exactly 0, and any positive value is actionable.</p>
+
+<h3><span class="rc">R11</span> · Demand-driven sizing &mdash; the pair every autoscaling fleet uses</h3>
+<pre>throughput    = maxUnits * concurrency / (perRequestDuration / 1000)
+requiredUnits = inflow(throughput) / (concurrency / (perRequestDuration / 1000))</pre>
+<p>Two views of the same per-unit capacity: the ceiling (the most the fleet may scale to) and the demand-implied count (how many units this load actually needs). <code>requiredUnits</code> is what the cost reads (<code>costPer(requiredUnits)</code>, R7) &mdash; you pay for what the load needs &mdash; while <code>maxUnits</code> bounds the ceiling; overflow past it is R4, applied automatically (<span class="path">content/sda/src/behaviors.ts</span>, <code>sizingRels</code>, used by the Fargate/ECS-style manifests).</p>
+
+<h3><span class="rc">R12</span> · A monthly bill line with explicit unit conversion</h3>
+<pre>egressCost = inflow(throughput) * payloadBytes * egressUsdPerGb * 2592000 / 1000000000</pre>
+<p>Data-transfer cost, the most-missed line on a real bill: requests per second, times bytes out per request, times the price per GB, times the seconds in a 30-day month, divided down from bytes to GB. Every conversion is visible in the expression &mdash; the reader can audit the dimensional chain req/s &rarr; B/s &rarr; GB/month &rarr; USD/month without leaving the string (<span class="path">content/sda/src/behaviors.ts</span>, <code>EGRESS</code>).</p>
+
+<h2><span class="no">5</span>Limits &mdash; what this language must not model</h2>
+<p class="lead">The language is one instrument in a four-solver ensemble, and its boundary is drawn on purpose. Each row says where the concern <em>does</em> belong &mdash; the tool covers these; it just refuses to cover them with the wrong instrument.</p>
+<table>
+  <tr><th>Concern</th><th>Not a relation, because&hellip;</th><th>Where it belongs</th></tr>
+  <tr><td><b>Behaviour over time</b> &mdash; transients, bursts, cold starts, retry storms, timeout waves</td><td>a relation is steady-state algebra; &ldquo;what happens during the spike&rdquo; is a question about time. The caller-side retry knobs (<code>timeoutMs</code>, <code>retryCount</code>, <code>retryBackoffMs</code>) exist as config and deliberately shape <em>only</em> the simulation.</td><td>the DES (discrete-event simulator) &mdash; a separate engine fed by the same manifests</td></tr>
+  <tr><td><b>Percentiles / tails</b> &mdash; p99 latency, tail SLOs</td><td>a fixpoint yields one number per cell; a distribution's tail cannot be one number honestly. <code>tailLatency</code>, <code>goodputRps</code> and <code>errorRate</code> carry no forward value at all &mdash; on the scalar pass they read <code>unknown</code>, pointing at the simulator.</td><td>DES-fed verdicts (true measured percentiles)</td></tr>
+  <tr><td><b>Categorical facts</b> &mdash; consistency, ordering, delivery guarantees, encryption</td><td>&ldquo;at-least-once&rdquo; is not a number, and encoding it as 0/1/2 would invite fake arithmetic on labels.</td><td>the guarantee system (label propagation over typed lattices) and port protocols</td></tr>
+  <tr><td><b>Reaching across nodes</b> &mdash; &ldquo;the database's latency&rdquo; from the app server</td><td>there is no syntax for it, by design: a component that names another component recreates dependency hell (doc-3's anti-dependency-hell invariant). All cross-node influence flows through wires, via <code>inflow</code>/<code>outflow</code> and the registry algebra.</td><td>the topology: draw the wire; the engine carries the value</td></tr>
+  <tr><td><b>Non-monotone feedback</b> &mdash; load that increases load (retry amplification), hysteresis, AIMD</td><td>the fixpoint guarantee (one natural steady state, three engines agreeing on it) holds only for monotone systems &mdash; <code>min</code>/<code>max</code>/<code>+</code>/non-negative scaling.</td><td>the DES, which simulates the feedback instead of asserting an equilibrium</td></tr>
+  <tr><td><b>Exponentials & powers</b> &mdash; <code>1&minus;(1&minus;a)&#8319;</code>, percentile math, compounding</td><td>no exponent operator exists, because a variable exponent is hostile to the exact backward solver (&sect;1.2).</td><td>a sourced step function on a mode knob (R9), or the DES where the quantity is genuinely dynamic</td></tr>
+  <tr><td><b>Text, branching logic, per-case special cases</b></td><td>no strings, no conditionals; and if a real modelling need is not expressible, the answer is a versioned meta-model evolution &mdash; never a per-component branch in the engine.</td><td>raise it; the meta-model grows deliberately (doc-3 &sect;0)</td></tr>
+</table>
+
+<h2><span class="no">6</span>Authoring &amp; testing a custom component &mdash; the loop</h2>
+<p class="lead">Relations are validated in two stages: a shape check when you save, a deep check when the design evaluates. The loop below gets a custom component from idea to verified in minutes, and every error names its exact location.</p>
+
+<h3>6.1 In the web app &mdash; the &#9998; editor</h3>
+<ul>
+  <li><b>Open</b>: the &#9998; button in the palette (new component, pre-filled with a starter manifest that already contains an R1 throughput relation), or &ldquo;&#9998; Edit type&rdquo; on a selected node. Editing a built-in loads it as a starting point and saves as a project-scoped override; the original catalog entry is never mutated.</li>
+  <li><b>Save</b>: checks the JSON shape (a non-empty <code>type</code>, a <code>ports</code> array). Deliberately shallow &mdash; deep validation belongs to the engine at evaluate time (<span class="path">app/core/src/commands.ts</span>, <code>defineComponent</code>). Custom components persist and export with the project and appear in the palette.</li>
+  <li><b>Place one instance and read the canvas</b>: the evaluate pass parses every relation and resolves every reference. A bad expression surfaces as <code>node &lt;id&gt; key &lt;key&gt;: &lt;parser message&gt;</code> (the exact messages of &sect;2.2); a typo'd reference as <code>unknown key "&lt;name&gt;"</code>; an ungoverned key as <code>key "&lt;name&gt;" not in registry</code>.</li>
+  <li><b>Test in isolation first</b>: one instance, no wires. This is precisely how the project's own integrity suite proves every shipped manifest (&ldquo;a single isolated node evaluates cleanly&rdquo;, <span class="path">content/sda/src/integrity.test.ts</span>) &mdash; with no wires, the only possible errors are yours. Expect your capacity relation to read its config-driven value and <code>inflow</code>-driven relations to sit at their identity. Then wire a traffic source in front and watch throughput clamp, overflow floor at zero, and cost move with the driver.</li>
+  <li><b>Make it judgeable</b>: add a <code>bands</code> entry (e.g. <code>max: 0</code> on your overflow-style key) so your relation produces a verdict, not just a number.</li>
+</ul>
+
+<h3>6.2 Over MCP &mdash; the AI-driven loop</h3>
+<p>The bridge exposes the same loop as self-correcting tools (<span class="path">app/mcp/src/tools.ts</span>): <code>list_protocols</code> for the port vocabulary &rarr; <code>define_component</code> with the manifest JSON &rarr; <code>describe_component</code> to read back the full card (ports, knobs with defaults and units, built-in bands) &rarr; <code>add_component</code> / <code>connect</code> / <code>set_config</code> to stage a probe design &rarr; <code>evaluate</code> for the <code>{feasible, violations, system, verdicts}</code> read-back. Every refusal names the valid alternatives (the closest knob, the node list, the port list), so the loop converges without reading any source.</p>
+
+<div class="callout"><b>The quality bar your component is held to.</b> A relation is credible when its numbers are sourced or marked as estimates, its cost reads the knob that grows its capacity (R7), its limits produce banded overflow keys instead of silent clamping (R3/R4), and its capacity reads are <code>self()</code> reads (&sect;3.4). Meet those four and your hand-authored component participates in every mode of the tool &mdash; forward verdicts, backward sizing, Monte-Carlo confidence, GPU batches &mdash; with exactly the same standing as the shipped catalog.</div>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · reference <span class="path">docs/design/expression-reference.html</span> · the manifest relation expression language · grammar verified case-by-case against <span class="path">engine/solve/src/relation/parse.ts</span> (every accept/reject row executed against the shipping parser) · semantics grounded in <span class="path">engine/solve/src/relation/{ast,evaluate}.ts</span>, <span class="path">engine/solve/src/network/build.ts</span>, <span class="path">engine/solve/src/fixpoint/solve.ts</span> · the three-compiler guarantee cited to <span class="path">engine/solve/src/minizinc/{differential,transform.differential,chain.property}.test.ts</span> and <span class="path">engine/solver-contract/src/gpu/{compile.ts,fp32.test.ts,differential.test.ts}</span> · recipes lifted verbatim from <span class="path">content/sda/src/{behaviors,common,catalog,manifest}.ts</span> · companion to backlog doc-3 (Manifest Contract) and doc-4 (Engine Calculus) · the language is small so the tool can be honest.
+</footer>
+</div>
+</body>
+</html>

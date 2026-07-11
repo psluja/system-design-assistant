@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retry Feedback &amp; Goodput Collapse · SDA Design</title>
+<style>
+  :root{
+    --ink:#1a1d23; --ink2:#4b5263; --paper:#fbfaf7; --card:#ffffff;
+    --accent:#0b6e6e; --accent2:#b4530a; --line:#e5e1d8; --ok:#176b37; --warn:#a33; --code:#f2f0ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 "Georgia","Charter",'Times New Roman',serif}
+  header{background:linear-gradient(135deg,#4a0d0d,#a33);color:#fff;padding:56px 24px 44px}
+  .w{max-width:880px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px;letter-spacing:-.01em}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.9;max-width:660px}
+  .meta{font:12px/1.4 "Segoe UI",system-ui,sans-serif;opacity:.7;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#6b1414}
+  h2 .no{color:var(--accent);margin-right:10px;font-variant-numeric:tabular-nums}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:var(--card)}
+  th{background:#6b1414;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",system-ui,sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center}
+  footer{margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2)}
+</style>
+</head>
+<body>
+<header>
+  <div class="w">
+    <h1>Retry Feedback &amp; Goodput Collapse</h1>
+    <div class="sub">The last big fidelity gap: past saturation, real systems don’t plateau — they <em>collapse</em>. Retries as declared data, simulated honestly, with Erlang-A as the theory anchor.</div>
+    <div class="meta">SDA design document · 2026-07-03 (night draft) · status: FOR OWNER REVIEW — not started</div>
+  </div>
+</header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas — services, databases, queues, connected by wires — and the tool <em>computes</em> that design instead of merely drawing it: it derives each component's load, latency, availability and cost, checks them against the architect's requirements, and can search for better configurations. This document is self-contained; earlier design documents are optional further reading, not prerequisites.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style='white-space:nowrap'><b>saturation / ρ (rho)</b></td><td>the ratio of offered load to a component's capacity; ρ ≥ 1 means more work arrives than the component can serve.</td></tr>
+  <tr><td style='white-space:nowrap'><b>goodput</b></td><td>the rate of REQUESTS THAT ACTUALLY SUCCEED, as opposed to raw attempts; the difference is retries and failures.</td></tr>
+  <tr><td style='white-space:nowrap'><b>DES</b></td><td>discrete-event simulation — SDA's engine for questions about time: it replays the system event by event, so queues, timeouts and retries emerge naturally.</td></tr>
+  <tr><td style='white-space:nowrap'><b>scalar (forward) pass</b></td><td>the instant steady-state calculation that runs on every canvas change; it is deliberately simple and honest — where dynamics matter it says 'unknown' and defers to the simulation.</td></tr>
+  <tr><td style='white-space:nowrap'><b>Erlang A / Erlang C</b></td><td>classical queueing-theory formulas: Erlang C gives waiting times for a multi-server queue; Erlang A extends it with customers who abandon the queue — the theoretical anchor for timeouts.</td></tr>
+  <tr><td style='white-space:nowrap'><b>SLO &amp; verdict</b></td><td>a declared requirement (e.g. 'throughput ≥ 5,000/s') and the tool's computed judgment of it: ok, violation, or honestly 'unknown'.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The gap (named by the holistic validation)</h2>
+<p class="lead">Our load-sweep matched Erlang C to fractions of a millisecond — up to saturation. Past it, SDA shows served throughput <b>flat at capacity</b>. Real systems show a <b>hump</b>: clients time out, retry, and the retries are new load attacking an already-saturated tier. Useful work (goodput) falls <em>below</em> capacity while total attempted load explodes. This is the mechanism behind most cascading outages — and it is exactly what doc-8 records as our known idealization.</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="680" height="240" viewBox="0 0 680 240" font-family="Segoe UI,system-ui,sans-serif">
+    <line x1="60" y1="200" x2="640" y2="200" stroke="#4b5263" stroke-width="1.4"/>
+    <line x1="60" y1="200" x2="60" y2="20" stroke="#4b5263" stroke-width="1.4"/>
+    <text x="350" y="228" text-anchor="middle" font-size="12" fill="#4b5263">offered load →</text>
+    <text x="28" y="110" text-anchor="middle" font-size="12" fill="#4b5263" transform="rotate(-90 28 110)">served /s</text>
+    <!-- capacity line -->
+    <line x1="60" y1="80" x2="640" y2="80" stroke="#d8d4c8" stroke-dasharray="5 4"/>
+    <text x="632" y="72" text-anchor="end" font-size="11.5" fill="#9a978e">capacity</text>
+    <!-- today's model: flat -->
+    <path d="M60 200 L330 80 L640 80" fill="none" stroke="#0b6e6e" stroke-width="2.4"/>
+    <text x="500" y="65" font-size="12.5" font-weight="600" fill="#0b6e6e">SDA today (upper bound)</text>
+    <!-- reality: hump -->
+    <path d="M60 200 L330 80 C 400 82, 430 105, 470 135 C 510 165, 570 180, 640 186" fill="none" stroke="#a33" stroke-width="2.4" stroke-dasharray="7 4"/>
+    <text x="475" y="170" font-size="12.5" font-weight="600" fill="#a33">reality with retries (goodput)</text>
+    <circle cx="330" cy="80" r="4" fill="#b4530a"/>
+    <text x="330" y="64" text-anchor="middle" font-size="11.5" fill="#8a5a00">saturation knee</text>
+  </svg>
+  </div>
+  <figcaption>The congestion-collapse hump. Today SDA reports the teal line — honest as an <em>upper bound</em> and recorded as such in doc-8. This design makes the red line computable, from declared retry policies.</figcaption>
+</figure>
+
+<h2><span class="no">2</span>The model — retries as caller-side DATA</h2>
+<p>A retry policy is a fact of the CALLER’s code, so it is declared on the calling node (client or service), as three plain config keys — components stay pure data:</p>
+<table>
+  <tr><th>Key</th><th>Meaning</th><th>Default</th></tr>
+  <tr><td><code>timeoutMs</code></td><td>per-attempt deadline: the caller abandons an attempt whose queue-wait + service exceeds it</td><td>0 = none (today’s behavior, bit-for-bit)</td></tr>
+  <tr><td><code>retryCount</code></td><td>additional attempts after the first (0 = fail immediately on timeout)</td><td>0</td></tr>
+  <tr><td><code>retryBackoffMs</code></td><td>delay before re-injection (fixed; jitter is a DES seed detail, noted honestly)</td><td>0</td></tr>
+</table>
+<div class="callout"><b>Where it executes: the DES, and only the DES.</b> Retry feedback is non-monotone (load ↑ → timeouts ↑ → load ↑) — the definition of a “question about time” under doc-8 §0. The scalar pass stays out: with a retry policy present, scalar goodput reads <code>unknown</code> and points at <code>simulate</code> — the same honest pattern percentile SLOs already use. No fixpoint hacks, no invented steady-state.</div>
+
+<h2><span class="no">3</span>DES semantics (three primitives)</h2>
+<table>
+  <tr><th>Primitive</th><th>Behavior</th><th>Also closes (recorded doc-8 gaps)</th></tr>
+  <tr><td><b>Reneging</b></td><td>a job leaves a station’s queue when its attempt deadline passes</td><td>RDS Proxy borrow-timeout (120 s default) — the same primitive, different numbers</td></tr>
+  <tr><td><b>Re-injection</b></td><td>an abandoned job re-enters after <code>retryBackoffMs</code>, attempt counter +1, until <code>retryCount</code> exhausted</td><td>—</td></tr>
+  <tr><td><b>Outcome accounting</b></td><td>completions split into GOODPUT (succeeded) vs FAILURES (retries exhausted); attempts tracked separately</td><td>an honest error-rate metric, absent today</td></tr>
+</table>
+<p>New simulation outputs: <code>goodputRps</code>, <code>errorRate</code>, <code>amplification</code> (attempts ÷ arrivals), all fed into verdicts the way DES already feeds <code>tailLatency</code> — a throughput SLO on a retrying path is judged against <b>goodput</b>, not raw completions.</p>
+
+<h2><span class="no">4</span>The theory anchor — Erlang A</h2>
+<p>M/M/c with exponential abandonment is the <b>Erlang-A</b> model — closed-form abandonment probabilities exist. That gives this feature the same rigor the queueing latency got (Erlang C matched to 0.1 ms): DES abandonment rates are differential-tested against Erlang-A at known (ρ, θ=1/timeout) points, and two property tests pin the semantics: <code>timeoutMs=0 ∧ retryCount=0 ≡ today bit-for-bit</code>, and <b>the hump property</b> — past saturation, goodput must be strictly LOWER with retries than without (the model may never claim retries help a saturated system).</p>
+
+<h2><span class="no">5</span>Build plan</h2>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td><b>R1 — engine/sim</b></td><td>reneging + re-injection + attempt accounting in the DES (pure math, zero domain strings); goodput/error/amplification in the result</td><td>Erlang-A differential + the two property tests; whole suite unweakened</td></tr>
+  <tr><td><b>R2 — content + verdicts</b></td><td>the three keys in the registry (+ registry docs), verdict wiring (goodput-aware throughput SLOs, timeout-rate band), scalar `unknown` + pointer to simulate; RDS-proxy borrow-timeout gets its real numbers via the same primitive</td><td>content e2e: the hump curve on a 3-tier system; doc-8 rows flip from “not covered” to covered-with-evidence</td></tr>
+  <tr><td><b>R3 — surface</b></td><td>System panel: goodput vs offered + error rate + amplification (both shells, presenter-first); simulate MCP output extended; design-doc generator section</td><td>shells’ suites + smokes + screenshots</td></tr>
+</table>
+
+<h2><span class="no">6</span>Non-goals (v1)</h2>
+<table>
+  <tr><td>Circuit breakers / bulkheads / adaptive backoff</td><td>separate policies with their own semantics — after the primitive lands, each is “more data”, not more engine</td></tr>
+  <tr><td>Scalar-side collapse approximation</td><td>non-monotone; scalar stays honest (`unknown` + simulate). No invented fixpoints.</td></tr>
+  <tr><td>Per-wire retry policies</td><td>caller-level covers the real pattern (SDK/middleware config); revisit only with a named case</td></tr>
+</table>
+
+<footer>
+  SDA · design doc <code>docs/design/retry-feedback.html</code> · closes doc-8 §2 “retry amplification” + two recorded idealizations (goodput collapse; RDS-proxy reneging).<br>
+  Drafted autonomously during the night shift of 2026-07-02→03; awaiting the owner’s go.
+</footer>
+</div>
+</body>
+</html>

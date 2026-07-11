@@ -1,0 +1,79 @@
+/*
+ * The VS Code variable layer. Maps the editor's theme colors (--vscode-*) onto the app's own design tokens for
+ * BOTH data-themes, so the canvas adopts the user's VS Code theme automatically. Each mapping keeps the app's own
+ * palette value as the FALLBACK (the second arg to var()) — so under the dev harness, where no --vscode-* vars
+ * exist, the app still looks exactly like the web shell. The host pushes `{type:'theme'}` to flip data-theme so
+ * the app's own fallbacks track light/dark too.
+ *
+ * Loaded AFTER @web/theme.css (see main.tsx import order), so these overrides win.
+ *
+ * CANVAS-ONLY: the webview keeps ONLY the React Flow canvas — the palette, inspector and System/Improve drawer are
+ * native VS Code views now. So there is no `.app` grid to collapse; the canvas <main> fills the whole viewport.
+ */
+
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  --bg: var(--vscode-editor-background, var(--bg));
+  --panel: var(--vscode-editorWidget-background, var(--panel));
+  --panel2: var(--vscode-editorWidget-background, var(--panel2));
+  --ink: var(--vscode-editor-foreground, var(--ink));
+  --ink2: var(--vscode-descriptionForeground, var(--ink2));
+  --ink3: var(--vscode-disabledForeground, var(--ink3));
+  --line: var(--vscode-editorWidget-border, var(--line));
+  --line2: var(--vscode-panel-border, var(--line2));
+  --accent: var(--vscode-focusBorder, var(--accent));
+  --accent-deep: var(--vscode-focusBorder, var(--accent-deep));
+  --ok: var(--vscode-charts-green, var(--ok));
+  --warn: var(--vscode-charts-yellow, var(--warn));
+  --bad: var(--vscode-errorForeground, var(--bad));
+}
+
+/* The webview IS the editor: no page chrome. VS Code owns the tab title, menus, palette, undo and status bar. */
+html, body, #root { margin: 0; height: 100%; }
+body { background: var(--bg); }
+
+/* The canvas is the ENTIRE webview. `.cv` (from @web/theme.css) is normally a grid cell inside `.app`; here it is
+ * the root element, so pin it to fill the viewport. `position: relative` anchors the HUD / toasts / context menu. */
+.cv.canvas-only { position: relative; width: 100vw; height: 100vh; }
+
+/* Empty-canvas ghost CTA (TASK-63, n8n's "Add first step"): a centred dashed affordance shown only when the design
+ * has no components. Absolutely centred over the canvas so it never collides with the HUD; opens the quick-add
+ * picker. Uses the app's own tokens (accent on hover) so it tracks the VS Code theme. */
+.ghost-cta {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 26px 34px; cursor: pointer;
+  background: transparent; color: var(--ink2);
+  border: 2px dashed var(--line2); border-radius: 14px;
+  font: 600 14px var(--sans, inherit);
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+.ghost-cta:hover { color: var(--accent); border-color: var(--accent); background: var(--panel2); }
+.ghost-cta .ghost-plus { font-size: 30px; line-height: 1; font-weight: 400; }
+
+/* The INLINE rename input (replaces window.prompt, which VS Code webviews block). Absolutely positioned over the
+ * canvas at the node/group's on-screen top-left; z-index above the graph so it is never occluded. Uses the app's
+ * own tokens (which map onto --vscode-* under a real webview) so it adopts the editor theme. Sized generously so a
+ * long name is editable; nowrap keeps it a single line. */
+.inline-rename {
+  position: absolute; z-index: 20;
+  min-width: 160px; max-width: 320px;
+  padding: 4px 8px;
+  font: 600 13px var(--sans, inherit);
+  color: var(--ink); background: var(--panel);
+  border: 1.5px solid var(--accent); border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  outline: none;
+}
+
+/* A full-pane state for "loading" / honest error (a hand-edited JSON file that no longer parses). */
+.pane-state { height: 100vh; display: grid; place-items: center; padding: 24px; }
+.pane-state .pane-msg { display: flex; flex-direction: column; gap: 8px; max-width: 560px; text-align: center; }
+.pane-state .pane-msg b { font-size: 15px; color: var(--ink); }
+.pane-state .pane-msg span { font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
+.pane-state.error .pane-msg b { color: var(--bad); }
+.pane-state .pane-err {
+  margin-top: 6px; text-align: left; white-space: pre-wrap; word-break: break-word;
+  font: 500 11.5px var(--mono); color: var(--ink2);
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+}

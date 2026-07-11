@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scale-up Cold Start — the time a fleet takes to grow · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--code:#f2f0ea;--good:#2f7d4f;--warn:#b48908;--bad:#b3261e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#0e2f3a,#1c6e7a);color:#fff;padding:56px 24px 44px}
+  .w{max-width:940px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",sans-serif;opacity:.92;max-width:760px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0e3540}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:28px 0 10px;color:#0e3540}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:8px;padding:14px 16px;overflow-x:auto}
+  a{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  .scroll{overflow-x:auto}
+  th{background:#0e3540;color:#fff;text-align:left;padding:10px 14px;font-weight:600;vertical-align:top}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout.big{border-left-width:6px;background:#f5faf9}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:26px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px 10px}
+  figure svg{display:block;max-width:100%;height:auto}
+  figcaption{font:13.5px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:10px;padding-bottom:6px}
+  .axis{stroke:#c9c4b8;stroke-width:1}
+  .grid{stroke:#eceadf;stroke-width:1}
+  .tick{font:11px "Segoe UI",sans-serif;fill:#8a8577}
+  .lbl{font:12.5px "Segoe UI",sans-serif;fill:var(--ink2)}
+  .lblb{font:600 12.5px "Segoe UI",sans-serif;fill:var(--ink)}
+  .small{font:13.5px/1.55 "Segoe UI",sans-serif;color:var(--ink2)}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .tag.gone{background:#fbe7e7;color:#b3261e}
+  .tag.keep{background:#e9f5f2;color:#0b6e6e}
+  .tag.done{background:#e7f3ea;color:#2f7d4f}
+  .v-high{background:#e7f3ea;color:#2f7d4f}
+  .v-med{background:#fdf2e2;color:#b4530a}
+  .v-low{background:#eee9df;color:#6b6456}
+  .fn{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+  .ledger td:first-child{font-weight:600;white-space:nowrap;font-family:"Segoe UI",sans-serif}
+  .net{font:600 15px "Segoe UI",sans-serif}
+  .minus{color:var(--bad)}.plus{color:var(--accent2)}.same{color:var(--accent)}
+  .matrix td:first-child{font-weight:600}
+  ol.build{list-style:none;padding-left:0;counter-reset:step}
+  ol.build>li{position:relative;padding:12px 0 12px 44px;border-bottom:1px solid var(--line);counter-increment:step}
+  ol.build>li::before{content:counter(step);position:absolute;left:0;top:12px;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;background:var(--accent);color:#fff;font:600 14px "Segoe UI",sans-serif}
+  .q{font-weight:600;color:#0e3540}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Scale-up Cold Start — the time a fleet takes to grow</h1>
+  <div class="sub">The owner ratified modelling the <b>time a scaling fleet takes to grow</b>: <code>scaleUpColdStart</code>, ONE honest lag knob (seconds) on a scaling fleet — the whole delay from a unit being <em>needed</em> to it <em>serving</em>, as a single number, not four separate detect/decide/launch/warm stages (the <em>uwspólnianie</em> principle — consolidate what exists). <code>maxUnits</code> stays the scaling <b>ceiling</b> and <code>requiredUnits</code> stays the <b>computed</b> demand-driven size; <code>scaleUpColdStart</code> adds only the missing <b>time dimension</b> — how fast the fleet grows toward what the load needs. It lives where transients live: the Tier-2 DES, whose server count becomes time-varying <code>c(t)</code>. This closes exactly the gap <span class="fn">behaviors.ts:75–76</span> already flags as honestly uncovered.</div>
+  <div class="meta">SDA design document · 2026-07-06 · HEAD 2a70440 · status: PLAN — owner-ratified model, docs-only, no code · scope: the knob, the one engine change, and how it fits the WHOLE product</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool that computes an architecture drawn on a canvas — its throughput, latency, availability and cost — against declared requirements, live on every edit, and can run backwards to size or repair a design. A domain-agnostic engine does the math (a fixpoint solver for the forward pass, a discrete-event simulator for tails and transients, a native search for optimization); all cloud meaning is <em>content</em>. An auto-scaling fleet (Fargate, Cloud Run, a Kubernetes HPA, an EC2 ASG) is modelled today as a pool that is <em>always already</em> the right size for the load it faces — capacity appears the instant demand does. That is a convenient fiction: real fleets take <b>time</b> to add units, and while they lag, work piles up. This document designs the honest version of that time, as the owner ratified it. Definitions, stated positively:</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>fleet / unit</b></td><td>an auto-scaling compute pool (a role shared across Fargate, Cloud Run, k8s HPA, EC2 ASG) and one member of it (a task / instance / pod). Its capacity is <code>maxUnits × per-unit</code>, where per-unit throughput is <code>concurrency / (perRequestDuration/1000)</code> (<span class="fn">behaviors.ts:294–296</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>maxUnits</b> <span class="tag keep">unchanged</span></td><td>the scaling <b>ceiling</b> — the most units the fleet may ever run (an ASG max size, an HPA <code>maxReplicas</code>, an account task quota). A design commitment, a config knob (<span class="fn">registry.ts:70</span>; declared per fleet at <span class="fn">common.ts:217,234,251,268</span>). It sets how <em>big</em> the fleet can get, not how <em>fast</em>.</td></tr>
+  <tr><td style="white-space:nowrap"><b>requiredUnits</b> <span class="tag keep">unchanged</span></td><td>the <b>computed</b> demand-driven size: <code>inflow / per-unit</code> — how many units this instant's offered load needs (<span class="fn">behaviors.ts:297</span>). Derived, never authored; billing already reads it (<code>cost = costPer(requiredUnits)</code>, <span class="fn">behaviors.ts:299</span>). It says how <em>big the fleet should be now</em>, not whether it has got there yet.</td></tr>
+  <tr><td style="white-space:nowrap"><b>scaleUpColdStart</b> <span class="tag new">this document</span></td><td>ONE lag, in seconds: the time from a unit becoming <b>needed</b> (<code>requiredUnits</code> rises) to that unit <b>serving</b> requests. It rolls detection + decision + launch + warm-up into a single honest number — the whole delay, not its parts. A fleet config knob, a sibling of <code>maxUnits</code>/<code>concurrency</code> on the same manifests (§2). <code>0</code> = today's instant fiction, bit-for-bit.</td></tr>
+  <tr><td style="white-space:nowrap"><b>c(t) — time-varying servers</b> <span class="tag new">this document</span></td><td>the DES station's server count made a function of time: it tracks <code>requiredUnits(t)</code> with the <code>scaleUpColdStart</code> lag, capped at <code>maxUnits</code>. Today it is a single fixed number (<span class="fn">network.ts:24–30</span>) — pinned at the ceiling for the whole run. This is <b>the one real engine change</b> (§3).</td></tr>
+  <tr><td style="white-space:nowrap"><b>Tier-1 steady sweep / Tier-2 transient</b></td><td>the two-tier load-stages evaluation (<a href="load-stages.html">load-stages.html</a> §10): Tier 1 is the cheap quasi-static analytic sweep over the season (<span class="fn">time-sweep.ts</span>); Tier 2 is the expensive DES that proves the one worst window over time (<span class="fn">two-tier.ts</span>, <span class="fn">engine/sim/transient.ts</span>). Cold start is a <b>transient</b>, so it lives in Tier 2 (§4).</td></tr>
+  <tr><td style="white-space:nowrap"><b>per-request cold start</b> <span class="tag keep">distinct, exists</span></td><td>a DIFFERENT thing already shipped: the DES <code>coldStart</code> distribution, a bimodal per-<em>request</em> service penalty (one request hits a cold container → slow) (<span class="fn">coldstart.test.ts:8–9</span>; doc-8 §Cold starts). <code>scaleUpColdStart</code> is per-<em>fleet</em> (not enough units yet → requests WAIT). Orthogonal; reused, not duplicated (§5).</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The workflow this serves — a fleet takes time to grow, and today the tool pretends it does not</h2>
+<p class="lead">A staff architect sizes an auto-scaler for two things at once: the <em>height</em> of the peak (can the fleet get big enough?) and the <em>speed</em> of the rise (can it get big enough <em>in time</em>?). SDA answers the first today and is silent on the second — it models every fleet as an autoscaler with infinite reaction speed. That silence is a lie of omission, and it is the exact gap the engine already admits to.</p>
+<p>The tool's own comment says it plainly. Where the Lambda account-concurrency ceiling is modelled, the code stops and records what it will <em>not</em> model: "BURST behaviour (a +500-per-10s / +5,000-rps-per-10s scale-up ramp) is a TRANSIENT, not a steady-state ceiling, so it is NOT modelled here — recorded in doc-8 as honestly uncovered (the numeric hot path is steady-state; a ramp is a DES/time question)" (<span class="fn">behaviors.ts:75–76</span>). The coverage map carries the same open item: "Transients (warm-up, ramp) → DES → warm-up exists; richer transient scenarios open" (doc-8). This feature closes precisely that line — the ramp is the DES/time question, and the DES is where it belongs.</p>
+<p>The stakes are concrete. A checkout fleet with <code>maxUnits: 100</code> can serve a Black-Friday peak of 4,000 rps — Tier-1 confirms the ceiling clears the load, ρ &lt; 1, green. But if the flash sale drives demand from 400 to 4,000 rps in ninety seconds and the fleet needs three minutes to launch and warm the tasks it now needs, the queue floods for those first minutes: timeouts, drops, a retry storm — a failure that survives at steady state, survives the peak <em>if instant</em>, and dies only on the ramp. Today no SDA surface can see it. After this feature, the Tier-2 transient does, and says so per node.</p>
+<p>The owner's framing is a discipline as much as a feature: model the whole delay as <b>one honest number</b>. A real autoscaler's lag is a chain — metrics scrape interval, alarm evaluation, a scaling decision and cooldown, instance provisioning, container pull, application warm-up. Splitting that into four authored knobs would be false precision (nobody knows their alarm-evaluation window to the second) and four ways to disagree. One number — "from needed to serving takes ~N seconds" — is what an architect can actually estimate, defend, and vary. That is the <em>uwspólnianie</em> stance this document carries throughout: consolidate the delay into one knob, reuse the transient machinery whole, change the engine in exactly one place.</p>
+
+<h2><span class="no">2</span>The knob the owner ratified — one lag on the fleet, beside <code>maxUnits</code></h2>
+<p class="lead"><code>scaleUpColdStart</code> is a fleet property, not a demand property. Demand shape (cycles) lives on the traffic <em>generator</em>; how fast the <em>serving</em> side grows to meet it lives on the fleet — right where <code>maxUnits</code> and <code>concurrency</code> already live, read by the same sizing relations.</p>
+<h3>2.1 Where it is declared — mirroring <code>maxUnits</code> / <code>concurrency</code> (confirmed)</h3>
+<p>The four demand-driven fleets each declare their scaling knobs as plain config and share one sizing-relation set: <code>compute.fargate</code> (<span class="fn">common.ts:207</span>, <code>maxUnits: 100</code> at <span class="fn">:217</span>), <code>compute.cloudrun</code> (<span class="fn">:234</span>), <code>compute.k8s</code> (<span class="fn">:251</span>), <code>compute.asg</code> (<span class="fn">:268</span>) — every one closing with <code>relations: sizingRels()</code> (<span class="fn">behaviors.ts:295–300</span>). <code>scaleUpColdStart</code> joins as a <b>fifth sibling config knob</b> on those same manifests, exactly as <code>maxUnits</code> is a config knob: a new registry key beside <code>maxUnits</code> (<span class="fn">registry.ts:70</span>) with a node-local, no-flow aggregate (a fleet's reaction time is nobody else's — like <code>maxUnits</code> at <span class="fn">registry.ts:168</span>), and a small helper on the sizing family so the four fleets declare it uniformly rather than each hand-copying a literal.</p>
+<pre>// content/sda/src/registry.ts — a new key beside maxUnits (registry.ts:70), node-local like it:
+scaleUpColdStart: Key('scaleUpColdStart'), // seconds from a unit being NEEDED to it SERVING (0 = instant, today)
+
+// content/sda/src/common.ts — a sibling config on each demand-driven fleet, beside maxUnits:
+{ key: k.maxUnits,          value: 100, unit: '1' },  // the CEILING (unchanged)
+{ key: k.scaleUpColdStart,  value: 0,   unit: 's', est: true }, // NEW: the fleet's growth lag; est. per platform</pre>
+<p>The default is <code>0</code>: a fleet with no declared lag is byte-for-byte today's instant autoscaler — the sacred-identity discipline load-stages already holds (a flat generator ≡ steady <code>generate(level)</code>). Because the knob is a fleet fact, <em>not</em> part of the <code>generate</code> Transform (whose payload is <code>level</code> + <code>cycles</code> + <code>disable</code>, <span class="fn">graph.ts:80–84</span>), the demand model and the growth model stay cleanly separated — one authored on the source, one on the fleet.</p>
+<h3>2.2 What stays exactly as it is</h3>
+<table>
+  <tr><th>Quantity</th><th>Definition (unchanged)</th><th>What <code>scaleUpColdStart</code> does <em>not</em> touch</th></tr>
+  <tr><td><code>throughput</code> (capacity)</td><td><code>maxUnits × per-unit</code> — the fleet's ceiling capacity (<span class="fn">behaviors.ts:296</span>).</td><td>Nothing. The ceiling is still the ceiling; the lag only governs how the DES <em>approaches</em> it over time.</td></tr>
+  <tr><td><code>requiredUnits</code></td><td><code>inflow / per-unit</code> — the demand-driven size (<span class="fn">behaviors.ts:297</span>).</td><td>Nothing in the scalar pass. It becomes the <em>target</em> the time-varying <code>c(t)</code> chases (§3), read straight from Tier-1's per-window sweep.</td></tr>
+  <tr><td><code>cost</code></td><td><code>costPer(requiredUnits)</code> — demand-driven billing already exists (<span class="fn">behaviors.ts:299</span>).</td><td>Nothing in v1. (A subtlety — a lagging fleet is briefly <em>smaller</em> than <code>requiredUnits</code>, so the honest instantaneous bill is marginally lower during the ramp — is deferred as an open question, §9.)</td></tr>
+  <tr><td>the <code>overflow</code> verdict</td><td><code>max(0, offered − served)</code> — the universal throttle/drop excess (<span class="fn">behaviors.ts:62</span>).</td><td>Nothing in the steady read. The transient <em>backlog</em> (queue length over time) is the time-domain twin the DES already measures — a different, complementary reading (§4).</td></tr>
+</table>
+<div class="callout">
+<b>The knob in one sentence.</b>
+<p style="margin-top:8px"><code>scaleUpColdStart</code> adds a <b>time axis</b> to a fleet that already has a <b>size axis</b>: <code>maxUnits</code> caps how big, <code>requiredUnits</code> says how big it should be now, and <code>scaleUpColdStart</code> says how long it takes to get there. Two of the three already exist; this feature supplies only the third, and only inside the one engine that reasons over time.</p>
+</div>
+
+<h2><span class="no">3</span>The one real engine change — a time-varying server count <code>c(t)</code></h2>
+<p class="lead">Everything else in this design is content and reuse. There is exactly one change to the domain-agnostic engine, and honesty demands it be named sharply: <b>the DES uses a fixed server count for a whole run; <code>scaleUpColdStart</code> makes that count a function of time.</b></p>
+<h3>3.1 Today: the server count is a constant, pinned at the ceiling</h3>
+<p>A DES station declares <code>servers: number</code> — a single fixed integer (<span class="fn">network.ts:24–30</span>). The content projector sets it to the fleet's full size: <code>serverCount(node) = concurrency × fleetOf(node)</code>, and <code>fleetOf = replicas ?? maxUnits ?? 1</code> (<span class="fn">graph-read.ts:20,25–28</span>) — i.e. <code>concurrency × maxUnits</code>, the fleet at its <b>ceiling</b>, for the entire simulation (<span class="fn">sim.ts:253,263</span>). The simulator reads that constant in the two places server count matters: admission to service, <code>if (s.busy &lt; s.def.servers)</code> (<span class="fn">des.ts:501</span>), and utilisation, <code>s.areaBusy / (s.def.servers · T)</code> (<span class="fn">des.ts:797</span>). The analytic twin reads the <em>same</em> <code>serverCount</code> (<span class="fn">queueing.ts:22</span>, <code>c = concurrency servers</code>, <span class="fn">queueing.ts:5–8</span>) so the two agree under the differential test — a shared definition that must not silently break.</p>
+<p>So today's DES models an autoscaler that is <em>always</em> at <code>maxUnits</code>: infinitely many warm servers standing ready from t = 0. Under a rising load that never queues for lack of capacity — the fleet was already as big as it could ever be.</p>
+<h3>3.2 The asymmetry this fixes — demand already varies in time; serving does not</h3>
+<p>The revealing thing is that the DES is <em>already half</em> time-varying. The arrival side carries a <code>rateProfile</code> — a periodic λ(t) multiplier — and the simulator generates a non-homogeneous Poisson process by exact inversion, one uniform per arrival (<span class="fn">network.ts:68–77</span>; <span class="fn">des.ts:628–631</span>). Load-stages' cycles lower to exactly this profile. So <b>demand rises and falls over time already; the serving capacity is frozen at the ceiling.</b> <code>scaleUpColdStart</code> restores the symmetry: the serving side gets its own time dependence, and the two finally race each other honestly — which is the whole physical content of a scale-up.</p>
+<h3>3.3 The change — <code>c(t)</code> chases <code>requiredUnits(t)</code> with the lag, capped at <code>maxUnits</code></h3>
+<p>Give a station an optional server <em>schedule</em> instead of only a constant. When present, the count admitted to service at time <code>t</code> is</p>
+<pre>servers(t) = min( maxUnits,  ceil( requiredUnits( t − scaleUpColdStart ) ) ) × concurrency</pre>
+<p>i.e. the fleet at time <code>t</code> serves the size the load needed <code>scaleUpColdStart</code> seconds <em>ago</em> — a pure <b>dead-time</b> reading of "the time from needed to serving", capped by the ceiling. <code>requiredUnits(t)</code> is not new math: Tier-1's sweep already overrides each origin's <code>assumedRps</code> to its instantaneous λ(t) and re-evaluates the forward pass, which recomputes <code>requiredUnits = inflow/per-unit</code> per window (<span class="fn">time-sweep.ts:156–164</span>; <span class="fn">behaviors.ts:297</span>). So the <code>c(t)</code> target is the <b>Tier-1 <code>requiredUnits</code> envelope, shifted right by the lag</b> — the two tiers read one demand model, never two. Only the admission check (<span class="fn">des.ts:501</span>) and the utilisation denominator (<span class="fn">des.ts:797</span>) need to consult <code>servers(t)</code> instead of the constant; when no schedule is present the field is absent and every read is bit-for-bit today's.</p>
+<figure>
+<svg viewBox="0 0 720 300" role="img" aria-label="Demand rises quickly while serving capacity lags behind by the scale-up cold start; the gap between them is the backlog that builds, which drains once capacity catches up">
+  <line class="grid" x1="70" y1="78" x2="690" y2="78"/>
+  <line class="axis" x1="70" y1="250" x2="690" y2="250"/><line class="axis" x1="70" y1="40" x2="70" y2="250"/>
+  <text class="lbl" x="70" y="268" text-anchor="middle">t₀</text>
+  <text class="lbl" x="380" y="268" text-anchor="middle">demand jumps</text>
+  <text class="lbl" x="690" y="268" text-anchor="end">time →</text>
+  <text class="lbl" x="62" y="82" text-anchor="end">ceiling</text>
+  <text class="lbl" x="62" y="214" text-anchor="end">baseline</text>
+  <!-- ceiling = maxUnits × per-unit -->
+  <text class="lbl" x="486" y="72">maxUnits × per-unit (the ceiling — unchanged)</text>
+  <!-- backlog wedge: region where demand (upper) exceeds capacity (lower) -->
+  <polygon points="250,210 320,95 430,95 285,210" fill="#f6d9c2" fill-opacity="0.75" stroke="none"/>
+  <!-- demand lambda(t): baseline hold, fast rise, plateau -->
+  <polyline fill="none" stroke="#0b6e6e" stroke-width="2.4" points="70,210 250,210 320,95 690,95"/>
+  <!-- serving capacity c(t)·mu: delayed, slower rise toward the plateau -->
+  <polyline fill="none" stroke="#b4530a" stroke-width="2.4" stroke-dasharray="1 0" points="70,210 285,210 430,95 690,95"/>
+  <!-- lag arrow at mid-height y=150 between the two ramps -->
+  <line x1="286" y1="150" x2="360" y2="150" stroke="#8a8577" stroke-width="1.4" marker-start="url(#a1)" marker-end="url(#a1)"/>
+  <defs><marker id="a1" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M1,1 L7,4 L1,7 Z" fill="#8a8577"/></marker></defs>
+  <text class="lblb" x="323" y="143" text-anchor="middle" fill="#8a8577">scaleUpColdStart</text>
+  <text class="lblb" x="340" y="182" text-anchor="middle" fill="#b3261e">backlog builds</text>
+  <text class="lbl" x="340" y="197" text-anchor="middle" fill="#b3261e">demand &gt; capacity</text>
+  <text class="lblb" x="200" y="205" text-anchor="middle" fill="#0b6e6e">demand λ(t)</text>
+  <text class="lblb" x="560" y="112" text-anchor="middle" fill="#b4530a">serving capacity c(t)·μ</text>
+  <text class="lbl" x="560" y="128" text-anchor="middle" fill="#b4530a">= requiredUnits(t − lag), capped at ceiling</text>
+  <circle cx="430" cy="95" r="4" fill="#fff" stroke="#b4530a" stroke-width="2"/>
+  <text class="lbl" x="470" y="90">caught up → queue drains</text>
+</svg>
+<figcaption><b>Figure 1 — the race the tool cannot currently see.</b> Demand λ(t) (teal) already varies over time in the DES (the <code>rateProfile</code> seam, <span class="fn">network.ts:68–77</span>). Serving capacity c(t)·μ (orange) is frozen at the ceiling today; <code>scaleUpColdStart</code> makes it a delayed, capped chase of <code>requiredUnits(t)</code>. The shaded wedge — where demand outruns capacity — is the backlog that builds, which <span class="fn">transient.ts</span> already measures as a per-station queue-over-time. Both curves still cap at the same ceiling: the fleet <em>can</em> serve the peak; the question is whether it gets there in time.</figcaption>
+</figure>
+<div class="callout warn">
+<b>Honest caveat — we model ONE lag, not a vendor's exact autoscaler.</b>
+<p style="margin:8px 0 0">A dead-time chase of <code>requiredUnits(t−τ)</code> is a faithful model of the one thing every autoscaler shares — <em>capacity lags demand</em> — and nothing more. It is <b>not</b> a target-tracking vs step-scaling controller, does not encode cooldown windows, does not reproduce a specific vendor's step size (Lambda's burst quota, an ASG's per-adjustment increment) or a warm-pool prefill. Those are exactly the four stages the owner ruled out consolidating into false precision. The claim the tool makes is honest and bounded: "with a growth lag of ~τ seconds, here is the backlog and the tail while the fleet catches up." Where a design needs vendor-exact scaling dynamics, that is out of scope and should read <code>unknown</code>, never a fabricated controller — the same line the tool holds everywhere.</p>
+</div>
+
+<h2><span class="no">4</span>Where it lives — Tier-1 is untouched; Tier-2 is the whole home</h2>
+<p class="lead">Cold start is a transient by definition, so it appears in exactly the tier that reasons over transients — and it slots into machinery that already measures the very thing it produces.</p>
+<h3>4.1 The steady sweep is correctly blind to it</h3>
+<p>Tier-1 is the quasi-static analytic sweep: at each window it reads the equilibrium M/M/c response for that window's demand (<span class="fn">time-sweep.ts:150–193</span>, basis <code>analytic (quasi-static)</code> at <span class="fn">:201</span>). At equilibrium the fleet <em>is</em> the size the load needs — that is what equilibrium means — so a growth lag has, correctly, no effect there. Cold start is the <em>departure</em> from quasi-static; a sweep that assumes quasi-static must not see it, and the owner's ruling that Tier-1 stays unaffected is exactly right. Tier-1 continues to answer "can the ceiling serve the peak?"; it was never the tier that answers "in time?".</p>
+<h3>4.2 The transient DES already measures backlog build and drain</h3>
+<p>Tier-2 runs the untouched transient DES over the worst window and reads a survival verdict (<span class="fn">two-tier.ts:201,338</span>). That runner already produces precisely the readings a lagging fleet generates: a per-station <b>backlog time series</b> with its peak and when it happened (<code>StationBacklog</code>, <span class="fn">transient.ts:84–92</span>), a per-window arrivals/served/failed/p99 bucket (<code>TransientWindow</code>, <span class="fn">transient.ts:61–82</span>), a <b>drain time</b> from the disturbance's end back to baseline (<code>drainTimeS</code>, <span class="fn">transient.ts:190–213</span>), and a divergence test for "still growing at the end" (<span class="fn">two-tier.ts:270–284</span>). Feed that runner a station whose <code>c(t)</code> lags, and the backlog it builds while capacity is short is measured by the machinery as-is. No new metric, no new observation path: the feature supplies a time-varying server count and the existing transient reads the consequence.</p>
+<p>The wiring is small and local. The Tier-2 job builder (<code>tier2Job</code>, <span class="fn">two-tier.ts:201–253</span>) already constructs the worst-window network and lowers each shaped origin's λ(t) to a windowed <code>rateProfile</code>. It gains one step: for a fleet station with <code>scaleUpColdStart &gt; 0</code>, attach the <code>c(t)</code> schedule sampled from Tier-1's <code>requiredUnits</code> envelope over the same neighbourhood, shifted by the lag and clamped to <code>maxUnits</code>. The runner (<code>runTier2</code>, <span class="fn">two-tier.ts:338</span>) then plays demand-up against capacity-lagging, and <code>transientVerdict</code> (<span class="fn">two-tier.ts:287–331</span>) reads the same survival story it reads today — now including the failures a slow ramp causes.</p>
+
+<h2><span class="no">5</span>What this removes &amp; unifies — the net ledger (<em>uwspólnianie</em>)</h2>
+<p class="lead">This feature is not a pure deletion the way load-stages was — it adds a genuinely new capability (time in the serving dimension). The <em>uwspólnianie</em> discipline shows instead as maximal reuse and minimal surface: it closes a documented hole, consolidates four conceptual stages into one number, changes the engine in exactly one place, and reuses the entire transient stack verbatim.</p>
+<h3>5.1 What it closes or consolidates</h3>
+<table class="ledger">
+  <tr><th>Item today</th><th>Fate</th><th>Net</th></tr>
+  <tr><td>The flagged uncovered transient — the Lambda burst/scale-up ramp, "NOT modelled here… recorded in doc-8 as honestly uncovered" (<span class="fn">behaviors.ts:75–76</span>); doc-8 "Transients (warm-up, ramp)… richer transient scenarios open"</td><td><span class="tag done">CLOSED.</span> The ramp is exactly the DES/time question the comment defers; this feature answers it in the tier the comment names.</td><td class="net minus">−1 known gap</td></tr>
+  <tr><td>The four-stage temptation — detect + decide + launch + warm-up as separate authored knobs</td><td><b>CONSOLIDATED to one.</b> A single <code>scaleUpColdStart</code> = the whole delay from needed to serving. No sub-stages to author, disagree on, or maintain.</td><td class="net minus">−3 latent knobs</td></tr>
+  <tr><td>The demand/serving asymmetry — arrivals carry λ(t) (<span class="fn">network.ts:68–77</span>) but servers are frozen (<span class="fn">network.ts:24–30</span>)</td><td><b>UNIFIED.</b> The serving side gains the same time dependence the arrival side already has — one symmetric "time-varying station", not a bespoke mechanism.</td><td class="net same">0 (symmetry)</td></tr>
+</table>
+<h3>5.2 What it reuses verbatim (no new machinery)</h3>
+<table class="ledger">
+  <tr><td>Transient runner &amp; metrics</td><td><code>engine/sim/transient.ts</code> — <code>StationBacklog</code>/<code>TransientWindow</code>/<code>drainTimeS</code>/<code>backlogGrowingAtEnd</code>/budget honesty, <b>AS-IS</b> (<span class="fn">transient.ts:61–92,190–225</span>). The lagging fleet's backlog is read by these unchanged.</td></tr>
+  <tr><td>Survival verdict</td><td><code>StressVerdict</code> + <code>transientVerdict</code> (<span class="fn">two-tier.ts:63–83,287–331</span>) — survives? / recovers-in / peak backlog / p99 during &amp; after / lost / amplification. The answer form is untouched; only its input (a station with <code>c(t)</code>) changes.</td></tr>
+  <tr><td>The demand target</td><td>Tier-1's per-window <code>requiredUnits</code> (<span class="fn">time-sweep.ts:156–164</span>; <span class="fn">behaviors.ts:297</span>) IS the <code>c(t)</code> target — read, shifted, clamped. No second sizing model.</td></tr>
+  <tr><td>The time-varying seam</td><td>The <code>rateProfile</code> / NHPP-inversion pattern (<span class="fn">network.ts:68–77</span>; <span class="fn">des.ts:628–631</span>) is the exact shape the server schedule mirrors — a deterministic function of time consulted on the hot path, absent ⇒ bit-for-bit today.</td></tr>
+  <tr><td>Per-request cold start</td><td>The DES <code>coldStart</code> service distribution (<span class="fn">coldstart.test.ts:8–9</span>) is a DIFFERENT effect (a slow request, not a missing server). Left alone; the two compose honestly (§7.3). Reused-not-duplicated.</td></tr>
+</table>
+<h3>5.3 The only genuinely new parts — each defended</h3>
+<table class="ledger">
+  <tr><th>New part</th><th>Why an existing one cannot carry it</th><th>Net</th></tr>
+  <tr><td><code>scaleUpColdStart</code> config knob (+ registry key)</td><td>No existing field expresses "how fast this fleet grows". It rides the fleet manifests beside <code>maxUnits</code> via the sizing helper, so the four fleets declare it uniformly, not four literals. Default <code>0</code> = today.</td><td class="net plus">+1 knob</td></tr>
+  <tr><td>Time-varying <code>c(t)</code> on <code>Station</code> (the one engine change)</td><td>The DES's fixed <code>servers: number</code> (<span class="fn">network.ts:27</span>) cannot express a growing fleet. An optional server <em>schedule</em> read by the two existing server-count touchpoints (<span class="fn">des.ts:501,797</span>) is the smallest honest change; it is a new engine <em>capability</em>, not a new subsystem, and it stays domain-free (pure timing over station ids).</td><td class="net plus">+1 engine capability</td></tr>
+</table>
+<div class="callout big">
+<b>The ledger reads: minimal addition, maximal reuse, one real hole closed.</b> One config knob and one time-varying-server capability buy the entire feature; they close a gap the code itself flags as uncovered, consolidate a four-stage delay into a single defensible number, restore the demand/serving symmetry, and lean on the transient runner, the survival verdict, the demand target and the time-varying seam without adding a rival to any of them. It is not a net removal — it is the smallest possible net addition that answers a question the tool currently cannot.</div>
+
+<h2><span class="no">6</span>The integration matrix — a fleet property the transient respects EVERYWHERE, not a peak add-on</h2>
+<p class="lead">The owner's hard requirement: <code>scaleUpColdStart</code> must fit the WHOLE product. It is a property of a fleet, so it bites <em>wherever demand rises faster than the fleet can grow</em> — a world switch, a capacity edge, a robust sizing, any spike, any per-node verdict — not only in the headline spike-vs-scale-up race. Each row is grounded in the code seam that carries it.</p>
+<div class="scroll">
+<table class="matrix">
+<tr><th>Feature</th><th>Where <code>scaleUpColdStart</code> bites</th><th>Seam that carries it</th><th>Value</th></tr>
+<tr>
+  <td>Worlds / scenarios</td>
+  <td>Switching to a higher-demand world is a demand <b>step</b> A→B; the fleet must grow to world B's <code>requiredUnits</code> across the lag. Does it catch the step, or backlog through the transition?</td>
+  <td><code>applyScenarioToGraph</code> overrides <code>assumedRps</code> (<span class="fn">scenario.ts:52,153</span>); a world transition is a two-stage cycle the Tier-2 DES plays with <code>c(t)</code> chasing.</td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+<tr>
+  <td>Capacity envelope</td>
+  <td>"Max sustainable" must mean a rise the fleet can actually track — a sudden climb to the edge is not served instantly. The honest edge is bounded by BOTH the ceiling AND the fleet's rate-of-rise.</td>
+  <td>The per-origin <code>maxRps</code> inversion + the queueing-knee sweep (<span class="fn">envelope.ts:5–6,52–54</span>); the transient adds a "fastest sustainable rise" companion to the "highest sustainable level".</td>
+  <td><span class="tag v-med">med</span></td>
+</tr>
+<tr>
+  <td>Robust Improve / optimize / repair</td>
+  <td>"Cheapest fleet that survives the spike AND scales fast enough." Sizing <code>maxUnits</code> for the peak height is not sufficient — the ramp may demand a higher <b>floor</b> (min warm units) so the fleet starts closer to the peak, or a smaller lag.</td>
+  <td>Per-world solve + knob-wise max over monotone knobs incl. <code>maxUnits</code> (<span class="fn">robust.ts:1,46–49</span>); ramp-catch is a Tier-2 feasibility check on the sized design (the transient, not the forward pass).</td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+<tr>
+  <td>Spike / load-stages</td>
+  <td>The headline pairing: a spike cycle's λ(t) races the fleet's growth over the worst window. But explicitly ONE of many — the same mechanism, not a spike-only feature.</td>
+  <td><code>tier2Job</code>/<code>runTier2</code> over the worst window (<span class="fn">two-tier.ts:201,338</span>); the <code>spike</code> preset (<span class="fn">load-stages.ts:312</span>) is the natural demand shape.</td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+<tr>
+  <td>Per-node verdicts</td>
+  <td>A node that survives steady (ρ&lt;1), survives the peak <em>if instant</em> (ρ&lt;1 at the peak), and fails ONLY because the ramp is too slow — the transient verdict no quasi-static read can produce.</td>
+  <td><code>realAwareVerdicts</code> reads steady + worst-window ρ (<span class="fn">verdict.ts:90–95</span>); this failure is NOT a ρ≥1 read, so it rides the Tier-2 <code>StressVerdict</code> basis (<span class="fn">two-tier.ts:65</span>), the measured-transient half of the two-basis honesty.</td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+</table>
+</div>
+<h3>6.1 Worlds — does the fleet catch the step?</h3>
+<p>A world overrides fact-assumptions, demand among them, and the sweep/verdict paths already re-evaluate the overlaid graph (<span class="fn">scenario.ts:153</span>, the same override Tier-1 uses at <span class="fn">time-sweep.ts:159–160</span>). Today "switch to the peak world" is judged quasi-statically: evaluate the graph at world B's demand, done. With <code>scaleUpColdStart</code>, the honest question about a <em>transition</em> — from an operating world to a surge world — is transient: the fleet begins at A's size and must reach B's <code>requiredUnits</code> across the lag. That transition is expressible in the existing grammar (a two-stage step cycle), so a "world-switch transient" is a Tier-2 run over an A→B step, needing no new overlay target. Value is high because world switches are exactly where a real system meets a step it did not ramp into gently.</p>
+<h3>6.2 Capacity envelope — the edge you can reach in time</h3>
+<p>The envelope frees an origin's demand and maximises it subject to the SLOs, reporting the capacity edge and the queueing knee (<span class="fn">envelope.ts:5–6,52–54</span>). That answers "how <em>high</em> can sustained load go". <code>scaleUpColdStart</code> adds an orthogonal axis: "how <em>fast</em> can load rise and still be served" — because a step to the very edge is not served instantly by a lagging fleet. The clean form is a companion figure beside the maxRps edge: the fastest rise (rps per second) the fleet can track without the Tier-2 backlog breaching the SLO, computed by sweeping the ramp slope against the lag. Medium value — a real but secondary reading next to the level edge.</p>
+<h3>6.3 Robust Improve — survive the height AND the slope</h3>
+<p>Robust sizing solves each world and takes the knob-wise max, sound because provisioning knobs (incl. <code>maxUnits</code>) are monotone (<span class="fn">robust.ts:46–49</span>). Sizing <code>maxUnits</code> for the peak <em>height</em> stays in that monotone class — a peak is just a larger fixed demand. But surviving the <em>ramp</em> is a transient feasibility question the forward pass cannot see: the remedy is often not a higher ceiling but a higher <b>floor</b> (a minimum warm-unit count so the fleet starts nearer the peak) or a smaller lag (a warm pool). Recommendation: v1 sizes <code>maxUnits</code> for the peak height via the existing robust path, then runs a Tier-2 ramp-catch check on the sized design and, if it still floods, reports the honest remedy ("survives the peak height; the ramp is too slow — raise the warm floor or reduce the cold-start lag") rather than silently over-sizing the ceiling. High value: "cheapest fleet that survives the spike AND scales fast enough" is the question a staff architect actually asks.</p>
+<h3>6.4 Per-node verdicts — the failure only the transient can see</h3>
+<p>This is the sharpest payoff. <code>realAwareVerdicts</code> judges each node against its steady ρ and its worst-window ρ, folding a peak in as the same saturation (<span class="fn">verdict.ts:78–95</span>). A scale-up failure is invisible to <em>both</em>: at steady state ρ&lt;1 (green), and at the peak instant — <em>evaluated as if the fleet were already that big</em> — ρ&lt;1 too (green). The failure exists only in the time between: the fleet had not grown yet. That is not a ρ≥1 read at any instant; it is a backlog that builds and (maybe) drains. So it must ride the Tier-2 <code>StressVerdict</code> (<span class="fn">two-tier.ts:65</span>) — the <em>measured (transient)</em> basis — never collapsed into the quasi-static saturation list. The node's honest verdict becomes: "holds at the mean · holds at the peak if capacity were instant · <b>fails during scale-up</b> (backlog N at the worst window, drains in ~M s / does not drain)". This is the killer diagnosis the feature exists to produce.</p>
+<figure>
+<svg viewBox="0 0 720 250" role="img" aria-label="Three panels for one node: it holds at steady state, holds at the peak if capacity were instant, and fails only during the scale-up ramp where capacity lags demand">
+  <!-- panel A: steady -->
+  <text class="lblb" x="20" y="24">① steady state</text>
+  <line class="axis" x1="20" y1="150" x2="220" y2="150"/><line class="axis" x1="20" y1="60" x2="20" y2="150"/>
+  <line x1="20" y1="80" x2="220" y2="80" stroke="#b4530a" stroke-width="2"/>
+  <line x1="20" y1="120" x2="220" y2="120" stroke="#0b6e6e" stroke-width="2.2"/>
+  <rect x="20" y="168" width="200" height="26" rx="5" fill="#e7f3ea"/>
+  <text class="lblb" x="120" y="185" text-anchor="middle" fill="#2f7d4f">holds · ρ &lt; 1</text>
+  <text class="lbl" x="120" y="214" text-anchor="middle">Tier-1 sees it</text>
+  <!-- panel B: peak if instant -->
+  <text class="lblb" x="260" y="24">② peak, if instant</text>
+  <line class="axis" x1="260" y1="150" x2="460" y2="150"/><line class="axis" x1="260" y1="60" x2="260" y2="150"/>
+  <line x1="260" y1="80" x2="460" y2="80" stroke="#b4530a" stroke-width="2"/>
+  <polyline fill="none" stroke="#0b6e6e" stroke-width="2.2" points="260,120 330,120 360,92 460,92"/>
+  <rect x="260" y="168" width="200" height="26" rx="5" fill="#e7f3ea"/>
+  <text class="lblb" x="360" y="185" text-anchor="middle" fill="#2f7d4f">holds · ρ &lt; 1 at peak</text>
+  <text class="lbl" x="360" y="214" text-anchor="middle">Tier-1 sees it</text>
+  <!-- panel C: the ramp -->
+  <text class="lblb" x="500" y="24">③ the scale-up ramp</text>
+  <line class="axis" x1="500" y1="150" x2="700" y2="150"/><line class="axis" x1="500" y1="60" x2="500" y2="150"/>
+  <line x1="500" y1="80" x2="700" y2="80" stroke="#b4530a" stroke-width="2"/>
+  <polygon points="570,120 600,92 660,92 615,120" fill="#f6d9c2" fill-opacity="0.8"/>
+  <polyline fill="none" stroke="#0b6e6e" stroke-width="2.2" points="500,120 570,120 600,92 700,92"/>
+  <polyline fill="none" stroke="#b4530a" stroke-width="2.2" stroke-dasharray="4 3" points="500,120 585,120 660,92 700,92"/>
+  <rect x="500" y="168" width="200" height="26" rx="5" fill="#fbe7e7"/>
+  <text class="lblb" x="600" y="185" text-anchor="middle" fill="#b3261e">fails · backlog builds</text>
+  <text class="lbl" x="600" y="214" text-anchor="middle" fill="#b3261e">only Tier-2 sees it</text>
+</svg>
+<figcaption><b>Figure 2 — one node, three readings.</b> The orange line is capacity, teal is demand. ① Steady: demand well under capacity, green. ② Peak evaluated quasi-statically — capacity treated as already at the needed size — green. ③ The same peak as a real ramp: capacity (now dashed, lagging) trails demand, the wedge is backlog, red. A node can pass both quasi-static reads and fail only here. This failure is not a ρ≥1 saturation at any instant, so it belongs on the Tier-2 <code>StressVerdict</code> (<span class="fn">two-tier.ts:65</span>), never folded into the steady list — the two-basis honesty load-stages already keeps.</figcaption>
+</figure>
+
+<h2><span class="no">7</span>The three hardest tensions</h2>
+<h3>7.1 Determinism of <code>c(t)</code> in the seeded DES</h3>
+<p>The DES's credibility rests on byte-for-byte reproducibility: a fixed seed fixes the output exactly, via a single RNG stream and a totally ordered event set (<span class="fn">des.ts:13–15</span>). A time-varying server count must not break that. The clean resolution is the <b>open-loop dead-time</b> model above: <code>c(t)</code> is a pure, deterministic function of time — Tier-1's <code>requiredUnits</code> envelope shifted by the lag — sampled like the arrival <code>rateProfile</code> already is, drawing nothing from the RNG. It stays byte-deterministic trivially, and reuses the exact seam the arrival side proved. The tempting alternative — a <b>closed-loop</b> autoscaler that reacts to the DES's own observed backlog/arrivals — is more realistic but introduces feedback (like retry storms) that can be non-monotone and is harder to size and reason about; it also remains deterministic (the reaction is a function of seed-determined history) but is genuinely harder. Recommendation: ship open-loop dead-time (deterministic, cheap, honest about capacity lag); treat closed-loop reactive scaling as a later, clearly-flagged upgrade. The tension is real because open-loop assumes the autoscaler knows what was needed τ ago — a slight optimism the caveat in §3.3 must state.</p>
+<h3>7.2 Is scale-DOWN modelled?</h3>
+<p>The owner named <code>scaleUpColdStart</code> — the <em>up</em> direction, which is the risk axis (too-slow growth ⇒ backlog ⇒ failures). Scale-<em>down</em> is a different lag and rarely a failure: removing units when demand falls does not build backlog, it only briefly over-provisions (a small cost, not an outage). v1 should model scale-up lag only and treat scale-down as <b>instant</b> — the conservative choice, because it makes each repeating peak start from a low fleet and pay the full cold start again (the worst case). But there is a genuine subtlety for multi-cycle demand: if a diurnal fleet scales down fully in the overnight trough, tomorrow's morning ramp pays the cold start afresh; if it retained a warm floor, it would not. That is precisely why the robust-improve remedy (§6.3) is a warm <b>floor</b>, and why scale-down speed / a min-warm-units knob is the natural v2. Decision: instant scale-down in v1, explicit; a scale-down lag or warm floor deferred, flagged (§9).</p>
+<h3>7.3 Per-unit cold start vs fleet-lag granularity</h3>
+<p>Two physically different "cold starts" now coexist, and conflating them would be a lie. The existing DES <code>coldStart</code> distribution is per-<em>request</em>: enough units exist, but a given request lands on a just-launched container and pays a slow <em>service</em> time — a tail effect (<span class="fn">coldstart.test.ts:8–9</span>). <code>scaleUpColdStart</code> is per-<em>fleet</em>: there are not enough units yet, so requests <em>wait</em> — a backlog effect. They are orthogonal and both real; they even compose (a unit the fleet just added serves its own first requests cold). v1 models the fleet as a single homogeneous <code>c(t)</code> count of warm servers (the dominant effect: queueing when under-provisioned) and leaves the per-request penalty to the existing distribution, unchanged. Modelling each newly-added unit as cold-for-its-first-N-requests — coupling the two — is a faithful refinement but a real increase in state (per-unit warmth, not just a count); deferred, and named so the seam is not accidentally closed.</p>
+
+<h2><span class="no">8</span>Ranked build rounds</h2>
+<p>Ordered so the smallest honest slice ships first and each round leans on the last. The engine change and the knob are the spine; everything downstream reads them.</p>
+<ol class="build">
+  <li><b>The knob + the engine change.</b> <span class="tag new">R1</span> Add the <code>scaleUpColdStart</code> registry key and fleet config (default 0), and give the DES <code>Station</code> an optional deterministic server schedule read by the two server-count touchpoints (<span class="fn">des.ts:501,797</span>). Gate it: absent ⇒ bit-for-bit today, pinned by a sacred-identity test. Differential-check that a <em>constant</em> schedule equals the fixed count exactly. Nothing user-visible yet.</li>
+  <li><b>Tier-2 plays <code>c(t)</code>.</b> <span class="tag new">R1</span> In <code>tier2Job</code> (<span class="fn">two-tier.ts:201</span>), attach the lagged <code>requiredUnits(t)</code> schedule to each shaped fleet station over the worst-window neighbourhood; <code>runTier2</code> and <code>transientVerdict</code> read the resulting backlog unchanged. This alone closes the doc-8 gap end-to-end.</li>
+  <li><b>Per-node scale-up verdict.</b> <span class="tag new">R2</span> Surface the "fails only during scale-up" verdict on the Tier-2 <code>StressVerdict</code> basis (§6.4), dual-basis honest ("holds steady · holds at peak-if-instant · fails on the ramp"), and route it to the per-node surfaces the peak read already uses. The highest-value diagnosis.</li>
+  <li><b>Robust Improve ramp-catch.</b> <span class="tag new">R2</span> After sizing <code>maxUnits</code> for the peak height (existing robust path), run a Tier-2 ramp-catch check and report the honest remedy (warm floor / smaller lag) when the height is sufficient but the slope is not (§6.3).</li>
+  <li><b>Worlds transition + envelope rise.</b> <span class="tag new">R2</span> The A→B world-switch transient (§6.1) and the "fastest sustainable rise" companion to the capacity edge (§6.2) — both compositions over existing sweeps, no new solver.</li>
+  <li><b>Deferred refinements.</b> <span class="tag gone">defer</span> Closed-loop reactive scaling (§7.1), a scale-down lag / warm-floor knob (§7.2), and per-unit-warmth coupling with the existing <code>coldStart</code> distribution (§7.3) — each a faithful upgrade, each named so its seam stays open.</li>
+</ol>
+
+<h2><span class="no">9</span>Open questions for the owner</h2>
+<p><span class="q">1. Dead-time or first-order lag?</span> The design proposes <code>c(t) = requiredUnits(t − scaleUpColdStart)</code> — a pure dead-time, which maps exactly to your words "the time from needed to serving". A first-order lag (<code>du/dt = (target − u)/τ</code>) is smoother but its τ is not literally the delay. Confirm dead-time as the honest primary (§3.3, §7.1).</p>
+<p><span class="q">2. Open-loop first, closed-loop later?</span> Open-loop (a deterministic function of time, reusing the <code>rateProfile</code> seam) ships determinism for free; closed-loop (react to the DES's measured backlog) is more realistic but feedback-coupled. Agreed to ship open-loop and flag closed-loop as an upgrade (§7.1)?</p>
+<p><span class="q">3. Scale-down: instant in v1?</span> Modelling only scale-<em>up</em> lag, with instant scale-down (the conservative worst case, each peak pays full cold start), and deferring a scale-down lag / warm-floor knob to v2 (§7.2). Confirm.</p>
+<p><span class="q">4. Fleet-count granularity, not per-unit warmth?</span> v1 models a homogeneous <code>c(t)</code> count and leaves the per-request <code>coldStart</code> distribution untouched, rather than tracking each new unit as cold-for-its-first-N-requests (§7.3). Enough for v1?</p>
+<p><span class="q">5. Does the bill follow the lagging size, or the required size?</span> During the ramp the fleet is briefly smaller than <code>requiredUnits</code>, so the honest instantaneous cost is marginally lower. v1 keeps <code>cost = costPer(requiredUnits)</code> unchanged (§2.2); an integral-of-<code>c(t)</code> bill is a possible refinement. Leave cost as-is for now?</p>
+<p><span class="q">6. Where is the knob's default value sourced?</span> The lag is genuinely platform-dependent (a warm Lambda vs a cold EC2 ASG differ by orders of magnitude). Default <code>0</code> (instant, today) is the safe non-lying default; should the four fleets ship an <em>est.</em> per-platform starting value (badged <code>est.</code>, architect-tunable), or stay 0 until the architect opts in?</p>
+
+<div class="callout" style="border-left-color:#4b5263;margin-top:40px">
+<b>Provenance &amp; guardrails.</b>
+<p style="margin-top:8px" class="small">This is a planning document — no code was changed, no owner example was modified, and nothing was published. Every code claim is grounded in a named <code>file:line</code> at HEAD <code>2a70440</code>. The model is the owner's ratified one: a single <code>scaleUpColdStart</code> lag (needed → serving), <code>maxUnits</code> unchanged as the ceiling, <code>requiredUnits</code> unchanged as the computed size, and one real engine change — a time-varying server count <code>c(t)</code> in the transient DES — stated plainly and bounded by the honest caveat that we model one lag, not a vendor's exact autoscaler. The feature closes the transient gap the engine already flags at <span class="fn">behaviors.ts:75–76</span> and in doc-8. It reuses the transient runner, the survival verdict, the demand target and the time-varying seam verbatim; the integration matrix shows it as a fleet property the transient respects wherever demand rises faster than the fleet grows, not a peak-only add-on. The night-loop package (<code>engine/solver-contract</code>) is untouched.</p>
+</div>
+
+</div>
+</body>
+</html>

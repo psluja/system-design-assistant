@@ -1,0 +1,344 @@
+{
+  "schema": 3,
+  "id": "p1",
+  "name": "Untitled",
+  "instances": [
+    {
+      "id": "client",
+      "type": "client.web",
+      "config": {
+        "throughput": 10
+      }
+    },
+    {
+      "id": "gw",
+      "type": "apigw.rest",
+      "config": {
+        "throughput": 12500
+      }
+    },
+    {
+      "id": "cmd",
+      "type": "compute.service"
+    },
+    {
+      "id": "pg",
+      "type": "db.postgres",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 120
+          }
+        }
+      ],
+      "config": {
+        "concurrency": 625
+      }
+    },
+    {
+      "id": "sns",
+      "type": "topic.sns"
+    },
+    {
+      "id": "indexq",
+      "type": "queue.sqs",
+      "config": {
+        "throughput": 12500
+      }
+    },
+    {
+      "id": "indexer",
+      "type": "compute.faas",
+      "config": {
+        "concurrency": 626
+      }
+    },
+    {
+      "id": "proj",
+      "type": "search.elasticsearch",
+      "config": {
+        "throughput": 12500
+      }
+    },
+    {
+      "id": "reportq",
+      "type": "queue.sqs",
+      "config": {
+        "throughput": 12500
+      }
+    },
+    {
+      "id": "reporter",
+      "type": "compute.fargate"
+    },
+    {
+      "id": "s3",
+      "type": "storage.object",
+      "config": {
+        "throughput": 12500
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "client",
+        "out"
+      ],
+      "to": [
+        "gw",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "gw",
+        "out"
+      ],
+      "to": [
+        "cmd",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "cmd",
+        "db"
+      ],
+      "to": [
+        "pg",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cmd",
+        "out"
+      ],
+      "to": [
+        "sns",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "sns",
+        "out"
+      ],
+      "to": [
+        "indexq",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "sns",
+        "out"
+      ],
+      "to": [
+        "reportq",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "indexq",
+        "out"
+      ],
+      "to": [
+        "indexer",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "indexer",
+        "out"
+      ],
+      "to": [
+        "proj",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "reportq",
+        "out"
+      ],
+      "to": [
+        "reporter",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "reporter",
+        "out"
+      ],
+      "to": [
+        "s3",
+        "in"
+      ],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "client": {
+      "x": 60,
+      "y": 208.5
+    },
+    "gw": {
+      "x": 400,
+      "y": 211.5
+    },
+    "cmd": {
+      "x": 740,
+      "y": 190
+    },
+    "pg": {
+      "x": 1080,
+      "y": 94
+    },
+    "sns": {
+      "x": 1080,
+      "y": 301
+    },
+    "indexq": {
+      "x": 1420,
+      "y": 88.5
+    },
+    "indexer": {
+      "x": 1767.205345377719,
+      "y": 17.151891600528018
+    },
+    "proj": {
+      "x": 2207.7221204747802,
+      "y": 36.982853557819965
+    },
+    "reportq": {
+      "x": 1417.598218207427,
+      "y": 528.4550159538541
+    },
+    "reporter": {
+      "x": 1760,
+      "y": 326
+    },
+    "s3": {
+      "x": 2097.0228230684716,
+      "y": 642.0776582666188
+    }
+  },
+  "labels": {
+    "client": "Clients",
+    "gw": "API Gateway",
+    "cmd": "Command handler",
+    "pg": "Source of truth",
+    "sns": "Event topic",
+    "indexq": "Index queue",
+    "indexer": "Indexer",
+    "proj": "Projections",
+    "reportq": "Report queue",
+    "reporter": "Report cluster",
+    "s3": "Reports"
+  },
+  "descriptions": {
+    "client": "HTTP POST commands",
+    "cmd": "writes to the source of truth, publishes events",
+    "pg": "Postgres — the write model",
+    "sns": "SNS — fans events out",
+    "indexq": "SQS — indexing",
+    "indexer": "Lambda — updates projections",
+    "proj": "Elasticsearch — open-source read model",
+    "reportq": "SQS — reporting",
+    "reporter": "Fargate — builds reports",
+    "s3": "S3 — report output"
+  },
+  "groups": [],
+  "components": [
+    {
+      "type": "topic.sns",
+      "ports": [
+        {
+          "name": "in",
+          "dir": "in",
+          "accepts": [
+            "sns",
+            "https",
+            "http"
+          ]
+        },
+        {
+          "name": "out",
+          "dir": "out",
+          "speaks": [
+            "sns"
+          ]
+        }
+      ],
+      "config": [
+        {
+          "key": "throughput",
+          "value": 30000,
+          "unit": "msg/s"
+        },
+        {
+          "key": "latency",
+          "value": 10,
+          "unit": "ms"
+        },
+        {
+          "key": "availability",
+          "value": 0.9999,
+          "unit": "ratio"
+        },
+        {
+          "key": "durability",
+          "value": 0.999999999,
+          "unit": "ratio"
+        },
+        {
+          "key": "unitCost",
+          "value": 1.3,
+          "unit": "USD/(msg/s)·month"
+        }
+      ],
+      "relations": [
+        {
+          "key": "cost",
+          "reads": [
+            "throughput",
+            "unitCost"
+          ],
+          "expr": "inflow(throughput) * self(unitCost)"
+        },
+        {
+          "key": "overflow",
+          "reads": [
+            "throughput"
+          ],
+          "expr": "max(0, inflow(throughput) - self(throughput))"
+        }
+      ],
+      "bands": [
+        {
+          "key": "overflow",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 0
+          }
+        }
+      ]
+    }
+  ]
+}

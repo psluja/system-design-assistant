@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Latency SLO Semantics v2 — response-anchored SLOs, flow-scoped lag & per-node percentiles · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:740px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{background:#1d2330;color:#e7e4da;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:18px 0;font:13px/1.62 "Cascadia Code",Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  pre .c{color:#7f8ba3;font-style:italic}
+  pre .k{color:#6fb3ff}
+  pre .t{color:#8fe3c0}
+  pre .s{color:#e0b070}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14.5px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:10px 13px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center;overflow-x:auto}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.now{background:#e9f5f2;color:#0b6e6e}
+  .tag.p0{background:#fbe7e7;color:#a33}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:13px}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Latency SLO Semantics v2</h1>
+  <div class="sub">The owner-approved rethink of what a latency requirement <em>means</em> in SDA. The center of the design is the architect's own workflow: set a latency requirement on a service and read it &mdash; mean <em>and</em> percentiles &mdash; right there, continuously. Every node is a potential beginning: one simulation yields a consistent latency perspective for <em>every</em> node at once. This document replaces the last "accumulated-from-the-origin" latency rule with three positively-defined, anchored quantities that each match a number the interface already shows.</div>
+  <div class="meta">SDA design document · 2026-07-03 · latency semantics v2 · status: for owner review — not started</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design &mdash; load, latency, cost, feasibility &mdash; against declared requirements, live on every edit. Underneath, SDA is a <b>domain-agnostic engine</b> that turns the drawing into a typed-property graph and a family of solvers, over which a <b>content pack</b> layers all cloud meaning as data. Latency is computed two ways that must agree: a fast <em>scalar</em> pass (queueing-aware means, on every edit) and a <em>discrete-event simulation</em> (the DES &mdash; true percentiles). This document redesigns how a <b>latency SLO</b> (a declared requirement like "&le; 200&nbsp;ms") is <em>anchored</em> and <em>judged</em>, so that the number the tool checks is always the number the architect is looking at &mdash; and it makes every node's latency perspective available from a single simulation run.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>SLO / band</b></td><td>a declared requirement on one property of one place in the design (e.g. latency &le; 200&nbsp;ms). Internally a <em>band</em>: a min / target / max for a scalar, or a set of percentile targets for a tail.</td></tr>
+  <tr><td style="white-space:nowrap"><b>verdict</b></td><td>the tool's honest read-back on a band: <code>ok</code> / <code>warning</code> / <code>violation</code> / <code>unknown</code>, with a cause-chain and a ranked remediation. Uncertainty (<code>unknown</code>) is a value, never a guess.</td></tr>
+  <tr><td style="white-space:nowrap"><b>node / flow</b></td><td>a <b>node</b> is one component (a gateway, a function, a database). A <b>flow</b> is a request's journey from a <em>source</em> node to a <em>terminal</em> node along the wires.</td></tr>
+  <tr><td style="white-space:nowrap"><b>requirement-bearing node</b></td><td>a node the architect has attached a latency or tail requirement to. The <em>engine</em> computes a latency perspective for <b>every</b> node; the <em>display</em> commits full numbers continuously only where they were asked for &mdash; on requirement-bearing nodes and the currently selected node &mdash; showing the rest on demand (the no-filler rule, now a display concern).</td></tr>
+  <tr><td style="white-space:nowrap"><b>response latency</b></td><td>a node's own queued service time <em>plus</em> the responses of everything it calls <b>synchronously</b> and waits for. An <b>async</b> hop (fire-and-forget, a queue) cuts the wait, so it is excluded. This is the request&rarr;response time a caller of that node actually feels.</td></tr>
+  <tr><td style="white-space:nowrap"><b>sojourn</b></td><td>queueing-theory name for one node's time-in-system = queue wait + service. SDA computes it from an M/M/c model; it is a node's "own term".</td></tr>
+  <tr><td style="white-space:nowrap"><b>percentile / tail</b></td><td>p50 / p95 / p99 &mdash; the value below which that fraction of requests complete. The <em>tail</em> (p99) is what users feel; a mean can look fine while the tail is on fire.</td></tr>
+  <tr><td style="white-space:nowrap"><b>async edge · &rho;</b></td><td>an <b>async edge</b> decouples the caller's wait from the callee. <b>&rho;</b> (utilisation) = offered load &divide; capacity; at &rho;&nbsp;&ge;&nbsp;1 a queue grows without bound and real latency is infinite.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The workflow this serves — the design center</h2>
+<p class="lead">Everything below is derived from one concrete way of working, which the owner named as the thing to optimise for: an architect states a latency requirement on a service and keeps that number &mdash; mean and percentiles &mdash; in view while they edit. The tool's job is to make it <em>trustworthy</em> and <em>legible</em>: judge exactly the quantity the architect pointed at, and show that same quantity back. The deeper move is that <b>every node is a potential beginning</b> &mdash; the tool computes a latency perspective for <em>every</em> node from one run, so the architect can point at any service and immediately read it, whether or not a requirement was set there first.</p>
+<p>Three properties follow directly, and the rest of this document is their consequences:</p>
+<ul>
+  <li><b>Every node has a latency perspective; the display decides what to commit to.</b> The engine holds no "watched list": it computes each node's response latency and response percentiles for all nodes. The <em>display</em> carries the no-filler rule (memory <code>ui-no-absent-feature-filler</code>) &mdash; it shows full numbers continuously on requirement-bearing nodes and the currently selected node, and every other node's view on demand. Nothing is <em>computed</em> selectively; only <em>presented</em> selectively.</li>
+  <li><b>What is judged equals what is shown.</b> The verdict on a node must be computed from the very number rendered on its card. Today that is not true (&sect;2), and it is the bug the owner hit live.</li>
+  <li><b>Percentiles are first-class and continuous.</b> A node shows mean <em>and</em> p50/p95/p99, refreshed after each simulation run &mdash; not only an end-of-path global tail.</li>
+</ul>
+<div class="callout"><b>This is a semantics change, not a new feature bolt-on.</b> SDA already computes every mean v2 needs &mdash; per-node <em>response latency</em> is shipped content (<span class="path">content/sda/src/queueing.ts</span> <code>responseLatency</code>), and the DES already produces true percentiles. v2 re-<em>anchors</em> the SLO to those existing quantities, adds one all-node sampling pass to the DES (&sect;4), and closes two honesty gaps. Much of the work is deleting a wrong rule and pointing the verdict at the right, already-computed number.</div>
+
+<h2><span class="no">2</span>The flaw being fixed — "accumulated from the origin"</h2>
+<p class="lead">SDA's scalar latency SLO is judged today against the latency <em>accumulated along the synchronous path from the traffic origin to the node carrying the requirement</em>. That rule is the last remnant of the old "flows begin at the client" bias that the universal-origins work removed everywhere else &mdash; and it is wrong on four independent counts.</p>
+
+<h3>2.1 Where it lives in the code today</h3>
+<table>
+  <tr><th>Fact</th><th>In the code</th></tr>
+  <tr><td>The <code>latency</code> registry key <b>sums along the synchronous path</b> and an async hop cuts the caller's wait.</td><td><span class="path">content/sda/src/registry.ts</span> line&nbsp;120: <code>aggregate: { series: 'sum', onAsyncEdge: 'cut' }</code> ("accumulates on the synchronous path; an async hop cuts the caller's wait").</td></tr>
+  <tr><td>The queueing-aware latency the verdict actually judges is <b>accumulated source&rarr;node</b>, taking the max over predecessors.</td><td><span class="path">content/sda/src/queueing.ts</span> <code>realCumulativeLatency</code> (lines&nbsp;145&ndash;171): <code>upstream + own(id)</code>, <code>Math.max(...ps.map(cum))</code> &mdash; a forward fold from the origins.</td></tr>
+  <tr><td>The latency verdict is computed from that accumulated value.</td><td><span class="path">content/sda/src/verdict.ts</span> <code>realAwareVerdicts</code> (line&nbsp;58 reads <code>realCumulativeLatency</code>; <code>latencyStatus</code> judges it, lines&nbsp;20&ndash;28).</td></tr>
+  <tr><td>But the node card shows a <b>different</b> number: the node's <em>response latency</em> (own + synchronous downstream subtree).</td><td><span class="path">content/sda/src/queueing.ts</span> <code>responseLatency</code> (lines&nbsp;182&ndash;210) &rarr; <code>responseLatencyMs</code> per node (doc-15 §4 "one truth"; rendered on canvas, MCP <code>evaluate</code>, and the design doc).</td></tr>
+</table>
+<div class="callout warn"><b>The probe the owner hit.</b> On a real design a node card read <code>responseLatencyMs</code>&nbsp;<b>120</b> while the latency verdict on the same node judged an accumulated <b>200.00000001</b> and failed. Two surfaces, two numbers, one node &mdash; the tool contradicted itself. (The trailing <code>…0001</code> is a second, independent bug; see &sect;5.)</div>
+
+<h3>2.2 Why the accumulated-from-origin anchor is wrong</h3>
+<table>
+  <tr><th>#</th><th>Defect</th><th>Why</th></tr>
+  <tr><td><b>1</b></td><td><b>Ill-defined under universal origins with fan-in</b></td><td>SDA no longer assumes traffic "begins at the client": <em>any</em> node can originate load (<span class="path">registry.ts</span> <code>originRps</code>). With several origins fanning into a node, "accumulated from the origin" has to ask <em>which</em> origin &mdash; and the honest answer (max over predecessors) is a path the architect never named. The anchor depends on upstream topology the requirement is not about.</td></tr>
+  <tr><td><b>2</b></td><td><b>Contrary to industry SLO practice</b></td><td>Real latency SLOs anchor to an <em>operation / endpoint</em>: "the p99 of the response served <em>from this service</em>". They measure from the point of the requirement outward to what it depends on &mdash; not from some upstream generator inward. v2's node anchor is the standard one.</td></tr>
+  <tr><td><b>3</b></td><td><b>Redundant</b></td><td>"End-to-end latency" is already exactly the response latency of the entry node. Carrying a separate origin-accumulated quantity gives two names for one thing at the terminal and a meaningless thing everywhere else.</td></tr>
+  <tr><td><b>4</b></td><td><b>Inconsistent with what the UI displays</b></td><td>The card shows response latency; the verdict judged accumulated latency. A tool whose check disagrees with its own display fails the project's first invariant &mdash; <em>the tool must not lie</em> (memory <code>web-is-a-dumb-renderer</code>).</td></tr>
+</table>
+<p>Notably, doc-15 (the response-time model) already foresaw this reckoning: it shipped <code>responseLatency</code> but recorded as an open follow-up whether "response time supersedes the source-sum latency for the caller-facing SLO", and deferred a response-time SLO verdict pending that reconciliation (<span class="path">backlog/docs/doc-15</span> §5&ndash;6). <b>Semantics v2 is that decision: it does.</b></p>
+
+<figure>
+  <div class="svgc">
+  <svg width="820" height="250" viewBox="0 0 820 250" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <text x="20" y="22" font-size="13" font-weight="700" fill="#a33">TODAY — the SLO on N is judged against an accumulated-from-origin sum (which origin?)</text>
+    <rect x="20" y="52" width="120" height="44" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="80" y="74" text-anchor="middle" font-size="12" font-weight="600">origin A</text><text x="80" y="89" text-anchor="middle" font-size="10" fill="#4b5263">+80 ms path</text>
+    <rect x="20" y="130" width="120" height="44" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="80" y="152" text-anchor="middle" font-size="12" font-weight="600">origin B</text><text x="80" y="167" text-anchor="middle" font-size="10" fill="#4b5263">+140 ms path</text>
+    <rect x="330" y="90" width="120" height="46" rx="8" fill="#fbe7e7" stroke="#a33" stroke-width="2"/><text x="390" y="112" text-anchor="middle" font-size="12.5" font-weight="700">N</text><text x="390" y="128" text-anchor="middle" font-size="10" fill="#a33">SLO ≤ 200 ms here</text>
+    <rect x="620" y="90" width="120" height="46" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="680" y="117" text-anchor="middle" font-size="12" font-weight="600">DB</text>
+    <line x1="140" y1="74" x2="328" y2="104" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="140" y1="152" x2="328" y2="120" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <line x1="450" y1="113" x2="618" y2="113" stroke="#4b5263" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="235" y="215" font-size="11.5" fill="#a33">accumulated(N) = max(80, 140) + own(N) = 140 + own — a number the requirement never named, set by upstream B</text>
+    <text x="235" y="233" font-size="11.5" fill="#0b6e6e">v2: SLO(N) = response(N) = own(N) + downstream(DB) — measured from N outward, independent of A/B</text>
+  </svg>
+  </div>
+  <figcaption>Fan-in makes "accumulated from the origin" ambiguous and topology-dependent. v2 anchors the node SLO to <b>response latency</b> &mdash; measured from the node carrying the requirement outward over what it synchronously calls &mdash; which is exactly the number already on its card.</figcaption>
+</figure>
+
+<h2><span class="no">3</span>Semantics v2 — three anchored quantities</h2>
+<p class="lead">v2 defines latency requirements positively, as three distinct, each-named quantities. An architect chooses the one that matches the question being asked; each maps to a quantity SDA already computes and displays.</p>
+<table>
+  <tr><th>Quantity</th><th>Definition (positive)</th><th>Anchored to</th><th>Maps to today</th></tr>
+  <tr>
+    <td><b>Node latency SLO</b><br><span class="tag now">re-anchored</span></td>
+    <td>The node's <b>response latency</b>: its own queued sojourn plus the responses of everything it calls <b>synchronously</b>, combined by its <code>latencyComposition</code> knob (sequential&nbsp;=&nbsp;sum · parallel&nbsp;=&nbsp;max · hedged&nbsp;=&nbsp;min). An <b>async</b> boundary cuts the wait and is excluded. A saturated (&rho;&ge;1) synchronous dependency makes it &infin;.</td>
+    <td>the node carrying the SLO (an endpoint / operation)</td>
+    <td><code>responseLatency</code> &mdash; the exact number the card shows (<span class="path">queueing.ts</span> 182&ndash;210). The verdict just needs to read <em>this</em> instead of <code>realCumulativeLatency</code>.</td>
+  </tr>
+  <tr>
+    <td><b>Flow-scoped lag SLO</b><br><span class="tag new">new anchor</span></td>
+    <td>The full <b>journey</b> latency from a chosen <em>source</em> node to a chosen <em>terminal</em> node, <b>including async queue waits</b> along the way. Answers data-propagation questions: "a change written here reaches Aurora in &le; X" (a CDC / replication lag).</td>
+    <td>a named flow (source&rarr;terminal)</td>
+    <td>reuses the guarantee-SLO's <b>flow keying</b> (source,&nbsp;terminal) from <span class="path">content/sda/src/guarantee-slo.ts</span> &mdash; but as a <em>numeric</em> quantity, and unlike the node SLO it deliberately <b>includes</b> the async waits the <code>latency</code> key cuts.</td>
+  </tr>
+  <tr>
+    <td><b>End-to-end</b><br><span class="tag now">falls out</span></td>
+    <td>Not a new mechanism: it is a flow-scoped SLO whose <em>source is the entry node</em>. Equivalently, the response latency of the entry node. The number the design doc's "end-to-end flow row" already reports.</td>
+    <td>the entry node (as source) / the terminal read-back</td>
+    <td>the flow terminal-read latency in <span class="path">content/sda/src/doc-model.ts</span> (the end-to-end flow row, 222&ndash;227).</td>
+  </tr>
+</table>
+
+<div class="callout"><b>Why lag is a separate quantity, not just "the node SLO on the terminal".</b> The node/response anchor exists to answer "what does a caller of this service wait for?" &mdash; so it correctly <em>cuts</em> at the async boundary (a caller does not block on a fire-and-forget). The lag anchor answers a different question &mdash; "how long until this data lands there?" &mdash; whose whole point is the async queue wait (retention, drain time). The same design legitimately carries both: a response SLO on the API tier and a lag SLO on the CDC&rarr;Aurora replication path. Two questions, two anchors; neither is redundant with the other.</div>
+
+<figure>
+  <div class="svgc">
+  <svg width="840" height="300" viewBox="0 0 840 300" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker>
+    <marker id="ba" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#b4530a"/></marker></defs>
+    <rect x="20" y="120" width="96" height="42" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="68" y="146" text-anchor="middle" font-size="12" font-weight="600">Client</text>
+    <rect x="150" y="120" width="96" height="42" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="198" y="146" text-anchor="middle" font-size="12" font-weight="600">Gateway</text>
+    <rect x="280" y="120" width="110" height="42" rx="8" fill="#fdf2e2" stroke="#b4530a" stroke-width="2"/><text x="335" y="140" text-anchor="middle" font-size="12" font-weight="700">FaaS</text><text x="335" y="154" text-anchor="middle" font-size="9.5" fill="#b4530a">response SLO here</text>
+    <rect x="430" y="120" width="96" height="42" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="478" y="146" text-anchor="middle" font-size="12" font-weight="600">DB</text>
+    <rect x="430" y="210" width="120" height="42" rx="8" fill="#f0ece2" stroke="#8b8fa3"/><text x="490" y="230" text-anchor="middle" font-size="11.5" font-weight="600">Stream (CDC)</text><text x="490" y="244" text-anchor="middle" font-size="9.5" fill="#4b5263">async queue</text>
+    <rect x="600" y="210" width="110" height="42" rx="8" fill="#e9f5f2" stroke="#0b6e6e" stroke-width="2"/><text x="655" y="230" text-anchor="middle" font-size="11.5" font-weight="700">Aurora</text><text x="655" y="244" text-anchor="middle" font-size="9.5" fill="#0b6e6e">lag SLO here</text>
+    <line x1="116" y1="141" x2="148" y2="141" stroke="#4b5263" stroke-width="1.5" marker-end="url(#b)"/>
+    <line x1="246" y1="141" x2="278" y2="141" stroke="#4b5263" stroke-width="1.5" marker-end="url(#b)"/>
+    <line x1="390" y1="141" x2="428" y2="141" stroke="#4b5263" stroke-width="1.5" marker-end="url(#b)"/>
+    <line x1="478" y1="162" x2="490" y2="208" stroke="#b4530a" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ba)"/>
+    <line x1="550" y1="231" x2="598" y2="231" stroke="#b4530a" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ba)"/>
+    <path d="M280 108 q60 -34 120 0" fill="none" stroke="#b4530a" stroke-width="1.4"/><text x="340" y="74" text-anchor="middle" font-size="10.5" fill="#b4530a">response(FaaS) = own + sync{DB}, async branch CUT</text>
+    <path d="M20 175 q315 60 630 40" fill="none" stroke="#0b6e6e" stroke-width="1.4" stroke-dasharray="2 3"/><text x="240" y="292" font-size="10.5" fill="#0b6e6e">end-to-end = response(entry = Client) — a flow SLO with the entry as source</text>
+    <text x="560" y="196" text-anchor="middle" font-size="10.5" fill="#0b6e6e">lag(DB→Aurora) INCLUDES the async queue wait</text>
+  </svg>
+  </div>
+  <figcaption>One design, three anchors. The <b>node</b> SLO on FaaS reads its response latency (own + the synchronous DB call; the async CDC branch is cut). The <b>lag</b> SLO on the DB&rarr;Aurora replication path includes the async queue wait. <b>End-to-end</b> is just the flow SLO whose source is the entry node (Client).</figcaption>
+</figure>
+
+<h2><span class="no">4</span>Per-node percentiles — one run, N perspectives <span class="tag new">new simulator capability</span></h2>
+<p class="lead">Today the simulator answers exactly one tail: the whole-system end-to-end sojourn, and a percentile SLO is honest only on a terminal node. v2 makes the DES report a response tail for <b>every</b> node from a <b>single</b> run &mdash; because a node's latency perspective is nothing but the <em>suffix</em> of the very same job journeys the run already produces. There is no second simulation and no per-node model: it is bookkeeping over one run.</p>
+
+<h3>4.1 The key insight: a node's view is a suffix of the same journey</h3>
+<p>A simulated request already flows through the whole design once. Node&nbsp;X's response latency, on that same request, is simply "the clock from when the job <b>enters</b> X to when X's <b>synchronous subtree completes</b>" &mdash; a sub-interval of the journey the DES is already tracking. So one run yields <em>N consistent perspectives at once</em>: entering a stamp at each node the job passes through and recording the elapsed time when that node's synchronous work finishes. The async boundary cuts exactly as it does for the scalar <code>responseLatency</code> (a fire-and-forget hop is not part of the caller's wait), so every node's mean and tail are twins of one definition &mdash; the same quantity, measured analytically (scalar) and empirically (DES).</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="820" height="230" viewBox="0 0 820 230" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <text x="20" y="22" font-size="13" font-weight="700" fill="#183a56">ONE job journey (one run) — each node's response is a SUFFIX of it</text>
+    <rect x="20" y="44" width="96" height="40" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="68" y="68" text-anchor="middle" font-size="12" font-weight="600">Client</text>
+    <rect x="150" y="44" width="96" height="40" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="198" y="68" text-anchor="middle" font-size="12" font-weight="600">Gateway</text>
+    <rect x="280" y="44" width="96" height="40" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="328" y="68" text-anchor="middle" font-size="12" font-weight="600">FaaS</text>
+    <rect x="410" y="44" width="96" height="40" rx="8" fill="#eef4ff" stroke="#3b6fd4"/><text x="458" y="68" text-anchor="middle" font-size="12" font-weight="600">DB</text>
+    <line x1="116" y1="64" x2="148" y2="64" stroke="#4b5263" stroke-width="1.5" marker-end="url(#c)"/>
+    <line x1="246" y1="64" x2="278" y2="64" stroke="#4b5263" stroke-width="1.5" marker-end="url(#c)"/>
+    <line x1="376" y1="64" x2="408" y2="64" stroke="#4b5263" stroke-width="1.5" marker-end="url(#c)"/>
+    <line x1="68" y1="110" x2="506" y2="110" stroke="#c9c3b6" stroke-width="1"/>
+    <line x1="68" y1="126" x2="506" y2="126" stroke="#3b6fd4" stroke-width="6" stroke-linecap="round"/><text x="516" y="130" font-size="10.5" fill="#3b6fd4">view(Client) = end-to-end</text>
+    <line x1="198" y1="146" x2="506" y2="146" stroke="#0b6e6e" stroke-width="6" stroke-linecap="round"/><text x="516" y="150" font-size="10.5" fill="#0b6e6e">view(Gateway)</text>
+    <line x1="328" y1="166" x2="506" y2="166" stroke="#b4530a" stroke-width="6" stroke-linecap="round"/><text x="516" y="170" font-size="10.5" fill="#b4530a">view(FaaS)</text>
+    <line x1="458" y1="186" x2="506" y2="186" stroke="#8b5ca6" stroke-width="6" stroke-linecap="round"/><text x="516" y="190" font-size="10.5" fill="#8b5ca6">view(DB)</text>
+    <text x="20" y="214" font-size="11" fill="#4b5263">Each bar is the stamp→sync-subtree-completion sub-interval for that node — all read off the SAME simulated request. No re-run.</text>
+  </svg>
+  </div>
+  <figcaption>One simulated journey, four consistent perspectives. A node's response latency is the suffix from its own entry stamp to its synchronous-subtree completion; the entry node's view is exactly end-to-end. The DES records all of them per event on one run.</figcaption>
+</figure>
+
+<h3>4.2 Cost: trivial by construction</h3>
+<table>
+  <tr><td style="white-space:nowrap"><b>Memory</b></td><td>one reservoir per node &mdash; a few thousand samples &times; node count. Trivial for any drawable design.</td></tr>
+  <tr><td style="white-space:nowrap"><b>CPU</b></td><td>a constant, small per-event overhead (record an entry stamp, close a completed sub-interval into the node's reservoir). No extra passes, no extra runs.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Runs</b></td><td>exactly one &mdash; the same run that already produces the end-to-end sojourn now also emits every node's suffix. All-node sampling is <em>cheaper</em> than a watched-list would be to maintain, and needs no plumbing of "which nodes to watch" into the engine.</td></tr>
+</table>
+
+<h3>4.3 What exists today, and the one change</h3>
+<table>
+  <tr><th>Fact</th><th>In the code</th></tr>
+  <tr><td>The DES keeps <b>one</b> reservoir of end-to-end sojourns and exposes a single <code>sojournPercentile(p)</code>.</td><td><span class="path">engine/sim/src/des.ts</span>: one <code>sojourns[]</code> array (146), pushed at terminate as <code>sojournEnd &minus; req.systemEntry</code> (235), read by <code>sojournPercentile</code> (427). v2 adds per-node reservoirs alongside it.</td></tr>
+  <tr><td>A tail verdict is attached <b>only to sink (terminal) nodes</b>; a percentile band on a non-terminal node stays <code>unknown</code>.</td><td><span class="path">app/mcp/src/simulate.ts</span> line&nbsp;38 (<code>sinks.has(String(node))</code>) and <span class="path">app/presenter/src/sim-verdicts.ts</span> 40&ndash;46 &mdash; the sink gate v2 removes.</td></tr>
+  <tr><td><code>tailLatency</code> is a node-local, DES-only key with a <code>percentiles</code> band, verified by <code>checkTailBands</code>, which <b>already iterates any node's band</b> &mdash; only the provider was terminal-only.</td><td><span class="path">registry.ts</span> 123 (<code>local: true</code>); <span class="path">engine/solve/src/verdict/tail.ts</span> <code>checkTailBands</code>.</td></tr>
+</table>
+<p>The verdict machinery needs no change; the tail provider simply drops its sink gate and returns any node's own response percentile:</p>
+<pre><span class="c">// today (sink-only, one global tail):</span>
+<span class="k">const</span> tail: <span class="t">TailProvider</span> = (node, key, q) =&gt;
+  key === keys.tailLatency &amp;&amp; sinks.has(<span class="t">String</span>(node)) ? ms(sim.sojournPercentile(q)) : <span class="k">undefined</span>;
+
+<span class="c">// v2 (every node — its own synchronous-subtree response tail, from the one run):</span>
+<span class="k">const</span> tail: <span class="t">TailProvider</span> = (node, key, q) =&gt;
+  key === keys.tailLatency ? sim.responsePercentile(node, q) : <span class="k">undefined</span>;  <span class="c">// undefined only ⇒ no run yet ⇒ honest `unknown`</span></pre>
+<p>A node's <code>tailLatency</code> SLO is judged against its <em>own</em> response tail; end-to-end stays available as the entry node's view. Every node's mean + p50/p95/p99 is available after each run &mdash; the display (&sect;1) decides which to show continuously.</p>
+<div class="callout warn"><b>Inherited honest limit to state plainly: downstream composition is serial today.</b> The suffix views compose a node's synchronous subtree <b>serially</b> (sum), which is exact for sequential calls and the conservative bound otherwise. <b>Parallel / fork-join (max) remains the recorded idealization</b> &mdash; the scalar pass approximates it with <code>max(means)</code>, which under-estimates the true tail by Jensen's inequality (doc-15 §3). Because a node's view is just a <em>suffix of the real journey</em>, it inherits true parallel composition <b>automatically</b> the moment the DES models fork-join &mdash; no per-node change is needed. v2 does not close that gap; it states it and structures the sampler so the eventual fix propagates for free.</div>
+<div class="callout"><b>Invariant kept: scalar and DES are twins, differential-tested.</b> The per-node response mean already exists (<code>responseLatency</code>); the per-node response <em>tail</em> is its DES counterpart under the identical async-cut, serial-composition definition. That gives a clean differential test &mdash; the DES per-node mean of the response reservoir must track the analytic <code>responseLatency</code> within tolerance on unsaturated designs &mdash; exactly the "scalar approximation + DES truth" discipline SDA already holds for the system sojourn (memory <code>simulation-modeling</code>, <code>testing-strategy</code>).</div>
+
+<h3>4.4 Boundaries — when a response perspective is well-defined <span class="tag new">R1 scope, owner discussion</span></h3>
+<p>A response is a <em>suffix</em> of a request's journey (&sect;4.1), so it is well-defined exactly when that journey has a finite synchronous end. Four topologies mark the honest edges of v2 &mdash; stated positively, as what each <em>is</em> and how far v2 reaches. The R1 sampler implements the first three; the fourth is named as the next extension.</p>
+<table>
+  <tr><th>Topology</th><th>What its response perspective is</th><th>v2</th></tr>
+  <tr>
+    <td><b>Acyclic synchronous request</b><br><span class="tag now">the norm</span></td>
+    <td>Every node's response is the finite clock from its entry to its synchronous-subtree completion. The suffix bottoms out at the leaves and folds up; the entry node's suffix is the whole journey (= end-to-end).</td>
+    <td><b>Fully supported.</b> This is the case the sampler measures every run.</td>
+  </tr>
+  <tr>
+    <td><b>Synchronous cycle within one request</b> (A waits for B, B waits back for A on the <em>same</em> request)</td>
+    <td>No finite response exists &mdash; a caller waiting on its own reply is a deadlock, and the "suffix until the synchronous subtree completes" never terminates. The honest read-back is that there is <em>nothing to measure</em>.</td>
+    <td><b>Honestly rejected.</b> The numeric folds are cycle-guarded (both <code>realCumulativeLatency</code> and <code>responseLatency</code> stop at a revisited node; the solvers reject cyclic synchronous flow), so v2 inherits that rejection rather than inventing a number. Uncertainty is a value, never a guess.</td>
+  </tr>
+  <tr>
+    <td><b>Cycle broken by an async edge, or a probabilistic back-edge</b> (a retry / feedback loop with <code>p&nbsp;&lt;&nbsp;1</code>)</td>
+    <td>The suffix stays finite. An <em>async</em> back-edge is fire-and-forget &mdash; it cuts the caller's wait (&sect;4.1), so the loop never enters the response. A <em>probabilistic</em> loop re-enters with probability <code>p&nbsp;&lt;&nbsp;1</code>, contributing a geometric series that converges; its expected work is bounded and its tail is a real, finite distribution.</td>
+    <td><b>Supported.</b> The async cut is exact today; a probabilistic loop is what the DES already simulates naturally over time (it plays out each re-entry as a real event), so its response tail falls out of the same run &mdash; no special case.</td>
+  </tr>
+  <tr>
+    <td><b>Full-mesh / any-to-any topology, each request using an acyclic subset</b><br><span class="tag p0">named future extension</span></td>
+    <td>The <em>drawing</em> has cycles but no single request does &mdash; each request threads an acyclic path through the mesh. A well-defined response then depends on <em>which</em> request we mean: the perspectives are per-<b>request-class</b>, not per-node-in-isolation.</td>
+    <td><b>Out of v2 &mdash; named, not silent.</b> Distinguishing the acyclic path a class of requests actually takes is a <b>multi-commodity (request-class) flow</b> problem: one flow per class, each acyclic, sampled independently. v2 scopes to a single commodity; request classes are the explicit next extension, at which point the same suffix sampler runs once per class.</td>
+  </tr>
+</table>
+<div class="callout"><b>Why this is a clean boundary, not a gap.</b> Every case above resolves to one of three honest outcomes &mdash; a finite measured response, an explicit rejection (a synchronous self-wait has no answer), or a named future scope (request classes). None of them asks the sampler to fabricate a number for a journey that has no finite synchronous end. That is the same discipline as the rest of SDA: where a quantity is undefined, the tool says so.</div>
+
+<h2><span class="no">5</span>Boundary epsilon — an independent bug found alongside <span class="tag p0">honesty fix</span></h2>
+<p class="lead">The probe's second surprise was the trailing noise: computed <code>200.00000001246752</code> versus a band max of <code>200</code> read as a <b>violation</b>. That ~1e-8 is floating-point residue from summed queueing terms, not a real breach &mdash; yet band judging compares with a bare <code>&gt;</code>, so the design "failed" its SLO by a rounding artefact.</p>
+<table>
+  <tr><th>Judge site</th><th>Today</th></tr>
+  <tr><td>Engine scalar band check</td><td><span class="path">engine/solve/src/verdict/check.ts</span> <code>statusForBand</code> (74): <code>if (band.max !== undefined &amp;&amp; v &gt; band.max) return 'violation'</code> &mdash; exact. (Its <code>point</code> shape already tolerates <code>EPS = 1e-9</code>, line&nbsp;79; <code>minTargetMax</code> does not.)</td></tr>
+  <tr><td>Content real-aware latency</td><td><span class="path">content/sda/src/verdict.ts</span> <code>latencyStatus</code> (23): <code>v &gt; band.max</code> &mdash; exact (this is the one that surfaced in the probe).</td></tr>
+  <tr><td>Tail bands</td><td><span class="path">engine/solve/src/verdict/tail.ts</span> (47): <code>if (v &gt; target)</code> &mdash; exact.</td></tr>
+  <tr><td>Goodput / error-rate rates</td><td><span class="path">content/sda/src/verdict.ts</span> <code>statusForRate</code> (166): <code>v &gt; band.max</code> &mdash; exact.</td></tr>
+</table>
+<p><b>The fix:</b> band judging adopts the contract's shared float tolerance &mdash; <code>closeEnough</code> (<span class="path">engine/solver-contract/src/bindings.ts</span> 47, ε&nbsp;=&nbsp;1e-4, relative+absolute). A value within ε of a bound is <em>at</em> the bound (ok), while a real breach beyond ε still fails honestly. This is not a new invention: the solver oracle harness <em>already</em> judges bands with the same <code>closeEnough</code> (<span class="path">engine/solver-contract/src/harness/oracle.ts</span> 156&ndash;158) &mdash; so adopting it in the verdict path makes the live judgement and the referee agree, closing a latent divergence rather than opening one.</p>
+<div class="callout warn"><b>Scope discipline.</b> ε is a <em>boundary</em> tolerance, not a slack budget: <code>closeEnough(v, max)</code> only rescues values within 1e-4 (relative) of the bound. A design that misses its SLO by any meaningful margin still reads <code>violation</code> &mdash; the tool must not lie in the other direction either. This is a shared-constant change applied at each judge site above; it is orthogonal to the anchoring change and can ship independently.</div>
+
+<h2><span class="no">6</span>Migration — honest, and mostly more generous</h2>
+<p class="lead">The change re-reads existing SLOs; it must do so transparently and without silently tightening or loosening anyone's intent. Every existing latency band means one of two things today, and each has a defined destination.</p>
+<table>
+  <tr><th>Existing SLO (today's meaning)</th><th>v2 destination</th><th>Effect on the verdict</th></tr>
+  <tr>
+    <td><b>A terminal-anchored latency band</b> meant as end-to-end (the finale's &le;&nbsp;250, the worked examples, tests, the generated design doc's end-to-end row, the MCP <code>set_slo</code> latency docs).</td>
+    <td>Converts to a <b>flow-scoped</b> SLO with the entry node as source (i.e. explicit end-to-end). Same number, now named for what it is.</td>
+    <td>No change at the terminal (response of the terminal = accumulation to the terminal). Behaviour-preserving for terminal SLOs.</td>
+  </tr>
+  <tr>
+    <td><b>A latency band on a non-terminal (mid-path) node.</b></td>
+    <td>Re-reads as that node's <b>response</b> latency (own + synchronous downstream), the number its card already showed.</td>
+    <td>Usually <b>more generous</b> &mdash; response (own + downstream) is typically smaller than accumulation-from-origin (which dragged in all upstream hops). <b>State this plainly</b> to the architect; it is a correctness fix, but it can flip a red node green.</td>
+  </tr>
+  <tr>
+    <td><b>A percentile (<code>tailLatency</code>) band.</b></td>
+    <td>Moves consistently: judged against the node's <b>own response tail</b> (&sect;4) instead of only being answerable at a sink.</td>
+    <td>Non-terminal tail SLOs that read <code>unknown</code> today become real verdicts. No terminal regression.</td>
+  </tr>
+</table>
+<p><b>Documents to update in lockstep</b> (so no surface contradicts another &mdash; memory <code>web-is-a-dumb-renderer</code>): doc-8 (the Coverage Map) latency rows; the sensitivity-matrix rows that reference end-to-end latency; the generated design-doc latency section (<span class="path">content/sda/src/design-doc.ts</span> / <span class="path">doc-model.ts</span>); and the MCP tool docs for <code>set_slo</code> / <code>evaluate</code> / <code>simulate</code> that today describe latency as an end-to-end/terminal quantity.</p>
+
+<h2><span class="no">7</span>Build plan — R1 &rarr; R2 &rarr; R3</h2>
+<p class="lead">Sequenced so the trustworthy number exists before any surface points at it, and each release is independently green.</p>
+<table>
+  <tr><th>Release</th><th>Scope</th><th>Done when</th></tr>
+  <tr>
+    <td><b>R1 · engine/sim</b><br><span class="tag new">the new capability</span></td>
+    <td><b>All-node suffix sampling</b> in the DES: on the one run, stamp entry at <em>every</em> node and close the stamp→synchronous-subtree-completion sub-interval into that node's reservoir (the <code>responseLatency</code> async-cut, serial composition, mirrored in event-time), exposing <code>responsePercentile(node, q)</code>. No watched-list, no second run. Property + differential tests: each node's response <em>mean</em> tracks analytic <code>responseLatency</code> on unsaturated designs; the async cut matches the scalar cut; the entry node's view equals the existing end-to-end sojourn.</td>
+    <td>the sampler ships with tests; no verdict/surface change yet (the number exists, unused).</td>
+  </tr>
+  <tr>
+    <td><b>R2 · verdicts + registry</b><br><span class="tag now">the semantics switch</span></td>
+    <td>Point the node latency verdict at <code>responseLatency</code> (not <code>realCumulativeLatency</code>); add the flow-scoped lag SLO on the guarantee-SLO flow-keying (numeric, async-inclusive); wire the per-node tail provider (&sect;4). Adopt <code>closeEnough</code> at every judge site (&sect;5). Apply the migration re-reads (&sect;6) with the "more generous" note surfaced.</td>
+    <td>the verdict a node shows is computed from the number on its card; existing tests updated to v2 meanings; boundary-noise designs read <code>ok</code>.</td>
+  </tr>
+  <tr>
+    <td><b>R3 · surfaces</b><br><span class="tag now">make it visible</span></td>
+    <td>Per-node mean&nbsp;+&nbsp;p50/p95/p99 chips on both shells (web + VS Code) &mdash; committed continuously on requirement-bearing nodes and the currently selected node, every other node on demand (the display no-filler rule); System-panel rows; the design-doc generator's latency section re-expressed as node-response + flow-lag + end-to-end; MCP (<code>set_slo</code> flow-scope, <code>evaluate</code>/<code>simulate</code> docs).</td>
+    <td>every surface reads the one computation; the architect can read percentiles at any node, and sees them continuously where a requirement sits or where they have selected.</td>
+  </tr>
+</table>
+
+<h2><span class="no">8</span>Open questions &amp; design tensions for the owner</h2>
+<table>
+  <tr><th>Question</th><th>Where it comes from</th><th>Proposed lean</th></tr>
+  <tr>
+    <td><b>How does <code>set_slo</code> express flow scope?</b></td>
+    <td><span class="path">app/mcp/src/tools.ts</span> <code>set_slo</code> (313&ndash;337) sets a band on <code>node.key</code> &mdash; it has no source&rarr;terminal notion. A flow-scoped lag SLO needs both endpoints. There <em>is</em> a flow-keyed surface already: <code>set_guarantee_slo</code> (340), but it is categorical.</td>
+    <td>Add an optional <code>{source, terminal}</code> to <code>set_slo</code> for the lag/end-to-end case (node-only stays the response SLO); reuse the guarantee-SLO's (source,&nbsp;terminal) serialisation. <b>Confirm</b> vs. a dedicated numeric flow-SLO tool.</td>
+  </tr>
+  <tr>
+    <td><b>Is the display commitment rule right?</b></td>
+    <td>The engine computes every node's view; the display must decide which to show continuously vs on demand (&sect;1, &sect;7 R3).</td>
+    <td>Default: full mean&nbsp;+&nbsp;percentiles continuously on requirement-bearing nodes and the currently selected node; every other node one hover/click away. This keeps the surface calm without hiding any computed number. <b>Confirm</b> that default (e.g. should a hovered node also commit, or only a selected one).</td>
+  </tr>
+  <tr>
+    <td><b>Is lag computed analytically or DES-only?</b></td>
+    <td>Lag must include async queue waits (retention/drain). The scalar pass can approximate a stable queue's wait (backlog / drain); a saturated or bursty queue's true wait is the DES's.</td>
+    <td>Scalar shows an analytic lag approximation live (like the queueing-aware mean); the DES gives the honest lag tail. Mirrors the existing mean/tail split. <b>Confirm</b> the approximation is wanted live, or lag should read <code>unknown</code> until a sim run.</td>
+  </tr>
+  <tr>
+    <td><b>Keep <code>realCumulativeLatency</code> at all?</b></td>
+    <td>Once the node SLO reads <code>responseLatency</code> and end-to-end is a flow SLO, the source&rarr;node accumulation has no verdict consumer &mdash; but it may still drive a display or the &rho;-cause chain.</td>
+    <td>Retire it from <em>judging</em>; keep it only if a non-SLO display genuinely needs it, else delete (no speculative code). <b>Decide</b> whether any surface still wants the origin-accumulated number.</td>
+  </tr>
+  <tr>
+    <td><b>When does true fork-join composition land, and is serial-now acceptable?</b></td>
+    <td>The suffix views compose downstream serially (sum); parallel-max remains a recorded idealization (&sect;4 limit, doc-15 §3). Because a view is a suffix of the real journey, it upgrades automatically when the DES models fork-join.</td>
+    <td>Ship serial composition now (exact for sequential, conservative otherwise), stated plainly on the surface; schedule true fork-join in the DES as its own item, at which point every node's tail sharpens with no per-node change. <b>Confirm</b> serial-now is an acceptable honest bound for v2.</td>
+  </tr>
+</table>
+
+<h2><span class="no">9</span>Non-goals</h2>
+<table>
+  <tr><td><b>No engine domain leakage</b></td><td>Response latency and the queue model stay in <em>content</em> (doc-15 §4 ADR); the engine remains domain-agnostic. v2 changes which content quantity the verdict reads, not where the computation lives.</td></tr>
+  <tr><td><b>No new solver</b></td><td>The scalar quantities already exist; the only new computation is the DES per-node response reservoir (R1). No MiniZinc/clingo change.</td></tr>
+  <tr><td><b>No slack budgets</b></td><td>The epsilon (&sect;5) is a boundary tolerance for float noise, not headroom on an SLO. A real miss still fails.</td></tr>
+  <tr><td><b>No engine watched-list</b></td><td>The engine computes a latency perspective for <em>every</em> node from one run &mdash; there is no "which nodes to watch" plumbing in the engine. The no-filler rule is purely a <em>display</em> concern (requirement-bearing + selected nodes continuous; the rest on demand). Nodes with no requirement still gain no <em>verdict</em> they were not asked for.</td></tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <span class="path">docs/design/latency-semantics-v2.html</span> · latency semantics v2 (owner-approved rethink) · grounded in <span class="path">content/sda/src/{queueing,verdict,registry,guarantee-slo,doc-model}.ts</span>, <span class="path">engine/solve/src/verdict/{check,tail}.ts</span>, <span class="path">engine/sim/src/des.ts</span>, <span class="path">engine/solver-contract/src/{bindings,harness/oracle}.ts</span>, <span class="path">app/{mcp,presenter}/src</span> · resolves doc-15 §5&ndash;6's deferred response-time-SLO decision · what is judged equals what is shown.
+</footer>
+</div>
+</body>
+</html>

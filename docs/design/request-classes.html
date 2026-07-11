@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request Classes — multi-commodity flows over a shared topology · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#10233a,#2b5f86);color:#fff;padding:56px 24px 44px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.92;max-width:740px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#183a56}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px;color:#1c4a6e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{background:#1d2330;color:#e7e4da;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:18px 0;font:13px/1.62 "Cascadia Code",Consolas,monospace;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  pre .c{color:#7f8ba3;font-style:italic}
+  pre .k{color:#6fb3ff}
+  pre .t{color:#8fe3c0}
+  pre .s{color:#e0b070}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:14.5px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#183a56;color:#fff;text-align:left;padding:10px 13px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center;overflow-x:auto}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.now{background:#e9f5f2;color:#0b6e6e}
+  .tag.p0{background:#fbe7e7;color:#a33}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .mono{font-family:"Cascadia Code",Consolas,monospace;font-size:13px}
+  ul{margin:0 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  .path{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Request Classes</h1>
+  <div class="sub">Multi-commodity flows over a shared topology &mdash; the owner-commissioned answer to <em>&ldquo;systems connected each-to-each, synchronously&rdquo;</em>. Today SDA computes over ONE implicit river: traffic flows along <b>every</b> wire. A full mesh (service A calls B for orders; B calls A for reports) then reads as a per-request cycle and is refused &mdash; even though reality is two <em>acyclic</em> classes of request that merely happen to share the same drawing. This document adds a <b>request class</b>: a named flow with its own origins and its own wire membership, so per-class acyclic paths run over a shared, possibly cyclic, topology. The default is a single implicit class containing every wire &mdash; so every existing design means exactly what it always did, at zero migration cost.</div>
+  <div class="meta">SDA design document · 2026-07-04 · request classes (multi-commodity flows) · status: for owner review — not started</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design &mdash; load, latency, cost, feasibility &mdash; against declared requirements, live on every edit. Underneath, SDA is a <b>domain-agnostic engine</b> that turns the drawing into a typed-property graph and a family of solvers, over which a <b>content pack</b> layers all cloud meaning as data. The engine propagates each quantity (throughput, latency, availability, cost&hellip;) along the wires with a per-key algebra, checks the result against declared bands, and &mdash; run backwards &mdash; optimizes, repairs, or explains. A separate discrete-event simulation (the DES) gives true percentiles over time. This document extends the <b>flow model</b>: it lets one topology carry several independent request flows, so a mesh whose drawing has cycles but whose <em>traffic</em> does not is computed honestly instead of being rejected.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>request class</b></td><td>a named flow: its own set of <em>origins</em> (nodes that inject traffic for the class) and its own <em>wire membership</em> (the edges the class actually traverses). One class's paths are acyclic even where the shared drawing is not. The <b>default</b> class contains every wire and every origin &mdash; exactly today's single river.</td></tr>
+  <tr><td style="white-space:nowrap"><b>flow / origin / terminal</b></td><td>a <b>flow</b> is a request's journey from an <em>origin</em> node to a <em>terminal</em> node along the wires. Today a design's flows are its connected components (<span class="path">content/sda/src/system.ts</span> <code>requestFlows</code>); a class refines this &mdash; several flows can share one component.</td></tr>
+  <tr><td style="white-space:nowrap"><b>multi-commodity flow</b></td><td>the standard name (from network optimisation) for several distinct commodities routed over one shared graph, each with its own sources/sinks, all sharing the edges' and nodes' finite capacity. A request class is exactly a commodity.</td></tr>
+  <tr><td style="white-space:nowrap"><b>SLO / band · verdict</b></td><td>an <b>SLO</b> is a declared requirement on one property of one place (e.g. latency &le; 200&nbsp;ms), internally a <em>band</em>. A <b>verdict</b> is the tool's honest read-back: <code>ok</code>&nbsp;/&nbsp;<code>warning</code>&nbsp;/&nbsp;<code>violation</code>&nbsp;/&nbsp;<code>unknown</code>. Uncertainty is a value, never a guess.</td></tr>
+  <tr><td style="white-space:nowrap"><b>flow key · &rho; · overflow</b></td><td>a <b>flow key</b> is a quantity that travels the wires and is reshaped by port transforms &mdash; today exactly one: <code>throughput</code> (<span class="path">content/sda/src/registry.ts</span> line&nbsp;118, <code>flow:&nbsp;true</code>). <b>&rho;</b> = offered load &divide; capacity; at &rho;&nbsp;&ge;&nbsp;1 a queue grows unbounded. <b>overflow</b> = offered &minus; served (the rejected rate).</td></tr>
+  <tr><td style="white-space:nowrap"><b>cell network</b></td><td>the engine's internal projection of the drawing: one <code>in&nbsp;/&nbsp;out&nbsp;/&nbsp;local</code> cell per (node,&nbsp;key), solved to a least fixpoint (<span class="path">engine/solve/src/network/build.ts</span>). The MiniZinc optimiser and the native solver both read the SAME cells; classes must extend the cells, not fork the math.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The workflow this serves — the each-to-each mesh</h2>
+<p class="lead">The owner named the case directly: real back-ends are wired <em>each-to-each</em>. An orders service calls an accounts service synchronously to place an order; the accounts service calls the orders service synchronously to build a report. On the canvas that is two wires, A&rarr;B and B&rarr;A. There is no cycle in the <em>traffic</em> &mdash; an order request never comes back to its own caller &mdash; but there is a cycle in the <em>drawing</em>. SDA today has exactly one notion of &ldquo;how load moves&rdquo;: it moves along <b>all</b> wires at once, as one river. So the drawing's cycle becomes a flow cycle, and the honest machinery refuses it.</p>
+<p>This is not a bug in the flow model; it is the flow model reaching the edge of what a single commodity can express. The fix the owner asked for is the standard one from network optimisation: stop pretending one river, and let the topology carry several <b>commodities</b> &mdash; here, <em>request classes</em> &mdash; each with its own origins and its own subset of wires, each acyclic on its own, all sharing the same physical nodes and their finite capacity. The name for the future extension was already reserved in the latency-semantics work (&sect;2 below); this document designs it.</p>
+<div class="callout"><b>The design center, stated as one sentence.</b> A class is a <em>named flow</em> = (its origins, its wire membership). Everything the engine already does &mdash; propagate a flow key along wires, cut at async edges, roll up latency/availability/cost, propagate guarantees, simulate percentiles &mdash; is repeated <em>once per class</em> over that class's wires, then composed at the shared nodes. The default is one implicit class over every wire, which is byte-for-byte today. The whole feature is <b>additive</b>: old designs are new designs with one class.</div>
+
+<h2><span class="no">2</span>The single river today — where it lives, and why the mesh is refused</h2>
+<p class="lead">To extend the flow model without breaking it, we first pin exactly how it works. Every claim here is verified against the named file and line.</p>
+
+<h3>2.1 One river: every wire carries the flow</h3>
+<table>
+  <tr><th>Fact</th><th>In the code today</th></tr>
+  <tr><td>The engine builds the incoming adjacency from <b>every</b> edge in the graph, indiscriminately &mdash; there is no notion of &ldquo;which flow&rdquo; an edge belongs to.</td><td><span class="path">engine/solve/src/network/build.ts</span> lines&nbsp;255&ndash;267: a single loop over <code>graph.edges</code> pushes each into <code>incoming</code>/<code>outgoing</code>.</td></tr>
+  <tr><td>A flow key's inflow is the fan-in of every incoming edge's transformed contribution: <code>in(N,K) = &Sigma;<sub>edges</sub> f(out(up,K))</code>; served <code>out(N,K) = combine(local, in)</code>.</td><td><code>flowInflow</code> (build.ts&nbsp;312&ndash;326) and the per-key assembly (build.ts&nbsp;373, 392&ndash;398). The async cut is a per-edge filter: <code>ups = incoming.filter(u =&gt; !(onAsyncEdge==='cut' &amp;&amp; u.async))</code> (build.ts&nbsp;364).</td></tr>
+  <tr><td><code>throughput</code> is the ONLY flow-flagged key; its algebra is <code>min</code> down a path, <code>sum</code> at a fan-in, carried across async.</td><td>registry.ts&nbsp;118: <code>aggregate:{ series:'min', fanIn:'sum', onAsyncEdge:'carry', flow:true }</code>. The offered load is <code>inflow(throughput)+self(originRps)</code>; overflow <code>= max(0, offered &minus; self(throughput))</code>, applied uniformly by <code>withOverflow</code> (<span class="path">content/sda/src/behaviors.ts</span> line&nbsp;62, 279).</td></tr>
+  <tr><td>A design is partitioned into flows by <b>connected component</b> &mdash; so a mesh is ONE flow with one source and one terminal, never two.</td><td><code>requestFlows</code> (system.ts&nbsp;89&ndash;113): union-find over the wires, one <code>{ids, source, terminal}</code> per component. The each-to-each mesh is a single component &rArr; a single flow.</td></tr>
+</table>
+
+<h3>2.2 Why the mesh is refused (three honest mechanisms, one root cause)</h3>
+<p>Because there is one river, an each-to-each pair is a genuine flow cycle, and three independent parts of the honest machinery react to it &mdash; none of them can express &ldquo;two acyclic classes&rdquo;:</p>
+<table>
+  <tr><th>Mechanism</th><th>What it does with the mesh today</th><th>Where</th></tr>
+  <tr><td><b>Search rejects</b> (optimize / repair / explain)</td><td>Both the incumbent MiniZinc compile and the native solver reject a cyclic dependency among the freed cells outright: <em>&ldquo;search over a cyclic flow is not supported&rdquo;</em>. The mesh cannot be optimized or repaired at all.</td><td>incumbent <code>hasCycle</code> (<span class="path">engine/solve/src/minizinc/search.ts</span> 209&ndash;211, 284); native <code>hasCycleAmongDerived</code> (<span class="path">engine/solver-contract/src/native/model.ts</span> 107&ndash;109, 177&ndash;214).</td></tr>
+  <tr><td><b>Latency folds cycle-guard</b> (degenerate, not rejected)</td><td>The response and cumulative-latency folds stop at a re-visited node and return its own term &mdash; so a mesh produces a <em>number</em>, but a silently truncated one that answers no real question.</td><td>queueing.ts <code>realCumulativeLatency</code> line&nbsp;159, <code>responseLatency</code> line&nbsp;199 (both: <code>if (onPath.has(id)) return own(id)</code>).</td></tr>
+  <tr><td><b>Guarantee walk cuts cycles</b> (per path, already)</td><td>Guarantee propagation already enumerates <em>simple</em> source&rarr;terminal paths, cutting a node it has revisited &mdash; so it is the one part of the engine that already thinks per-path rather than one-river.</td><td><code>enumerateFlowPaths</code> (<span class="path">engine/solve/src/guarantee/propagate.ts</span> 118&ndash;152), <code>propagateFlow</code> (163&ndash;165).</td></tr>
+</table>
+<div class="callout warn"><b>The honest read-back today is a contradiction the tool should not tolerate.</b> The scalar forward pass reaches <em>some</em> fixpoint on the mesh (a relay's <code>min(cap,&nbsp;&hellip;)</code> settles), the latency folds return truncated numbers, and search refuses entirely. Three surfaces, three different behaviours, one drawing &mdash; and none of them is the answer the architect wants, which is: <em>&ldquo;there are two request classes here; here is each one's load, latency and cost.&rdquo;</em> Request classes replace all three reactions with one correct one.</div>
+
+<div class="callout"><b>The pre-authorisation from latency-semantics v2.</b> The v2 latency design (<span class="path">docs/design/latency-semantics-v2.html</span> §4.4) already listed this exact topology &mdash; <em>&ldquo;full-mesh / any-to-any, each request using an acyclic subset&rdquo;</em> &mdash; and named the fix positively: <em>&ldquo;a well-defined response depends on WHICH request we mean: the perspectives are per-<b>request-class</b>&hellip; a multi-commodity (request-class) flow problem: one flow per class, each acyclic, sampled independently.&rdquo;</em> It scoped itself to a single commodity and deferred this document. Request classes are that deferred extension; when they land, v2's own suffix sampler (§6 here) &ldquo;runs once per class&rdquo; exactly as v2 predicted.</div>
+
+<figure>
+  <div class="svgc">
+  <svg width="840" height="300" viewBox="0 0 840 300" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker>
+    <marker id="or" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#b4530a"/></marker>
+    <marker id="rp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#0b6e6e"/></marker></defs>
+    <text x="20" y="22" font-size="13" font-weight="700" fill="#a33">TODAY — one river: A→B and B→A are a single flow cycle ⇒ refused / degenerate</text>
+    <rect x="70" y="60" width="120" height="48" rx="9" fill="#fbe7e7" stroke="#a33"/><text x="130" y="89" text-anchor="middle" font-size="12.5" font-weight="700">Orders (A)</text>
+    <rect x="300" y="60" width="120" height="48" rx="9" fill="#fbe7e7" stroke="#a33"/><text x="360" y="89" text-anchor="middle" font-size="12.5" font-weight="700">Accounts (B)</text>
+    <path d="M190 76 L298 76" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <path d="M300 92 L192 92" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="244" y="70" text-anchor="middle" font-size="10" fill="#4b5263">A→B</text>
+    <text x="244" y="108" text-anchor="middle" font-size="10" fill="#4b5263">B→A</text>
+    <text x="70" y="140" font-size="11.5" fill="#a33">the drawing has a cycle → search rejects; latency folds truncate; requestFlows sees ONE component</text>
+
+    <text x="450" y="22" font-size="13" font-weight="700" fill="#0b6e6e">WITH CLASSES — two acyclic commodities over the SAME two nodes</text>
+    <rect x="470" y="52" width="120" height="42" rx="9" fill="#fdf2e2" stroke="#b4530a"/><text x="530" y="78" text-anchor="middle" font-size="12" font-weight="700">Orders (A)</text>
+    <rect x="690" y="52" width="120" height="42" rx="9" fill="#fdf2e2" stroke="#b4530a"/><text x="750" y="78" text-anchor="middle" font-size="12" font-weight="700">Accounts (B)</text>
+    <path d="M590 73 L688 73" stroke="#b4530a" stroke-width="2" marker-end="url(#or)"/>
+    <text x="639" y="66" text-anchor="middle" font-size="10" fill="#b4530a">class “order”: A→B (acyclic)</text>
+    <rect x="470" y="150" width="120" height="42" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/><text x="530" y="176" text-anchor="middle" font-size="12" font-weight="700">Orders (A)</text>
+    <rect x="690" y="150" width="120" height="42" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/><text x="750" y="176" text-anchor="middle" font-size="12" font-weight="700">Accounts (B)</text>
+    <path d="M690 171 L592 171" stroke="#0b6e6e" stroke-width="2" marker-end="url(#rp)"/>
+    <text x="641" y="164" text-anchor="middle" font-size="10" fill="#0b6e6e">class “report”: B→A (acyclic)</text>
+    <text x="470" y="230" font-size="11.5" fill="#0b6e6e">each class is acyclic on its OWN wires; the shared topology stays a mesh — legal, computed per class</text>
+    <text x="470" y="252" font-size="11" fill="#4b5263">A and B are the SAME physical nodes in both — their capacity is shared across the two classes (§4.1)</text>
+  </svg>
+  </div>
+  <figcaption>The each-to-each mesh reads as a cycle under one river and is refused. Splitting the traffic into two named classes &mdash; &ldquo;order&rdquo; (A&rarr;B) and &ldquo;report&rdquo; (B&rarr;A) &mdash; makes each class acyclic while the drawing stays a mesh. The nodes are shared, so their capacity is contended (&sect;4.1); the paths are separate, so latency and guarantees are per class (&sect;4.2&ndash;4.3).</figcaption>
+</figure>
+
+<h2><span class="no">3</span>The model — a class is a named flow <span class="tag new">the meta-model addition</span></h2>
+<p class="lead">A request class is declared as data, in the same spirit as everything else in SDA: no code, references by id. It carries two facts and nothing more.</p>
+<pre><span class="c">// A request class — pure DATA, added to the design document (export schema bumps 3 → 4).</span>
+<span class="k">interface</span> <span class="t">RequestClass</span> {
+  <span class="k">readonly</span> id: string;                              <span class="c">// "order", "report" — the class's name on the canvas</span>
+  <span class="k">readonly</span> origins: <span class="k">readonly</span> { node: <span class="t">NodeId</span>; rps: number }[]; <span class="c">// where THIS class injects load (its per-class originRps)</span>
+  <span class="k">readonly</span> wires: <span class="k">readonly</span> <span class="t">EdgeId</span>[];               <span class="c">// the edges this class traverses (its membership)</span>
+}
+<span class="c">// Absent ⇒ the design has ONE implicit class over EVERY wire and every node's originRps — today, bit-for-bit.</span></pre>
+<table>
+  <tr><th>Property</th><th>Positive definition</th><th>Reduces to today when&hellip;</th></tr>
+  <tr>
+    <td><b>Default: one implicit class</b><br><span class="tag now">zero migration</span></td>
+    <td>A design with no declared classes has a single implicit class whose <code>wires</code> = all edges and whose <code>origins</code> = every node's existing <code>originRps</code> (registry.ts&nbsp;89). The cell network, the DES network and every verdict are then identical to today.</td>
+    <td>always &mdash; this is the whole design corpus as it stands.</td>
+  </tr>
+  <tr>
+    <td><b>Per-class acyclicity</b></td>
+    <td>Each class's wire membership, as a directed subgraph, must be acyclic. The engine's cycle guard (&sect;2.2) moves from &ldquo;the whole topology&rdquo; to &ldquo;each class's edge subset&rdquo;. A mesh is legal iff every class carves an acyclic slice of it.</td>
+    <td>a single class over an already-acyclic drawing &mdash; the guard fires on the same graph as today.</td>
+  </tr>
+  <tr>
+    <td><b>Shared nodes, separate paths</b></td>
+    <td>The classes overlap on <em>nodes</em> (the physical services are the same) and may overlap on <em>wires</em> (a shared DB edge can carry both order and report load). What differs per class is the <em>route</em> and the <em>origins</em>.</td>
+    <td>one class &mdash; every node is crossed by exactly one river, so &ldquo;shared&rdquo; is vacuous.</td>
+  </tr>
+</table>
+<div class="callout"><b>Why not derive classes automatically from reachability?</b> Tempting, and wrong: in a mesh, plain reachability from an origin cannot separate the two acyclic subsets &mdash; that ambiguity is the entire reason the mesh is hard. The class's <em>wire membership</em> is the minimum information that disambiguates it, so it is declared, not inferred. (An assist that <em>proposes</em> a membership from a chosen origin&rarr;terminal pair is a fine UX affordance &mdash; &sect;7 &mdash; but the truth of record is the declared set.)</div>
+
+<h2><span class="no">4</span>Per-class arithmetic — fold once per class, contend at the node</h2>
+<p class="lead">This is the heart of the design and the source of its three hardest tensions. The rule is simple to state and subtle to honour: <b>load composes per class along the class's wires; capacity is shared and contended at the node; latency, response, lag and guarantees are read per class along the class's path.</b> Everything is a per-class repeat of an existing fold, joined at the shared node by one new term.</p>
+
+<h3>4.1 Load composition — per-class flow cells, one shared-capacity split</h3>
+<p>Today the flow key lives in cells <code>in:N:K</code>, <code>out:N:K</code>, <code>local:N:K</code> (build.ts&nbsp;40&ndash;44). The generalisation indexes the <em>flow</em> cells by class &mdash; <code>in:N:K:C</code>, <code>out:N:K:C</code> &mdash; while capacity, cost and every non-flow key stay unindexed (one physical node). Per class, the inflow fold is <b>exactly today's</b> <code>flowInflow</code>, but summed only over that class's edges:</p>
+<pre><span class="c">// Per-class offered load — today's flowInflow (build.ts 312–326), restricted to the class's wires E_C:</span>
+offered(N, C) = inflow(N, throughput, C) + originRps(N, C)          <span class="c">// class C's arrivals at N</span>
+             = &Sigma;<sub>e ∈ E_C into N</sub> f_out(e) · out(up(e), throughput, C)   <span class="c">// grouped by in-port, f_in per port — unchanged</span>
+
+<span class="c">// THE ONE NEW TERM — the shared node contends across classes (processor-sharing default):</span>
+totalOffered(N) = &Sigma;<sub>C</sub> offered(N, C)                              <span class="c">// all classes queue at the SAME servers</span>
+served(N, C)    = offered(N, C) · min(1, capacity(N) / totalOffered(N))  <span class="c">// each class's share of a shared ceiling</span>
+overflow(N, C)  = offered(N, C) − served(N, C)                        <span class="c">// per-class rejected rate</span>
+overflow(N)     = &Sigma;<sub>C</sub> overflow(N, C) = max(0, totalOffered(N) − capacity(N))  <span class="c">// = today's overflow, exactly</span></pre>
+<p>Two properties make this the honest default and keep it behaviour-preserving:</p>
+<ul>
+  <li><b>Unsaturated is exact and separable.</b> When <code>totalOffered(N) &le; capacity(N)</code> &mdash; the design target that the search's &rho;-headroom already enforces &mdash; the split factor is 1, so <code>served(N,C) = offered(N,C)</code>: each class passes through untouched, the fold is fully separable per class, and there is <em>no</em> cross-class coupling. This is the regime almost every real design sits in.</li>
+  <li><b>Saturated is processor-sharing, and it reduces correctly.</b> When the node is overloaded, its finite capacity is split in proportion to each class's offered load &mdash; the M/M/c processor-sharing / PASTA default, the honest choice when no priority is declared. With one class the factor cancels and <code>served = min(capacity, offered)</code> &mdash; <b>exactly today's</b> <code>out = min(local, in)</code> and <code>overflow = max(0, offered − cap)</code> (behaviors.ts&nbsp;62). Total overflow is class-count-independent.</li>
+</ul>
+<figure>
+  <div class="svgc">
+  <svg width="840" height="300" viewBox="0 0 840 300" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#b4530a"/></marker>
+    <marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#0b6e6e"/></marker>
+    <marker id="c3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <text x="20" y="22" font-size="13" font-weight="700" fill="#183a56">Load composes PER CLASS along E_C; capacity is SHARED and contended at the node</text>
+    <text x="30" y="70" font-size="11.5" font-weight="600" fill="#b4530a">class “order”</text>
+    <rect x="30" y="80" width="120" height="34" rx="7" fill="#fdf2e2" stroke="#b4530a"/><text x="90" y="102" text-anchor="middle" font-size="11">offered(N, order)</text>
+    <text x="30" y="150" font-size="11.5" font-weight="600" fill="#0b6e6e">class “report”</text>
+    <rect x="30" y="160" width="120" height="34" rx="7" fill="#e9f5f2" stroke="#0b6e6e"/><text x="90" y="182" text-anchor="middle" font-size="11">offered(N, report)</text>
+    <path d="M150 97 Q280 100 360 122" fill="none" stroke="#b4530a" stroke-width="1.8" marker-end="url(#c1)"/>
+    <path d="M150 177 Q280 172 360 150" fill="none" stroke="#0b6e6e" stroke-width="1.8" marker-end="url(#c2)"/>
+    <rect x="365" y="110" width="150" height="56" rx="9" fill="#eef4ff" stroke="#3b6fd4" stroke-width="2"/><text x="440" y="132" text-anchor="middle" font-size="12" font-weight="700">node N</text><text x="440" y="150" text-anchor="middle" font-size="10" fill="#4b5263">one capacity(N) = c·μ</text><text x="440" y="162" text-anchor="middle" font-size="9.5" fill="#4b5263">serves Σ offered</text>
+    <text x="440" y="196" text-anchor="middle" font-size="10.5" fill="#183a56">totalOffered(N) = Σ_C offered(N,C)   ·   ρ = totalOffered / capacity</text>
+    <path d="M515 128 Q590 118 640 100" fill="none" stroke="#b4530a" stroke-width="1.8" marker-end="url(#c1)"/>
+    <path d="M515 150 Q590 162 640 178" fill="none" stroke="#0b6e6e" stroke-width="1.8" marker-end="url(#c2)"/>
+    <rect x="645" y="80" width="170" height="40" rx="7" fill="#fdf2e2" stroke="#b4530a"/><text x="730" y="96" text-anchor="middle" font-size="10.5">served(N,order) =</text><text x="730" y="112" text-anchor="middle" font-size="10">offered·min(1, cap/total)</text>
+    <rect x="645" y="160" width="170" height="40" rx="7" fill="#e9f5f2" stroke="#0b6e6e"/><text x="730" y="176" text-anchor="middle" font-size="10.5">served(N,report) =</text><text x="730" y="192" text-anchor="middle" font-size="10">offered·min(1, cap/total)</text>
+    <text x="30" y="238" font-size="11.5" fill="#0b6e6e"><tspan font-weight="700">Unsaturated (total ≤ cap):</tspan> factor = 1 ⇒ served = offered per class — fully separable, exactly today.</text>
+    <text x="30" y="260" font-size="11.5" fill="#a33"><tspan font-weight="700">Saturated (total &gt; cap):</tspan> proportional split; Σ_C overflow(N,C) = max(0, total − cap) = today’s single-river overflow.</text>
+    <text x="30" y="282" font-size="11" fill="#4b5263">With ONE class the factor cancels: served = min(cap, offered), overflow = max(0, offered − cap) — bit-for-bit behaviors.ts.</text>
+  </svg>
+  </div>
+  <figcaption>The one new term. Each class's offered load composes along its own wires; the shared node sums them, queues on the aggregate (&rho; drives the class-blind per-hop wait), and &mdash; only when saturated &mdash; splits its finite capacity proportionally. Unsaturated, the split is the identity and the per-class folds are independent; that separable region is where the search's headroom keeps every candidate design.</figcaption>
+</figure>
+<div class="callout warn"><b>Tension #1 (the hardest): the saturated split is non-separable, which threatens per-class monotonicity.</b> Raising class C's load lowers the served rate of <em>other</em> classes at a shared saturated node (they contend). So per-class served throughput is <b>not</b> monotone in cross-class load once <code>totalOffered &gt; capacity</code> &mdash; and monotonicity is precisely the property the native solver's branch-and-bound relies on (&sect;5). The resolution is a scope, honestly drawn: the coupling term is <em>inactive</em> in the unsaturated region, which is where the search's headroom constraint keeps every candidate design; the saturated split is a boundary the scalar reports as a proportional estimate and the DES measures as truth (like every other queue-dynamics quantity). Priority classes (weighted, not proportional) are a named future extension, not R1 &mdash; §9.</div>
+
+<h3>4.2 Latency, response &amp; lag — one perspective per class crossing a node</h3>
+<p>Latency semantics v2 already established that a node has <em>one response perspective</em>, and that a node crossed by more than one request has <em>one perspective per request-class</em> (v2 §4.4). Request classes make that literal. The split is clean because a shared queue's per-hop wait is class-blind while the path composition is per class:</p>
+<table>
+  <tr><th>Quantity</th><th>Per-class definition</th><th>Generalises</th></tr>
+  <tr>
+    <td><b>Per-hop sojourn</b> (the node's own term)</td>
+    <td><em>Shared</em>, not per class: the M/M/c wait is driven by <code>totalOffered(N)</code> vs capacity &mdash; all classes queue at the same servers, so they feel the same mean wait (one service time per node in R1). <code>ownLatency(N)</code> is computed once from the aggregate &rho;.</td>
+    <td><code>nodeQueues</code> (queueing.ts&nbsp;102&ndash;135) &mdash; feed it <code>totalOffered</code> instead of the single-river offered.</td>
+  </tr>
+  <tr>
+    <td><b>Response latency</b><br><span class="tag now">v2 anchor, per class</span></td>
+    <td><code>response(N,C) = ownLatency(N) + combine<sub>C</sub>(response of N's SYNC children ON class C's wires)</code>. The suffix is a class repeat of v2's fold: same async cut, same <code>latencyComposition</code> knob, restricted to <code>E_C</code>. A node crossed by both classes has <code>response(N,order)</code> and <code>response(N,report)</code> &mdash; two numbers, two perspectives.</td>
+    <td><code>responseLatency</code> (queueing.ts&nbsp;182&ndash;210): the same leaves-up fold, per class over its successor subset.</td>
+  </tr>
+  <tr>
+    <td><b>Flow-scoped lag</b> (async-inclusive)</td>
+    <td>The mean journey from a class's source to a chosen terminal along <code>E_C</code>, including async queue waits &mdash; the CDC/replication question, now unambiguous because the class names the path.</td>
+    <td><code>lagLowerBoundMs</code> (queueing.ts&nbsp;225&ndash;263): Dijkstra restricted to the class's edges.</td>
+  </tr>
+  <tr>
+    <td><b>Cumulative (source&rarr;node) latency</b></td>
+    <td>Per class, the max over the class's own predecessors &mdash; the &ldquo;which origin?&rdquo; ambiguity v2 flagged dissolves, because the class names the origin.</td>
+    <td><code>realCumulativeLatency</code> (queueing.ts&nbsp;145&ndash;171): the forward fold over <code>E_C</code>.</td>
+  </tr>
+</table>
+<div class="callout"><b>Tension #2, resolved: acyclicity is a per-class property, so the cycle guard MOVES rather than loosens.</b> Under one river the guard sits on the whole topology (search rejects any cycle; the folds truncate at a revisit). Per class, the guard runs on <code>E_C</code>: a class whose <em>own</em> path cycles (A&rarr;B&rarr;A within one class &mdash; a synchronous self-wait) is still refused, honestly, exactly as v2 §4.4 keeps refusing it &mdash; there is nothing finite to measure. What becomes legal is only the case where every class is individually acyclic. The refusal does not weaken; it re-targets from the drawing to the commodity.</div>
+
+<h3>4.3 Guarantees — the lattice walk already follows class paths</h3>
+<p>Guarantee propagation is the part of the engine that already thinks per-path: <code>enumerateFlowPaths</code> walks <em>simple</em> source&rarr;terminal paths and cuts revisited nodes (propagate.ts&nbsp;118&ndash;152), and <code>propagateDimension</code> meets tokens along each (46&ndash;63). Per class, the only change is <b>which edges the walker may traverse</b>: restrict <code>enumerateFlowPaths</code> to <code>E_C</code> and run it from the class's origins. The lattice meet, the first-drop root-cause attribution and the &ldquo;touched-unknown &rArr; unknown&rdquo; honesty are all unchanged &mdash; they were already per-flow. A per-class guarantee requirement (&ldquo;the order class must stay read-your-writes end to end&rdquo;) is judged on the order class's paths alone, and its root-cause hop is named on the order class's wires.</p>
+
+<h2><span class="no">5</span>Solver implications — honestly <span class="tag new">size · monotonicity · the oracle</span></h2>
+<p class="lead">Classes touch the numeric core, so the solver story must be told without hand-waving: how big the model grows, which assumptions survive, and what the differential oracle must gain <em>before</em> the native solver is trusted on a multi-class design.</p>
+
+<h3>5.1 Size — cells &times; classes, but only for flow keys</h3>
+<p>Only the flow key's cells gain a class index. A design with <code>|N|</code> nodes, one flow key and <code>|C|</code> classes grows its <em>flow</em> cells from <code>O(|N|)</code> to <code>O(|N|&middot;|C|)</code>; every non-flow key (latency, availability, cost, the pool/queue/limit keys &mdash; the large majority of the registry) stays single. The fixpoint is still one dependency-ordered sweep per acyclic class-slice (build.ts&nbsp;197&ndash;233), so evaluate stays within the &lt;16&nbsp;ms hot-path budget for realistic class counts. The class count is the growth axis to bound (a sanity cap &mdash; &sect;8), not the node count.</p>
+
+<h3>5.2 Monotonicity — preserved per class in the headroom regime, lost at a shared saturated node</h3>
+<p>The native solver (<span class="path">engine/solver-contract/src/native/model.ts</span>) is exact because, after freeing the tunables, every cell is a deterministic acyclic function of the knob vector, and the capacity/flow family is monotone &mdash; the property the oracle's generator deliberately keeps its designs inside (<span class="path">engine/solver-contract/src/harness/generator.ts</span> 137&ndash;139: <em>&ldquo;every axis except declined-* stays INSIDE the monotone capacity/flow class, so the native solver and the incumbent MUST still agree&rdquo;</em>). Per class, each class's fold is the same monotone <code>min/sum</code> &mdash; <b>monotone per class</b>. The one place it breaks is the shared saturated split of &sect;4.1: <code>served(N,C)</code> decreases in a <em>sibling</em> class's load, a non-separable coupling that lands multi-class-under-saturation in the same &ldquo;outside the monotone class&rdquo; category as the existing <code>declined-*</code> axes. In the unsaturated region the search's &rho;-headroom constraint enforces (<code>inflow &le; factor&middot;capacity</code>, the <code>Headroom</code> request field), the coupling is inactive and per-class monotonicity holds &mdash; so optimize/repair remain exact where they search.</p>
+
+<div class="callout warn"><b>Tension #3 &mdash; the headroom lesson, stated so it is not re-learned the hard way.</b> The differential oracle certifies the native solver <em>only over what its generator produces</em>. TASK-79's suite is trustworthy precisely because its coverage axes were made explicit and every axis's monotonicity was pinned; an unexercised structure can pass the whole green suite and still be wrong. A multi-class design &mdash; especially one with a shared <em>saturated</em> node, where per-class monotonicity fails &mdash; is exactly such an unexercised structure today. <b>Therefore the oracle harness must grow a CLASS AXIS &mdash; generating multi-class designs, including shared-saturation contention &mdash; and that axis must be green (native agrees with the MiniZinc referee, or the case is an honest <code>declined-*</code>) BEFORE the native solver is ever bound for a multi-class design.</b> The generator's axis list (generator.ts&nbsp;141&ndash;152) is the exact seam to extend; do not switch the runtime solver on classes until the axis exists and passes. This is the &ldquo;gaps are the goal&rdquo; discipline applied to a new structural dimension.</div>
+
+<h3>5.3 MiniZinc emission — the same per-class cells, one linearisation caveat</h3>
+<p>The MiniZinc projector emits a <code>var</code> + equality per non-constant cell (<span class="path">engine/solve/src/minizinc/search.ts</span> compile 146&ndash;254); indexing the flow cells by class multiplies the <code>var</code>s by <code>|C|</code> but changes nothing structural &mdash; each per-class equality is the same arithmetic. The single caveat is the saturated split's division by <code>totalOffered</code>: in the unsaturated region the search stays in (headroom), the factor is 1 and the constraint is linear; the saturated proportional split is non-linear and is <em>not</em> emitted as a forward equality &mdash; it is treated like tail latency and overflow-under-load: a DES-measured truth, with the scalar carrying the proportional estimate for display. This keeps the emitter linear where it must be and honest where it cannot.</p>
+
+<h2><span class="no">6</span>The DES — tag jobs with class, key reservoirs by (node, class) <span class="tag new">per-class time truth</span></h2>
+<p class="lead">The simulator already forks a request at fan-out, tags forks with retry generation, records a per-node response suffix and per-lineage lag stamps. Classes ride on the same machinery: a job carries its class; routing follows the class's edges; the response and lag reservoirs gain a class key.</p>
+<table>
+  <tr><th>DES concern</th><th>Today</th><th>Per class</th></tr>
+  <tr>
+    <td><b>Routing</b></td>
+    <td><code>toQueueingNetwork</code> builds route edges from <b>every</b> graph edge, fan-out at full rate (<span class="path">content/sda/src/sim.ts</span> 171&ndash;191; async flag at 185).</td>
+    <td>Build the route table <em>per class</em> from <code>E_C</code>; a job tagged class C only follows class-C route edges. Arrivals are the per-class origins. Async cut and multiplicity transforms are unchanged, per class.</td>
+  </tr>
+  <tr>
+    <td><b>Response reservoirs</b></td>
+    <td>One bounded reservoir per station (<code>respReservoir</code>, cap 8192), the suffix frame closing on synchronous-subtree completion (<span class="path">engine/sim/src/des.ts</span> 156&ndash;197, 211).</td>
+    <td>Key the reservoir by <code>(station, class)</code>. A node crossed by two classes keeps two reservoirs &mdash; the twin of the scalar's two <code>response(N,C)</code>. Memory stays trivial: cap &times; stations &times; classes.</td>
+  </tr>
+  <tr>
+    <td><b>Lag pairs</b></td>
+    <td>Per-lineage stamps at declared source stations, recorded at terminals (des.ts&nbsp;138&ndash;143, 234&ndash;263).</td>
+    <td>Lag pairs become per class (a class names its source&rarr;terminal); the stamp map already rides the lineage, so tagging it with class is additive.</td>
+  </tr>
+</table>
+<div class="callout"><b>Open display question surfaced by keying: what does a node crossed by many classes SHOW?</b> The engine holds a response mean+tail per (node, class). The display must choose: per-class chips (one row per class on the node card), an aggregate badge (the worst class), or a class-lens filter that shows only the selected class's number. The lean (&sect;7) is a class lens by default plus per-class chips on the selected / requirement-bearing node &mdash; the same &ldquo;compute all, present selectively&rdquo; no-filler rule v2 established. Confirm with the owner (&sect;10).</div>
+
+<h2><span class="no">7</span>UX &amp; MCP — declare a class, colour its river <span class="tag new">surfaces</span></h2>
+<p class="lead">The architect must be able to say &ldquo;these wires are the order class, those are the report class&rdquo; with the least possible ceremony, and read each class back distinctly. The interaction is a <b>class lens</b>: a filter over the canvas that colours each class's river and scopes the numbers shown.</p>
+<ul>
+  <li><b>Declaring membership.</b> A class is <code>{id, origins, wires}</code>. The primary gesture: pick a class in the lens, then click wires to toggle their membership (or draw an origin&rarr;terminal path that the tool proposes as a membership, which the architect accepts/edits). A wire may belong to several classes (a shared DB edge serves both) &mdash; membership is a set, not a partition.</li>
+  <li><b>Per-class origins.</b> A class's origins are declared on the class, defaulting from the nodes' existing <code>originRps</code>. This reconciles with today's node-local <code>originRps</code>: the implicit class inherits each node's full <code>originRps</code>; when the architect splits classes, each class takes a share and the node's total is their sum (a validation, not a new field on the node).</li>
+  <li><b>The default view.</b> No classes declared &rArr; the canvas shows the single implicit river, identical to today. One or more declared &rArr; the lens defaults to &ldquo;all classes&rdquo; (each river in its own colour) with a picker to isolate one; the selected node's card shows per-class chips.</li>
+</ul>
+<h3>7.1 MCP — least input, self-correcting</h3>
+<pre><span class="c">// Additive tools; omitting classes leaves every existing tool behaving exactly as today.</span>
+<span class="t">declare_class</span>({ id: <span class="s">"order"</span>, origins: [{ node: <span class="s">"orders_svc"</span>, rps: 800 }], wires: [<span class="s">"w3"</span>, <span class="s">"w5"</span>] })
+<span class="t">set_class_membership</span>({ class: <span class="s">"report"</span>, wire: <span class="s">"w7"</span>, member: <span class="k">true</span> })   <span class="c">// toggle one wire</span>
+<span class="c">// existing tools gain an OPTIONAL class scope; absent ⇒ the implicit "all" class (today's behaviour):</span>
+<span class="t">set_slo</span>({ node: <span class="s">"accounts_svc"</span>, key: <span class="s">"latency"</span>, max: 200, <span class="s">class</span>: <span class="s">"order"</span> })  <span class="c">// per-class latency SLO</span>
+<span class="t">evaluate</span>({ <span class="s">class</span>: <span class="s">"report"</span> })                                       <span class="c">// read the report river's roll-up</span></pre>
+<p>The tool self-corrects like the rest of the MCP surface: an unknown class id lists the declared classes; a wire id that is not an edge lists the edges; declaring a class whose membership cycles names the offending back-edge and refuses <em>that class</em> (not the design). The <code>set_guarantee_slo</code> / <code>set_lag_slo</code> flow tools (already source&rarr;terminal keyed, tools.ts&nbsp;360&ndash;417) gain the same optional class scope.</p>
+
+<h2><span class="no">8</span>Boundaries &amp; non-goals</h2>
+<table>
+  <tr><td><b>A class whose own path cycles stays refused</b></td><td>Per-class acyclicity is enforced on <code>E_C</code> (&sect;4.2). A synchronous self-wait inside one class has no finite response &mdash; honestly rejected, as v2 §4.4 already rejects it. Classes legalise a cyclic <em>drawing</em>, never a cyclic <em>commodity</em>.</td></tr>
+  <tr><td><b>Class-count sanity</b></td><td>Cells and reservoirs grow linearly in <code>|C|</code> (&sect;5.1, &sect;6). A soft cap with a warning keeps the hot path fast and the canvas legible; beyond it the tool asks whether the design really has that many distinct commodities.</td></tr>
+  <tr><td><b>Priority / weighted contention is future</b></td><td>R1's shared-node split is proportional processor-sharing (&sect;4.1). Weighted priority classes (a gold class pre-empting a bronze one) are a named extension &mdash; they change only the split weights, not the model shape.</td></tr>
+  <tr><td><b>Per-class service time is future</b></td><td>R1 keeps one service time per node, so the per-hop wait is class-blind (&sect;4.2). Different work per class at a shared node (a heavier report query) is a refinement to the M/M/c station, deferred.</td></tr>
+  <tr><td><b>Synthesize / enumerate stay class-agnostic</b></td><td>clingo enumerates <em>topologies</em> (structure); classes are a <em>load</em> overlay on a fixed topology. <code>synthesize()</code> evaluates each enumerated topology class-aware; enumerate itself is unchanged &mdash; it builds the graph, classes describe the traffic over it.</td></tr>
+  <tr><td><b>No engine domain leakage</b></td><td>A class is opaque ids (a class id, node ids, edge ids) &mdash; the engine gains a per-class index on flow cells and a per-class walk; it still knows nothing of orders, reports, or AWS. The cloud meaning stays content.</td></tr>
+</table>
+
+<h2><span class="no">9</span>Build plan — R1 &rarr; R5, each gate independently green</h2>
+<p class="lead">Sequenced so the additive default is proven byte-identical first, the per-class reads land before the solver touches them, and the native solver is gated on the oracle's new axis.</p>
+<table>
+  <tr><th>Release</th><th>Scope</th><th>Gate (done when)</th></tr>
+  <tr>
+    <td><b>R1 · model + cell network</b><br><span class="tag new">the additive core</span></td>
+    <td>Add <code>RequestClass</code> as data (export schema 3&rarr;4) with the implicit default. Index flow cells by class in <code>buildNetwork</code>; add the shared-capacity split (&sect;4.1). Move the cycle guard to per-class <code>E_C</code>.</td>
+    <td>every existing design (one implicit class) evaluates <b>byte-for-byte identical</b> to today (golden pin); a two-class mesh evaluates without rejection and its total overflow equals the single-river overflow.</td>
+  </tr>
+  <tr>
+    <td><b>R2 · per-class verdicts</b><br><span class="tag now">latency · lag · guarantees</span></td>
+    <td>Per-class <code>responseLatency</code> / <code>realCumulativeLatency</code> / <code>lagLowerBoundMs</code> over <code>E_C</code>; per-class guarantee walk (restrict <code>enumerateFlowPaths</code>). Per-class SLOs.</td>
+    <td>the v2 §4.4 full-mesh row is supported: each class reads its own latency/lag/guarantee verdict; the differential per-class mean tracks the DES (R3) within tolerance on unsaturated designs.</td>
+  </tr>
+  <tr>
+    <td><b>R3 · DES per class</b><br><span class="tag new">time truth</span></td>
+    <td>Tag jobs with class; per-class routing from <code>E_C</code>; reservoirs keyed <code>(station, class)</code>; per-class lag pairs (&sect;6).</td>
+    <td>per-class DES mean tracks the scalar <code>response(N,C)</code>; a single-class run is bit-for-bit the pre-class simulator.</td>
+  </tr>
+  <tr>
+    <td><b>R4 · solver</b><br><span class="tag p0">gated on the oracle</span></td>
+    <td>Add the generator <b>CLASS AXIS</b> (multi-class incl. shared saturation); certify per-class monotonicity or mark honest <code>declined-*</code>. Per-class native model + MiniZinc emission (&sect;5).</td>
+    <td>the class axis is green (native agrees with the MiniZinc referee, or declines honestly) <b>before</b> the native solver is bound for any multi-class design.</td>
+  </tr>
+  <tr>
+    <td><b>R5 · surfaces</b><br><span class="tag now">make it visible</span></td>
+    <td>The class lens (per-wire membership, per-class origins, per-river colour), per-class chips on the selected/requirement-bearing node, MCP class tools (&sect;7).</td>
+    <td>an architect declares the mesh's two classes, colours each river, and reads each class's load/latency/cost distinctly; the generated design doc reports per-class flows.</td>
+  </tr>
+</table>
+
+<h2><span class="no">10</span>Open questions &amp; design tensions for the owner</h2>
+<table>
+  <tr><th>Question</th><th>Where it comes from</th><th>Proposed lean</th></tr>
+  <tr>
+    <td><b>Can a wire belong to many classes?</b></td>
+    <td>A shared DB edge realistically serves both the order and the report class (&sect;3, &sect;7).</td>
+    <td><b>Yes</b> &mdash; membership is a set, not a partition. Almost certainly correct; confirm there is no case where a wire must be exclusive to one class.</td>
+  </tr>
+  <tr>
+    <td><b>Are origins per class, and how do they reconcile with node <code>originRps</code>?</b></td>
+    <td>Today <code>originRps</code> is node-local (registry.ts&nbsp;89); a class needs its own injected rate.</td>
+    <td><b>Yes, per class.</b> The implicit class inherits each node's full <code>originRps</code>; splitting into classes apportions it, validated so the classes' shares at a node sum to the node's total. Confirm this reconciliation vs. moving <code>originRps</code> entirely onto classes.</td>
+  </tr>
+  <tr>
+    <td><b>Shared saturated node: proportional processor-sharing, or priority?</b></td>
+    <td>The one non-separable term (&sect;4.1) and the monotonicity break (&sect;5.2).</td>
+    <td><b>Proportional (PS)</b> for R1 &mdash; the honest no-priority default that reduces to today for one class. Weighted priority is a later extension. Confirm PS is the right R1 semantics.</td>
+  </tr>
+  <tr>
+    <td><b>Display for a node crossed by many classes?</b></td>
+    <td>The engine holds a value per (node, class); the display must choose (&sect;6).</td>
+    <td><b>Class lens</b> by default (isolate one river) + per-class chips on the selected / requirement-bearing node. Confirm vs. an always-aggregate badge.</td>
+  </tr>
+  <tr>
+    <td><b>How does a class declare its terminal for lag / end-to-end?</b></td>
+    <td>Lag and end-to-end are source&rarr;terminal (queueing.ts, tools.ts&nbsp;360&ndash;417); a class has origins but its terminal may be implicit.</td>
+    <td>Derive the class terminal as the deepest sink on <code>E_C</code> (per-class <code>requestFlows</code>), overridable. Confirm auto-derive vs. always-explicit.</td>
+  </tr>
+  <tr>
+    <td><b>Class-count cap?</b></td>
+    <td>Cells &times; classes and reservoir growth (&sect;5.1, &sect;8).</td>
+    <td>A soft cap with a warning (a real design rarely has many truly distinct commodities). Confirm the number, or leave uncapped with a perf note.</td>
+  </tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <span class="path">docs/design/request-classes.html</span> · request classes (multi-commodity flows) · the owner-commissioned answer to each-to-each synchronous systems · grounded in <span class="path">engine/solve/src/network/build.ts</span>, <span class="path">content/sda/src/{registry,behaviors,queueing,system,sim}.ts</span>, <span class="path">engine/solve/src/guarantee/propagate.ts</span>, <span class="path">engine/solver-contract/src/{native/model,harness/generator}.ts</span>, <span class="path">engine/sim/src/des.ts</span> · realises the request-class extension named in <span class="path">docs/design/latency-semantics-v2.html</span> §4.4 · one river per class · the default class is today, at zero cost.
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design Document v2 — the generated deliverable, grown up · SDA Design</title>
+<style>
+  :root{
+    --ink:#1a1d23; --ink2:#4b5263; --paper:#fbfaf7; --card:#ffffff;
+    --accent:#0b6e6e; --accent2:#b4530a; --line:#e5e1d8; --ok:#176b37; --warn:#a33; --code:#f2f0ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 "Georgia","Charter",'Times New Roman',serif}
+  header{background:linear-gradient(135deg,#0d2b4a,#2563a8);color:#fff;padding:56px 24px 44px}
+  .w{max-width:880px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px;letter-spacing:-.01em}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.9;max-width:680px}
+  .meta{font:12px/1.4 "Segoe UI",system-ui,sans-serif;opacity:.7;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0d2b4a}
+  h2 .no{color:var(--accent2);margin-right:10px;font-variant-numeric:tabular-nums}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:var(--card)}
+  th{background:#0d2b4a;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",system-ui,sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center}
+  .prov{display:inline-block;font:600 11px/1 "Segoe UI",sans-serif;padding:3px 8px;border-radius:999px}
+  .src{background:#e2f2e8;color:#176b37} .est{background:#fdf2e2;color:#8a5a00} .usr{background:#e8eefc;color:#2c4a9a} .def{background:#efede7;color:#6b6659}
+  footer{margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2)}
+</style>
+</head>
+<body>
+<header>
+  <div class="w">
+    <h1>Design Document v2 — the deliverable, grown up</h1>
+    <div class="sub">SDA already verifies architectures; this makes it AUTHOR the document a senior architect would hand to a review board — computed, assumption-honest, and beautiful — as a single self-contained HTML file.</div>
+    <div class="meta">SDA design document · 2026-07-03 · status: for owner review</div>
+  </div>
+</header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas — services, databases, queues, connected by wires — and the tool <em>computes</em> that design: each component's load, latency, availability and cost, checked against declared requirements. One of its features exports a <b>design document</b> — the written deliverable an architect hands to reviewers. Today that export is a modest Markdown file; this document designs its grown-up successor.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style='white-space:nowrap'><b>verified model</b></td><td>the canvas design plus everything the engines computed about it — the single source every sentence of the generated document must come from.</td></tr>
+  <tr><td style='white-space:nowrap'><b>assumption</b></td><td>any input number the computation rests on: a declared traffic level, a timeout, a cache-hit ratio. Mature engineering documents list them explicitly, with their origin.</td></tr>
+  <tr><td style='white-space:nowrap'><b>provenance</b></td><td>where a number came from: an official document, an estimate, the architect's own hand, or a catalog default.</td></tr>
+  <tr><td style='white-space:nowrap'><b>C4 container view</b></td><td>an industry-standard diagram style showing a system's deployable pieces and the connections between them.</td></tr>
+  <tr><td style='white-space:nowrap'><b>DES / simulation</b></td><td>SDA's discrete-event simulation — replays the system over time to obtain latency percentiles, retry behavior and failure rates that averages cannot give.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>Why, and why now</h2>
+<p class="lead">Two reasons. First, our own honest assessment: SDA verifies designs excellently but barely <em>delivers</em> — architects are judged by documents, not canvases. Second, an unfair advantage no competitor has: hand-written design documents <b>drift into fiction</b> the week after they're written; a document generated as a pure function of the verified model is true by construction, every number computed, every assumption carrying its origin.</p>
+<p>Industry research (Google's design-doc culture, the arc42 template, RFC practice at HashiCorp/Twitter and peers) converges on a canon of sections — summary, context, goals and explicit non-goals, requirements, an <b>assumptions register</b>, architecture views, detailed design, reliability, cost, <b>alternatives considered</b>, risks and open questions. The two hallmarks of a production-grade document are exactly the two we can now generate better than a human: the assumptions register (we know every knob and its provenance) and alternatives considered (we can <em>compute</em> the ranked alternatives, not recall them).</p>
+
+<h2><span class="no">2</span>The document, section by section</h2>
+<table>
+  <tr><th>Section</th><th>Filled from</th><th>Notes</th></tr>
+  <tr><td>1 · Summary</td><td>flows + verdicts</td><td>one paragraph: what the system is, its load, whether it meets its requirements, headline cost</td></tr>
+  <tr><td>2 · Requirements (SLOs)</td><td>declared SLOs + verdicts</td><td>each requirement with its computed judgment: met / violated / unknown-with-reason</td></tr>
+  <tr><td>3 · <b>Assumptions &amp; parameters register</b></td><td>every input the numbers rest on</td><td>the owner's ask, and the heart of v2 — see §3</td></tr>
+  <tr><td>4 · Architecture (C4 container view)</td><td>canvas layout</td><td>a real SVG diagram: nodes, protocols on wires, traffic rates on edges, legend</td></tr>
+  <tr><td>5 · Capacity &amp; flow analysis</td><td>forward evaluation</td><td>per-tier table (offered / capacity / utilization) + charts: utilization bars, latency-budget waterfall, load→latency curve (a 5–7-point sweep costs ~40 ms total)</td></tr>
+  <tr><td>6 · Time behavior (simulation)</td><td>DES results</td><td>latency percentiles; with retry policies: goodput vs offered, failure rate, amplification</td></tr>
+  <tr><td>7 · Reliability</td><td>availability math + reliability tool</td><td>flow availability tiers, max yearly downtime, weakest dependency</td></tr>
+  <tr><td>8 · Cost</td><td>cost model</td><td>monthly total + per-component breakdown chart; pay-per-use vs provisioned split</td></tr>
+  <tr><td>9 · <b>Alternatives considered</b></td><td>compare_options per swappable tier</td><td>computed ranking (same family, each sized to the SLOs, with cost deltas) — the section reviewers respect most, generated instead of recalled</td></tr>
+  <tr><td>10 · Risks &amp; open questions</td><td>verdicts + coverage honesty</td><td>violations, warnings, every `unknown` with what would resolve it, and the model's own recorded idealizations that apply to this design</td></tr>
+  <tr><td>11 · Glossary &amp; provenance legend</td><td>static + registry</td><td>the outside reader finishes the document without prior SDA knowledge</td></tr>
+</table>
+
+<h2><span class="no">3</span>The assumptions register — the heart of v2</h2>
+<p>Every number the computation rests on, one row each, with a provenance badge. This is what turns “trust me” into a reviewable document:</p>
+<figure>
+<table style="margin:0">
+  <tr><th>Assumption</th><th>Value</th><th>Provenance</th><th>Where</th></tr>
+  <tr><td>Offered traffic</td><td>2,000 req/s</td><td><span class="prov usr">architect</span></td><td>client “users”</td></tr>
+  <tr><td>Checkout call timeout</td><td>200 ms, 2 retries, 50 ms backoff</td><td><span class="prov usr">architect</span></td><td>service “web”</td></tr>
+  <tr><td>Log fan-out</td><td>×100 per request</td><td><span class="prov usr">architect</span> <span style="font:12px 'Segoe UI'">(wire-level)</span></td><td>wire web → log pipeline</td></tr>
+  <tr><td>CDN cache-hit ratio</td><td>90% (origin sees ×0.1)</td><td><span class="prov est">estimate</span></td><td>catalog default, overridable</td></tr>
+  <tr><td>PostgreSQL connection ceiling</td><td>100</td><td><span class="prov src">documented</span></td><td>max_connections default</td></tr>
+  <tr><td>RDS Proxy borrow timeout</td><td>120 s</td><td><span class="prov src">documented</span></td><td>ConnectionBorrowTimeout</td></tr>
+  <tr><td>Service time, catalog tier</td><td>30 ms</td><td><span class="prov def">catalog default</span></td><td>compute.service</td></tr>
+</table>
+<figcaption>Mock of the register. Badge taxonomy: <span class="prov src">documented</span> (official source, linked) · <span class="prov est">estimate</span> (marked est. in the catalog, with its reasoning) · <span class="prov usr">architect</span> (set by hand in this design) · <span class="prov def">catalog default</span> (untouched). The generator derives the badge mechanically: instance config ≠ manifest default ⇒ architect; manifest comment carries a source URL ⇒ documented; carries est. ⇒ estimate; else default.</figcaption>
+</figure>
+<div class="callout"><b>Rule inherited from the whole product:</b> the register lists what IS; it never pads. A design with three assumptions gets three rows. Retry policies, flow transforms (with their level: wire / instance / catalog), traffic origins, deployment modes, SLO bands — all land here automatically because they are all just config the generator can enumerate against the catalog.</div>
+
+<h2><span class="no">4</span>Architecture — one document model, two renderers</h2>
+<figure>
+  <div class="svgc">
+  <svg width="740" height="190" viewBox="0 0 740 190" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <rect x="10" y="65" width="180" height="60" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/>
+    <text x="100" y="90" text-anchor="middle" font-size="13" font-weight="600">verified model</text>
+    <text x="100" y="108" text-anchor="middle" font-size="12" fill="#4b5263">design + evaluation + sim</text>
+    <rect x="260" y="65" width="200" height="60" rx="9" fill="#fdf2e2" stroke="#b4530a"/>
+    <text x="360" y="85" text-anchor="middle" font-size="13" font-weight="600">DocModel (pure data)</text>
+    <text x="360" y="103" text-anchor="middle" font-size="12" fill="#8a5a00">sections · tables · chart series</text>
+    <text x="360" y="117" text-anchor="middle" font-size="11" fill="#8a5a00">content/sda — a pure function</text>
+    <rect x="540" y="15" width="190" height="56" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="635" y="38" text-anchor="middle" font-size="13" font-weight="600">HTML renderer</text>
+    <text x="635" y="56" text-anchor="middle" font-size="12" fill="#4b5263">humans: typography, SVG, print→PDF</text>
+    <rect x="540" y="115" width="190" height="56" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="635" y="138" text-anchor="middle" font-size="13" font-weight="600">Markdown renderer</text>
+    <text x="635" y="156" text-anchor="middle" font-size="12" fill="#4b5263">AI agents &amp; git diffs (kept)</text>
+    <line x1="190" y1="95" x2="255" y2="95" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <line x1="460" y1="80" x2="535" y2="48" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+    <line x1="460" y1="110" x2="535" y2="142" stroke="#4b5263" stroke-width="1.6" marker-end="url(#a)"/>
+  </svg>
+  </div>
+  <figcaption>The anti-drift shape we use everywhere: one <b>DocModel</b> — sections, tables and chart SERIES as plain data, produced by a pure function in the content layer — and two dumb renderers. The existing Markdown export becomes a renderer of the same model (agents and version control keep their diffable text); the new HTML renderer is for people.</figcaption>
+</figure>
+<table>
+  <tr><th>Decision</th><th>Choice &amp; why</th></tr>
+  <tr><td>Self-containment</td><td>ONE .html file: inline CSS, inline SVG charts/diagram, zero external requests — mailable, archivable, works offline, safe under any CSP. Print stylesheet → clean PDF from the browser.</td></tr>
+  <tr><td>Charts</td><td>hand-rendered SVG from chart series (bars, waterfall, line) — no chart library (bundle size, CSP, determinism). Our design docs already prove the aesthetic.</td></tr>
+  <tr><td>C4 diagram</td><td>generated from the canvas layout the architect already arranged (tidy positions), so the document mirrors what they see; protocols + rates label the edges.</td></tr>
+  <tr><td>Load→latency curve</td><td>the generator may run extra forward evaluations (a 5–7-point load sweep, ~6 ms each) — computed exclusively at GENERATION time, never persisted as fake state.</td></tr>
+  <tr><td>Alternatives section</td><td>optional + async (clingo/MiniZinc solvers): generated when the caller passes compare results or opts in; the section states its method honestly.</td></tr>
+  <tr><td>Surfaces</td><td>web “Design doc” button → downloads .html (Markdown stays in a dropdown); VS Code command → opens the .html beside the canvas + saves next to the .sda.json; MCP <code>generate_doc{format?: 'html'|'markdown'}</code>.</td></tr>
+</table>
+
+<h2><span class="no">5</span>Build plan</h2>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td><b>R1 — DocModel + register</b></td><td>the pure DocModel function (all §2 sections as data; provenance derivation for the assumptions register; existing Markdown becomes a renderer of it — byte-compatible output pinned)</td><td>content suite; MD golden unchanged</td></tr>
+  <tr><td><b>R2 — HTML renderer</b></td><td>typography (our design-doc language), SVG charts (utilization bars, cost breakdown, latency waterfall, load sweep), C4 SVG, print CSS, provenance badges, author-required skeletons</td><td>rendered-output tests + a golden HTML snapshot; eyeball review by the owner (screenshots)</td></tr>
+  <tr><td><b>R3 — surfaces</b></td><td>web button + vscode command + MCP format param; browser smokes; screenshots</td><td>all shells green; e2e</td></tr>
+</table>
+
+<h2><span class="no">6</span>Non-goals</h2>
+<table>
+  <tr><td>Editable/WYSIWYG documents</td><td>the document is a REPORT of the model; edits belong on the canvas, then regenerate</td></tr>
+  <tr><td>Multi-page sites, external assets, tracking</td><td>one honest file</td></tr>
+  <tr><td><b>Anything outside the computed domain</b> — security reviews, rollout plans, organizational context</td><td>OWNER RULING (2026-07-03): not skeletons, not placeholders — <b>completely absent</b>. The document covers only what SDA computes well, and says so in ONE honest scope sentence in the summary ("this document covers the quantitative envelope of the design: capacity, latency, availability, cost and their assumptions"). A scope statement is honesty; an empty template section is filler.</td></tr>
+</table>
+
+<footer>
+  SDA · design doc <code>docs/design/design-doc-v2.html</code> · research base: Google design-doc practice, arc42, RFC templates (Pragmatic Engineer survey, HashiCorp) · supersedes the doc-7 Markdown-only deliverable design.<br>
+  Owner request 2026-07-03: “w tym doku musi się znaleźć jak ustawiliśmy timeout i inne parametry, by wiadomo było co założyliśmy” — §3 is that requirement, generalized.
+</footer>
+</div>
+</body>
+</html>

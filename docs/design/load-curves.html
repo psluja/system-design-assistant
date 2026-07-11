@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Curves — the day as an input · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--code:#f2f0ea;--good:#2f7d4f;--warn:#b48908;--bad:#b3261e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#0d3a2e,#1c7a5f);color:#fff;padding:56px 24px 44px}
+  .w{max-width:880px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",sans-serif;opacity:.9;max-width:680px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.7;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0d3a2e}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:28px 0 10px;color:#0d3a2e}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:8px;padding:14px 16px;overflow-x:auto}
+  a{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#0d3a2e;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:26px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px 10px}
+  figure svg{display:block;max-width:100%;height:auto}
+  figcaption{font:13.5px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:10px;padding-bottom:6px}
+  .axis{stroke:#c9c4b8;stroke-width:1}
+  .grid{stroke:#eceadf;stroke-width:1}
+  .tick{font:11px "Segoe UI",sans-serif;fill:#8a8577}
+  .lbl{font:12.5px "Segoe UI",sans-serif;fill:var(--ink2)}
+  .lblb{font:600 12.5px "Segoe UI",sans-serif;fill:var(--ink)}
+  .small{font:13.5px/1.55 "Segoe UI",sans-serif;color:var(--ink2)}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Load Curves — the day as an input</h1>
+  <div class="sub">Traffic is <em>generated</em> by a port function: <code>generate(level, curve)</code> joins the flow-transform family, and the 24-hour multiplier curve — pure shape, editable as a chart — rides the generator. The scalar pass judges the worst hour and bills the mean; the analytic sweep films the day; the DES plays λ(t) with true tails. One assumption space, extended by time.</div>
+  <div class="meta">SDA design document · 2026-07-05 · status: for owner review — research + design, no code</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> computes an architecture drawn on a canvas — load, latency, availability, cost — against declared requirements. Today every traffic origin declares its offered load as <em>one sustained number</em> (<code>assumedRps</code>); every verdict, bill and simulation reads a world where the day is perfectly flat. This document adds the missing axis — <b>time of day</b> — as an owner-commissioned feature, with an industry-research section and an evaluated UI recommendation. Definitions used throughout, stated positively:</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>generator</b></td><td>a port function <code>generate(level, curve?)</code> — the sixth member of the closed flow-function family (<code>ratio / batch / cap / window / prob</code>) that already sits on ports. Where the five existing functions <em>reshape</em> traffic flowing through a port, a generator <em>originates</em> it: the port emits a stream of its own.</td></tr>
+  <tr><td style="white-space:nowrap"><b>load curve</b></td><td>a periodic, piecewise-linear function of time-of-day attached to one generator; its value is a <em>relative multiplier</em> of the generator's level — the shape of the day, owning no req/s of its own.</td></tr>
+  <tr><td style="white-space:nowrap"><b>level vs shape</b></td><td>the <b>level</b> is the generator's rate — the day's <em>mean</em> req/s, the number worlds and Monte-Carlo already manipulate (today's <code>assumedRps</code>, which becomes sugar for a generator). The <b>shape</b> is the curve — how that mean distributes across the hours. Rate at any instant = level × shape(t).</td></tr>
+  <tr><td style="white-space:nowrap"><b>peak factor k</b></td><td>the curve's maximum effective multiplier — how many times busier the worst instant is than the day's mean. A flat day has k&nbsp;=&nbsp;1.</td></tr>
+  <tr><td style="white-space:nowrap"><b>window</b></td><td>one slice of the day (15&nbsp;min or 1&nbsp;h) evaluated as if its rate held steady — the unit of the analytic day-sweep and of the DES's windowed metrics.</td></tr>
+  <tr><td style="white-space:nowrap"><b>NHPP</b></td><td>non-homogeneous Poisson process — random arrivals whose rate λ(t) varies over time; the mathematically standard model of a day of traffic, and what the simulator generates when a curve is present.</td></tr>
+  <tr><td style="white-space:nowrap"><b>quasi-static</b></td><td>treating a slowly-changing rate as a sequence of steady states — valid when the system settles much faster than the curve moves (hours vs seconds), which is exactly the daily-curve regime outside sharp spikes.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The workflow this serves — one number flattens the day</h2>
+<p class="lead">No real system receives its mean rate all day. Traffic breathes: business hours, an evening peak, a weekend lull, a flash sale. A single <code>assumedRps</code> forces the architect to pick a lie: size to the mean and break every evening, or size to the peak and read a monthly bill inflated three-fold.</p>
+<p>Both errors are silent today. Capacity verdicts judged at the mean ride green while the 19:00 peak would saturate the pool; pay-per-use cost computed from a peak-set level overstates the bill exactly by the peak factor. The two numbers the architect actually needs — <em>what the worst hour does to my promises</em> and <em>what the whole day costs</em> — come from two different points of the same curve, and the tool currently has no curve to read them from.</p>
+<p>The owner's commission, in two parts. First: every traffic origin carries a <b>relative</b> time function — a 24-hour multiplier curve, editable as a chart — that the DES interprets. Second, the widening that sets the model's home: <b>traffic generation is a port-level function in the same closed family as the flow transforms</b> — instead of <em>reshaping</em> traffic, a port function can <em>generate</em> it, and the time function lives where functions live: on the generator. This also dissolves a recorded limitation — a node may now relay on some ports and generate on others (a saga emitting timer-driven follow-ups, a cron job on a shared service, a health-checker inside an app) instead of being forced to be either a relay or an origin. This document designs the feature end-to-end: the generator model, the curve, the scalar semantics, the analytic day-sweep, the simulator changes, the composition with worlds / Monte-Carlo / request classes, and the curve editor — grounded in what the industry does and in the verified seams of the existing code.</p>
+
+<h2><span class="no">2</span>Research — how the industry declares a load shape</h2>
+<p>Every load-testing and autoscaling product was surveyed from its official documentation. The full grammar of each, with what it can and cannot say:</p>
+<table>
+  <tr><th>Tool</th><th>Grammar</th><th>Absolute / relative</th><th>Period handling</th><th>Open / closed model</th></tr>
+  <tr><td><b>k6</b> <a href="https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/ramping-vus/">ramping-vus</a> / <a href="https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/ramping-arrival-rate/">ramping-arrival-rate</a></td><td><code>stages: [{duration, target}]</code> — linear interpolation to each target</td><td>absolute (VUs, or iterations per <code>timeUnit</code>)</td><td>one-shot sequence</td><td>both, chosen by executor</td></tr>
+  <tr><td><b>Gatling</b> <a href="https://docs.gatling.io/concepts/injection/">injection profiles</a></td><td>sequential chain: <code>rampUsersPerSec(r1).to(r2).during(d)</code>, <code>constantUsersPerSec</code>, <code>stressPeakUsers</code>, <code>incrementUsersPerSec</code> stairs</td><td>absolute (users/s or concurrent users)</td><td>one-shot chain</td><td>both, explicit (<code>injectOpen</code>/<code>injectClosed</code>)</td></tr>
+  <tr><td><b>Locust</b> <a href="https://docs.locust.io/en/2.32.9/custom-load-shape.html">LoadTestShape</a></td><td>code: <code>tick()</code> called ~1/s returns <code>(user_count, spawn_rate)</code>; idiom = a list of stage dicts</td><td>absolute user counts</td><td>one-shot, but arbitrary code can express cycles</td><td>closed</td></tr>
+  <tr><td><b>JMeter</b> <a href="https://jmeter-plugins.org/wiki/ThroughputShapingTimer/">Throughput Shaping Timer</a> / <a href="https://jmeter-plugins.org/wiki/UltimateThreadGroup/">Ultimate Thread Group</a></td><td>rows: <code>const(N,T)</code>, <code>line(N,K,T)</code>, <code>step(N,K,S,T)</code>; thread rows start/ramp/hold/shutdown, summed</td><td>absolute RPS / threads</td><td>one-shot schedule</td><td>TST open, thread groups closed</td></tr>
+  <tr><td><b>Azure Load Testing</b> <a href="https://learn.microsoft.com/en-us/azure/load-testing/how-to-high-scale-load">config</a></td><td>menu: Linear (VUs + ramp-up), Step, Spike (<code>spikeMultiplier</code>, hold)</td><td>absolute VUs; <code>spikeMultiplier</code> is the one relative knob</td><td>one-shot test</td><td>closed (VUs × engines)</td></tr>
+  <tr><td><b>AWS scheduled scaling</b> <a href="https://docs.aws.amazon.com/autoscaling/application/userguide/scheduled-scaling.html">docs</a></td><td>cron points, not curves: <code>cron(…)</code>/<code>at(…)</code> actions setting Min/Max capacity</td><td>absolute capacity</td><td><b>explicitly recurring</b> — daily/weekly cycles</td><td>n/a (capacity)</td></tr>
+  <tr><td><b>AWS predictive scaling</b> <a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-predictive-scaling.html">docs</a></td><td>no grammar — learns "daily or weekly patterns" from CloudWatch history and forecasts ahead</td><td>learned; implicitly <b>relative</b> (the pattern is the object)</td><td>built for daily/weekly cycles</td><td>n/a</td></tr>
+  <tr><td><b>Artillery</b> <a href="https://www.artillery.io/docs/reference/test-script">phases</a></td><td>sequential <code>{duration, arrivalRate, rampTo}</code> phases, linear ramps</td><td>absolute arrivals/s</td><td>one-shot</td><td>open + VU cap</td></tr>
+  <tr><td><b>Vegeta</b> <a href="https://github.com/tsenart/vegeta">pacers</a></td><td>constant <code>-rate</code>; library <code>Pacer</code> interface incl. <code>SinePacer</code></td><td>absolute RPS</td><td><code>SinePacer</code> is periodic</td><td>open (closed variant via workers)</td></tr>
+</table>
+<div class="callout">
+<b>The distilled common grammar — and where SDA deliberately differs.</b>
+<p style="margin-top:8px">Everyone converged on the same shape language: <b>an ordered list of segments <code>(duration, target-level)</code> with linear interpolation between targets</b>. Nothing in the field uses splines or formulas; piecewise-linear <em>is</em> the industry's curve. Two axes split the field: values are <b>overwhelmingly absolute</b> (VUs or RPS — the only relative multipliers live in Azure's <code>spikeMultiplier</code> and in the autoscaling world, where the daily <em>pattern itself</em> is the object), and load tests are <b>one-shot</b> while periodicity lives only in autoscaling (cron recurrence, learned diurnal cycles).</p>
+<p style="margin:0">SDA adopts the consensus where it is real consensus — <b>piecewise-linear control points</b> — and takes the autoscaling side of both splits: the curve is <b>relative</b> (the level already lives in <code>assumedRps</code> and is already the thing worlds, Monte-Carlo and the envelope manipulate — an absolute curve would create a second place to state the same fact) and <b>periodic</b> (a design document describes an operating day, not a test run). SDA is a capacity-planning tool, not a load generator; its natural relatives are the diurnal curves autoscaling learns, expressed in the grammar the test tools standardised.</p>
+</div>
+<p class="small">Arrival-process mathematics: simulating a time-varying Poisson stream is a solved problem with two standard algorithms — <b>thinning</b> (P. A. W. Lewis &amp; G. S. Shedler, <a href="https://onlinelibrary.wiley.com/doi/10.1002/nav.3800260304">"Simulation of nonhomogeneous Poisson processes by thinning", <i>Naval Research Logistics Quarterly</i> 26(3), 1979</a>; open copy at <a href="https://calhoun.nps.edu/handle/10945/63247">calhoun.nps.edu</a>): generate candidates at a majorizing rate λ*&nbsp;≥&nbsp;λ(t) and accept each with probability λ(t)/λ* — and <b>inversion</b> (time-change through the inverse of the cumulative rate Λ; <a href="https://en.wikipedia.org/wiki/Poisson_point_process">Poisson point process, simulation</a>; canonical text: Çinlar, <i>Introduction to Stochastic Processes</i>, 1975). For piecewise-linear λ(t), Λ is piecewise-quadratic with a closed-form inverse, so inversion is exact, rejection-free and draws exactly one uniform per arrival. §6 picks between them on determinism grounds.</p>
+
+<h2><span class="no">3</span>The model — <code>generate()</code> at a port; the curve is pure shape</h2>
+<p class="lead">Traffic generation joins the closed port-function family. Where <code>ratio / batch / cap / window / prob</code> <em>reshape</em> the flow crossing a port, <code>generate(level, curve?)</code> <em>originates</em> flow at one — and the time function lives where functions live: on the generator. The curve multiplies; it never owns a rate. The generator's level is the single place the rate is declared — and it is, by construction, the day's <b>mean</b>.</p>
+<pre>// engine/core/src/graph.ts — the closed union grows by one member (pure math, domain-free):
+export type Transform =
+  | { kind: 'ratio';    value: number }
+  | { kind: 'batch';    value: number }
+  | { kind: 'cap';      value: number }
+  | { kind: 'window';   value: number }
+  | { kind: 'prob';     value: number }
+  | { kind: 'generate'; level: number; curve?: LoadCurve };   // NEW: out = through-flow + served(level)
+
+/** A periodic, piecewise-linear multiplier over a declared period (default 24 h). Pure shape:
+ *  the engine reads it normalized so its mean over the period is exactly 1. */
+interface LoadCurve {
+  readonly periodHours?: number;                 // default 24; the only period v1 ships
+  readonly points: readonly { readonly t: number; readonly m: number }[]; // t in hours ∈ [0, period), m ≥ 0
+}</pre>
+<table>
+  <tr><th>Piece</th><th>Design</th></tr>
+  <tr><td><b>The family it joins</b></td><td>the closed <code>Transform</code> union in <code>engine/core/src/graph.ts</code> — a rate and a shape are pure math (like <code>Distribution</code>), so the engine stays domain-free. The scalar arithmetic composes with the family: a generator port's emission is its through-flow (shaped by nothing — <code>generate</code> replaces the reshaping slot) <em>plus</em> the generator's served share; a port with no through-flow (the common source port) emits exactly the served level. The universal overflow keeps its one form: <code>max(0, inflow + Σ levels − capacity)</code>.</td></tr>
+  <tr><td><b>Where a generator lives</b></td><td>everywhere the family already resolves, with the same precedence (verified: <code>content/sda/src/sim.ts</code> and flow-transformations-r2 §5 — <b>wire &gt; instance port &gt; manifest port</b>): a catalog block may <em>ship</em> one (a cron component's out port generates by nature), an instance may declare/override one (<code>Instance.transforms</code> — the existing port-name-keyed container, unchanged), and a wire-level generator injects into one specific wire's emission. A node may relay on some ports and generate on others — the recorded relay-vs-origin limitation is gone structurally.</td></tr>
+  <tr><td><b><code>assumedRps</code> becomes sugar</b></td><td>a node-level <code>assumedRps</code> declaration compiles to a generator on the node's <b>primary out port</b> (its first out/bi port). <code>deserialize</code> maps it on load, extending the legacy demand-key chain (<code>originRps → demandRps → assumedRps</code>, <code>app/core/src/document.ts</code>) by one final link — kept forever, idempotent, and behavior-preserving: the generator physics is a superset of today's origin physics (see the callout below), so a migrated document evaluates identically. A legacy source client's throughput-as-workload maps the same way.</td></tr>
+  <tr><td><b>One address for worlds / MC</b></td><td>the compiled graph keeps the node's <code>assumedRps</code> input cell as the <b>reconciled total</b> of its generators' levels — exactly the <code>originByNode</code> precedent from request classes (per-port declarations authoritative, the class-blind total supplied where the shared relations read it). Scenario overrides, Monte-Carlo ranges and the envelope keep addressing <code>node|assumedRps</code> untouched; on a multi-generator node an override scales the ports proportionally (v1 norm: one generator per node — open question 8 ratifies the rule).</td></tr>
+  <tr><td><b>The curve rides the generator</b></td><td>an optional field <em>of</em> <code>generate</code>, nowhere else — time-functions live where functions live. Absent ⇒ a flat day, and the whole curve feature is silent (no-filler); a design with no generator evaluates bit-for-bit as today (sugar compiles to the same physics).</td></tr>
+  <tr><td><b>Normalize-at-read</b></td><td>The stored points are exactly what the architect drew. The engine reads the <b>effective</b> multiplier <code>ŝ(t) = m(t) / m̄</code> where <code>m̄</code> is the drawn curve's mean over the period — so the effective shape has mean 1 <em>by construction</em>, always. The alternative (rewriting the stored points to mean 1 on every edit) makes the whole curve visibly shift each time one point is dragged — the editor would fight the hand. Normalize-at-read keeps stored = drawn and model = pure shape; there is no state in which level and shape double-count. <b>Peak factor k = max(m)/m̄.</b></td></tr>
+  <tr><td><b>Role discipline</b></td><td>the generator's <b>level</b> is a <b>fact-assumption</b> exactly as <code>assumedRps</code> is today (role in <code>content/sda/src/registry.ts</code>, polarity higher-is-worse): scenario-overridable, MC-rangeable — through the reconciled cell, so the role machinery is untouched. The <b>shape</b> is a fact-assumption by the same declaration (a belief about the world's traffic); its scalar shadow — the peak factor k — is what the numeric passes consume. Neither is a new registry key: <code>generate</code> is a port function resolved like its five siblings.</td></tr>
+  <tr><td><b>Validation</b></td><td>on load and on edit, guided errors (the <code>ranges</code> discipline): <code>level ≥ 0</code>; points sorted by <code>t</code>, unique <code>t</code> within [0, period), every <code>m ≥ 0</code>, and <code>m̄ &gt; 0</code> (an all-zero curve makes "the mean" meaningless — refused naming the fix, never a silent divide-by-zero). One point is legal and means a flat day. A <code>generate</code> on an in-port is refused naming the port's direction.</td></tr>
+  <tr><td><b>Presets as data</b></td><td>five named shapes shipped as content constants (the <code>DERIVED_DEMAND_FRACTIONS</code> precedent — tunable in one place, pure data): <code>flat</code> · <code>business-hours</code> (9–17 plateau, quiet night) · <code>evening-peak</code> (the consumer curve of fig. 1) · <code>weekend-day</code> (broad late-morning-to-evening hump) · <code>flash-sale</code> (flat base + one sharp spike). A preset is a <em>starting shape</em> — fully editable after insertion, never a mode.</td></tr>
+  <tr><td><b>Serialization</b></td><td>schema <b>7 → 8</b>, additive like every bump before it (<code>app/core/src/document.ts</code>): <code>generate</code> rides in the very containers the family already serializes (manifest port <code>transform</code>, <code>Instance.transforms</code>, the wire transform) — a new union member, no new field. A schema ≤7 export has no generator anywhere; the sugar mapping gives it identical semantics on load, and a schema-8 file with no generators round-trips byte-identically. Plain arrays — no Map handling.</td></tr>
+</table>
+<div class="callout warn">
+<b>Injection vs emission — the semantics tension, resolved explicitly.</b>
+<p style="margin:8px 0 0">Does generated traffic <em>consume the generating node's own service capacity</em> before exiting the declared port, or does it materialize on the wire for free? <b>Resolved: it consumes — a cron job eats its host.</b> The generator's offered level enters the node's own offered load (service time, concurrency, the universal overflow), and its <em>served</em> share exits the declared port. This is a superset of today's physics, not a change: a pure origin already emits <code>min(capacity, assumedRps)</code> and overflows at <code>max(0, inflow + assumedRps − capacity)</code> (verified: <code>content/sda/src/registry.ts</code>, the <code>withOrigin</code> wrapper) — so every migrated declaration evaluates identically, while the new mixed case (a service that relays <em>and</em> hosts a nightly batch) finally charges the batch to the host that runs it.</p>
+<p style="margin:8px 0 0">The alternative — <b>pure emission</b> (the stream costs the emitter nothing) — is documented and rejected for v1: an external pusher that does no local work is already modeled honestly by a dedicated zero-service source node (exactly what client blocks are today — zero-service passthrough stations in the DES). Pure emission would only matter if one node had to both do real work <em>and</em> host a cost-free foreign stream on the same box — no named case demands it; revisit with one, as an additive <code>free: true</code> flag if ever.</p>
+</div>
+<figure>
+<svg viewBox="0 0 720 268" role="img" aria-label="A 24-hour evening-peak load curve with control points, its drawn mean, and the peak factor">
+  <line class="grid" x1="60" y1="20" x2="690" y2="20"/><line class="grid" x1="60" y1="83.3" x2="690" y2="83.3"/><line class="grid" x1="60" y1="146.7" x2="690" y2="146.7"/>
+  <line class="axis" x1="60" y1="210" x2="690" y2="210"/><line class="axis" x1="60" y1="14" x2="60" y2="210"/>
+  <text class="tick" x="52" y="214" text-anchor="end">0</text><text class="tick" x="52" y="150" text-anchor="end">×1</text><text class="tick" x="52" y="87" text-anchor="end">×2</text><text class="tick" x="52" y="24" text-anchor="end">×3</text>
+  <text class="tick" x="60" y="226" text-anchor="middle">00:00</text><text class="tick" x="217.5" y="226" text-anchor="middle">06:00</text><text class="tick" x="375" y="226" text-anchor="middle">12:00</text><text class="tick" x="532.5" y="226" text-anchor="middle">18:00</text><text class="tick" x="690" y="226" text-anchor="middle">24:00</text>
+  <!-- drawn mean m̄ ≈ 1.15 -->
+  <line x1="60" y1="137" x2="690" y2="137" stroke="#8a8577" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text class="lbl" x="66" y="131">drawn mean m̄ ≈ 1.15 — reads as ×1.0</text>
+  <!-- curve: (0,.3)(6,.3)(9,1.2)(16,1.5)(19,2.6)(21,2.0)(24,.3) ; y = 210 - m*63.33 -->
+  <polyline fill="none" stroke="#0b6e6e" stroke-width="2" points="60,191 217.5,191 296.3,134 480,115 558.8,45.3 611.3,83.3 690,191"/>
+  <circle cx="60" cy="191" r="4.5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="217.5" cy="191" r="4.5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="296.3" cy="134" r="4.5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="480" cy="115" r="4.5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="611.3" cy="83.3" r="4.5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="690" cy="191" r="4.5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/>
+  <!-- peak point -->
+  <circle cx="558.8" cy="45.3" r="5.5" fill="#b4530a"/>
+  <text class="lblb" x="548" y="36" text-anchor="end">peak ×2.6 drawn → k = 2.6 / 1.15 ≈ ×2.3 over the mean</text>
+  <text class="lbl" x="20" y="112" transform="rotate(-90 20 112)" text-anchor="middle">multiplier (as drawn)</text>
+</svg>
+<figcaption><b>Figure 1 — the curve is pure shape.</b> Control points as drawn (an evening-peak day), wrapping periodically at 24:00 → 00:00; the dashed line is the drawn mean m̄ — the generator's level IS that line. The engine divides by m̄ at read time, so the effective curve has mean exactly 1 and the level keeps meaning the day's mean rate. The single derived scalar the numeric passes consume is the peak factor k = max/m̄.</figcaption>
+</figure>
+
+<h2><span class="no">4</span>Scalar semantics — judge the worst hour, bill the mean</h2>
+<p class="lead">The sustained-vs-peak question dissolves once level = mean and shape = curve: every consumer reads the point of the day it honestly describes.</p>
+<table>
+  <tr><th>Quantity</th><th>Evaluated at</th><th>Why this is the honest point</th></tr>
+  <tr><td><b>Capacity, utilization ρ, queueing latency, overflow — every verdict</b></td><td><b>peak</b>: level × k</td><td>The day breaks at its worst hour. A verdict green at the mean and red at 19:00 is a broken promise; "real by default" (doc-11) demands the tool lead with the hour that bites. Verdicts are badged <code>at peak (×2.3)</code> so the provenance is visible.</td></tr>
+  <tr><td><b>Pay-per-use cost, egress</b></td><td><b>mean</b>: level × 1</td><td>A bill integrates the day. Because the level IS the mean, every existing cost relation is already correct, unchanged and to the letter: <code>payPerUseCost = inflow(throughput) × unitCost</code> and the egress relation's <code>× MONTH_SECONDS</code> (<code>content/sda/src/behaviors.ts</code>) multiply a <em>sustained mean</em> into a month — exactly what the level now guarantees to be.</td></tr>
+  <tr><td><b>Capacity envelope</b></td><td><b>both edges</b></td><td>The envelope (<code>content/sda/src/envelope.ts</code>) reports per-origin <code>maxRps</code>; with a curve it reports headroom twice — <em>mean headroom</em> (maxRps / level) and <em>peak headroom</em> (maxRps / (level × k)) — and the day's first-breaking hour when peak demand crosses the edge.</td></tr>
+</table>
+<div class="callout">
+<b>Mechanism: the peak pass is a derived world — zero new solver machinery.</b>
+<p style="margin:8px 0 0">The scalar peak evaluation is literally a scenario: override each curved origin's reconciled level cell (<code>node|assumedRps</code>, §3) to <code>level × k<sub>origin</sub></code> and evaluate. That is one more entry in the ambient <code>EvaluateBatch</code> that already carries the base world, the named worlds and Monte-Carlo (<code>content/sda/src/scenario.ts</code>, <code>uncertainty.ts</code> — the same <code>"node|key"</code> addressing onto fixed input cells). The batch becomes <code>[mean, peak, …worlds]</code>; verdicts read from the peak entry, cost and the register from the mean entry. The engine contract stays scalar and domain-agnostic — <b>the curve never crosses the engine boundary in the scalar pass</b>. No curve anywhere, or a flat curve (k&nbsp;=&nbsp;1) ⇒ the peak entry is skipped and everything is today, bit-for-bit.</p>
+</div>
+<figure>
+<svg viewBox="0 0 720 272" role="img" aria-label="The day's rate curve against the capacity envelope: cost is the area under the curve, the verdict is judged at the peak">
+  <line class="grid" x1="60" y1="20" x2="690" y2="20"/><line class="grid" x1="60" y1="96" x2="690" y2="96"/><line class="grid" x1="60" y1="172" x2="690" y2="172"/>
+  <line class="axis" x1="60" y1="210" x2="690" y2="210"/><line class="axis" x1="60" y1="14" x2="60" y2="210"/>
+  <text class="tick" x="52" y="214" text-anchor="end">0</text><text class="tick" x="52" y="176" text-anchor="end">100</text><text class="tick" x="52" y="100" text-anchor="end">300</text><text class="tick" x="52" y="24" text-anchor="end">500</text>
+  <text class="tick" x="60" y="226" text-anchor="middle">00:00</text><text class="tick" x="217.5" y="226" text-anchor="middle">06:00</text><text class="tick" x="375" y="226" text-anchor="middle">12:00</text><text class="tick" x="532.5" y="226" text-anchor="middle">18:00</text><text class="tick" x="690" y="226" text-anchor="middle">24:00</text>
+  <!-- bill area: effective curve × level 200 → rps; y = 210 - v*0.38 -->
+  <polygon fill="#0b6e6e" opacity="0.13" points="60,190.2 217.5,190.2 296.3,131 480,111.2 558.8,39 611.3,78.1 690,190.2 690,210 60,210"/>
+  <!-- exceedance band 18.2h..20.0h -->
+  <rect x="537.8" y="20" width="46.5" height="190" fill="#b3261e" opacity="0.10"/>
+  <!-- envelope edge 400 rps -->
+  <line x1="60" y1="58" x2="690" y2="58" stroke="#b4530a" stroke-width="1.8" stroke-dasharray="7 4"/>
+  <text class="lblb" x="66" y="52">envelope maxRps = 400 (every SLO green up to here)</text>
+  <!-- mean 200 rps -->
+  <line x1="60" y1="134" x2="690" y2="134" stroke="#8a8577" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text class="lbl" x="66" y="128">level = mean = 200 req/s → the bill</text>
+  <!-- curve -->
+  <polyline fill="none" stroke="#0b6e6e" stroke-width="2" points="60,190.2 217.5,190.2 296.3,131 480,111.2 558.8,39 611.3,78.1 690,190.2"/>
+  <!-- peak marker -->
+  <circle cx="558.8" cy="39" r="5.5" fill="#b3261e"/>
+  <text class="lblb" x="548" y="30" text-anchor="end">verdict judged here: 450 req/s &gt; 400 → violation at peak (×2.3)</text>
+  <text class="lbl" x="20" y="112" transform="rotate(-90 20 112)" text-anchor="middle">req/s</text>
+</svg>
+<figcaption><b>Figure 2 — one curve, two honest readings.</b> Level 200 req/s with the fig.-1 shape. The shaded area (the whole day) is what pay-per-use cost integrates — the mean line, unchanged formulas. The red band (≈18:10–20:00) is where the day exceeds the envelope's 400 req/s edge: the capacity verdict is judged at the peak and turns violation, naming the hour.</figcaption>
+</figure>
+
+<h2><span class="no">5</span>The day as a batch — the analytic sweep</h2>
+<p class="lead">Between "two points" (§4) and "a full simulation" (§6) sits the cheap film of the whole day: evaluate every window of the period as its own steady state. The machinery already exists — it is one more <code>EvaluateBatch</code>.</p>
+<p>The sweep lowers the day to 96 scenarios (15-minute windows; each overrides every curved origin to <code>level × ŝ(t<sub>w</sub>)</code>) and reads, per window: every node's ρ, the queueing-aware latency, served throughput and overflow. A thousand-scenario batch is routine for Monte-Carlo today, so 96 is ambient-cheap — the sweep can re-run on every edit, like everything else. On top of the per-window steady states, two <em>fluid</em> quantities capture what steady state cannot:</p>
+<table>
+  <tr><th>Quantity</th><th>Computation</th><th>Reads as</th></tr>
+  <tr><td><b>Backlog build-up</b></td><td>per node, the fluid recursion <code>B<sub>w+1</sub> = max(0, B<sub>w</sub> + (λ<sub>w</sub> − μ) · Δ)</code> across the day's windows (λ<sub>w</sub> = the window's offered rate, μ = the node's capacity)</td><td>"the 19:00 hour banks ≈170 k requests of queue"</td></tr>
+  <tr><td><b>Drain time</b></td><td>first window after the peak where the fluid backlog returns to ~0</td><td>"the backlog drains by ≈21:10 — 70 min after the peak passes"</td></tr>
+</table>
+<p>This quasi-static treatment is exact in the model wherever the curve moves in hours and the system settles in seconds — the whole day except sharp spikes, which is precisely where the DES takes over. The sweep is also what the generated design document renders as the day strip (§8).</p>
+<figure>
+<svg viewBox="0 0 720 312" role="img" aria-label="Per-window utilisation bars for 24 hours with amber and red thresholds, and the fluid backlog hump below, sharing the time axis">
+  <!-- rho panel -->
+  <line class="grid" x1="60" y1="45" x2="690" y2="45"/><line class="grid" x1="60" y1="70" x2="690" y2="70"/>
+  <line class="axis" x1="60" y1="170" x2="690" y2="170"/><line class="axis" x1="60" y1="26" x2="60" y2="170"/>
+  <text class="tick" x="52" y="174" text-anchor="end">0</text><text class="tick" x="52" y="74" text-anchor="end">ρ .8</text><text class="tick" x="52" y="49" text-anchor="end">ρ 1</text>
+  <text class="lbl" x="66" y="40">ρ per window · green &lt; 0.8 · amber 0.8–1 · red &gt; 1</text>
+  <!-- bars h0..h23: x=62+26.25h w=22 ; y=170-rho*125 -->
+  <rect x="62" y="153.8" width="22" height="16.2" fill="#2f7d4f" rx="2"/><rect x="88.3" y="153.8" width="22" height="16.2" fill="#2f7d4f" rx="2"/><rect x="114.5" y="153.8" width="22" height="16.2" fill="#2f7d4f" rx="2"/><rect x="140.8" y="153.8" width="22" height="16.2" fill="#2f7d4f" rx="2"/><rect x="167" y="153.8" width="22" height="16.2" fill="#2f7d4f" rx="2"/><rect x="193.3" y="153.8" width="22" height="16.2" fill="#2f7d4f" rx="2"/>
+  <rect x="219.5" y="145" width="22" height="25" fill="#2f7d4f" rx="2"/><rect x="245.8" y="128.7" width="22" height="41.3" fill="#2f7d4f" rx="2"/><rect x="272" y="112.5" width="22" height="57.5" fill="#2f7d4f" rx="2"/>
+  <rect x="298.3" y="103.7" width="22" height="66.3" fill="#2f7d4f" rx="2"/><rect x="324.5" y="101.2" width="22" height="68.8" fill="#2f7d4f" rx="2"/><rect x="350.8" y="98.7" width="22" height="71.3" fill="#2f7d4f" rx="2"/><rect x="377" y="96.2" width="22" height="73.8" fill="#2f7d4f" rx="2"/><rect x="403.3" y="95" width="22" height="75" fill="#2f7d4f" rx="2"/><rect x="429.5" y="92.5" width="22" height="77.5" fill="#2f7d4f" rx="2"/><rect x="455.8" y="90" width="22" height="80" fill="#2f7d4f" rx="2"/>
+  <rect x="482" y="78.7" width="22" height="91.3" fill="#2f7d4f" rx="2"/>
+  <rect x="508.3" y="58.7" width="22" height="111.3" fill="#b48908" rx="2"/>
+  <rect x="534.5" y="38.7" width="22" height="131.3" fill="#b3261e" rx="2"/>
+  <rect x="560.8" y="37.5" width="22" height="132.5" fill="#b3261e" rx="2"/>
+  <rect x="587" y="53.7" width="22" height="116.3" fill="#b48908" rx="2"/>
+  <rect x="613.3" y="77.5" width="22" height="92.5" fill="#2f7d4f" rx="2"/><rect x="639.5" y="107.5" width="22" height="62.5" fill="#2f7d4f" rx="2"/><rect x="665.8" y="137.5" width="22" height="32.5" fill="#2f7d4f" rx="2"/>
+  <!-- backlog panel -->
+  <line class="axis" x1="60" y1="272" x2="690" y2="272"/><line class="axis" x1="60" y1="196" x2="60" y2="272"/>
+  <text class="lbl" x="66" y="208">fluid backlog (requests queued beyond capacity)</text>
+  <polygon fill="#b4530a" opacity="0.35" points="537.8,272 552,246 573,212 584,224 598,248 616,268 621,272"/>
+  <polyline fill="none" stroke="#b4530a" stroke-width="2" points="537.8,272 552,246 573,212 584,224 598,248 616,268 621,272"/>
+  <text class="lblb" x="576" y="204" text-anchor="start">peak ≈ 1.7×10⁵ req</text>
+  <line x1="621" y1="272" x2="621" y2="256" stroke="#8a8577" stroke-width="1" stroke-dasharray="3 3"/>
+  <text class="lbl" x="630" y="252">drained</text>
+  <text class="lbl" x="630" y="267">≈ 21:10</text>
+  <text class="tick" x="60" y="288" text-anchor="middle">00:00</text><text class="tick" x="217.5" y="288" text-anchor="middle">06:00</text><text class="tick" x="375" y="288" text-anchor="middle">12:00</text><text class="tick" x="532.5" y="288" text-anchor="middle">18:00</text><text class="tick" x="690" y="288" text-anchor="middle">24:00</text>
+</svg>
+<figcaption><b>Figure 3 — the analytic day-sweep.</b> Top: each window evaluated as its own steady state — utilisation per hour, coloured by the standard thresholds (and labeled, never colour alone). Bottom, same clock: the fluid backlog that the two over-capacity hours bank, and when it drains. 96 scalar evaluations — one ordinary batch, instant and deterministic.</figcaption>
+</figure>
+
+<h2><span class="no">6</span>The DES plays λ(t) — arrivals, windows, budget</h2>
+<p class="lead">The simulator is where the curve earns its keep: true percentiles inside the peak, the transient the sweep's fluid model only sketches. Three verified seams change — and nothing else.</p>
+<h3>6.1 What the code does today (verified)</h3>
+<table>
+  <tr><th>Seam</th><th>As built</th></tr>
+  <tr><td><b>Arrival generation</b></td><td><code>engine/sim/src/des.ts</code> lines 509–523: each source seeds one arrival, and every arrival schedules the next by drawing <code>sample(src.interarrival, rng)</code> — a stationary renewal stream. The projector (<code>content/sda/src/sim.ts</code> line 132) hands it <code>{ kind: 'exponential', rate: emittedRps }</code>: homogeneous Poisson at the level.</td></tr>
+  <tr><td><b>Run shape</b></td><td><code>SimOptions</code> is completion-bounded (<code>warmupCompletions</code> + <code>measureCompletions</code>) — a steady-state design: warm up, then measure one long stationary window; percentiles come from run-wide reservoirs. There is no notion of wall-clock windows.</td></tr>
+  <tr><td><b>Ambient policy</b></td><td>the web shell runs the DES in a worker, debounced 450 ms after each edit, at seed 7 with 10 k warm-up + 50 k measured completions (<code>app/web/src/sim-worker.ts</code>, <code>app.tsx</code>) — roughly 60 k system completions per ambient run.</td></tr>
+</table>
+<h3>6.2 The three changes</h3>
+<table>
+  <tr><th>Change</th><th>Design</th></tr>
+  <tr><td><b>1 · NHPP arrivals by inversion</b></td><td>one <code>ArrivalSource</code> <b>per generator</b> (not per node), each with an optional, <em>domain-free</em> <code>rateProfile</code> (piecewise-linear rate points over a period — pure timing data, like <code>Distribution</code>; the engine stays free of domain strings). A generated arrival's onward routing is restricted to the wires of the port that generated it — the same job-tagged routing restriction the request-class machinery already introduced (a generator is, in effect, an implicit stream), so a cron port's jobs never leak down the relay ports. Generation is by <b>inversion</b>: draw E ~ Exp(1) — one uniform, exactly today's draw — and advance to the t where the integrated rate Λ grows by E; Λ is piecewise-quadratic with a closed-form per-segment inverse. Chosen over Lewis–Shedler thinning for three reasons: it is <em>exact</em> for our piecewise-linear curves; it draws <em>exactly one uniform per arrival</em>, so the RNG stream stays aligned and — decisively — <b>a flat profile reduces to today's <code>−ln(1−u)/rate</code> literally, byte-for-byte</b>, which makes "no curve ≡ today" a testable identity rather than a statistical claim; and it wastes nothing on peaky curves, where thinning at λ* = k·λ̄ rejects most of the night's candidates. Thinning remains the documented fallback for any future non-piecewise-linear profile.</td></tr>
+  <tr><td><b>2 · A time-bounded run mode</b></td><td>alongside today's completion-bounded mode: play <code>[t₀, t₁)</code> of the period. The run starts at the curve's <em>minimum</em> point (rotating the day so the empty-system start bias is smallest) and warms through one window before measuring. Absent a curve, the mode is never entered — the existing path is untouched.</td></tr>
+  <tr><td><b>3 · Windowed accumulators</b></td><td>per window: a system-sojourn reservoir (per-window p50/p95/p99), arrivals/completions/drops (loss windows), and per-station peak queue length; per-node reservoirs only for the peak window (bounded memory — 96 windows × every node's reservoir is not paid for). Two derived headlines: <b>peak backlog</b> and <b>drain time</b> (first window after the peak where total in-system returns to its pre-peak band) — the DES twins of §5's fluid numbers, and the differential test between them.</td></tr>
+</table>
+<h3>6.3 Budget honesty — the day is expensive, and the tool must say so</h3>
+<p>A full day at the fig.-2 scale is ≈17 M arrivals (200 req/s × 86 400 s) before counting per-station events — two orders of magnitude past the ambient 60 k-completion budget. The tool never silently scales, samples or lies about this:</p>
+<table>
+  <tr><th>Run</th><th>Policy</th></tr>
+  <tr><td><b>Ambient (every edit)</b></td><td>stays <b>steady-state, at the peak level</b> (level × k) — the worst hour, sustained; the same budget as today. The tail-latency verdict therefore judges the hour that bites, labeled <code>worst hour (×2.3)</code>. With no curve this is exactly today's ambient run.</td></tr>
+  <tr><td><b>"Play the day" (explicit action)</b></td><td>a button/tool with a declared event budget (~2 M events, seconds in the worker). The tool computes the expected event count up front; if the full period fits, it plays the whole day. If not, it <b>offers the widest true-rate window the budget affords, centred on the peak</b> (e.g. "the budget covers 18:00–21:00 — play it?") and says exactly what it refused and why. The whole-day film is §5's sweep, which is always available; the DES buys the true tail where the money is.</td></tr>
+</table>
+
+<h2><span class="no">7</span>Composition — one assumption space, extended by time</h2>
+<p class="lead">One form, no special cases: the rate an origin offers at instant t, in world w, in Monte-Carlo draw d, is <code>level(o; w, d) × ŝ<sub>o</sub>(t)</code>. Levels compose exactly as they already do; the shape multiplies afterwards, at the content layer.</p>
+<table>
+  <tr><th>Axis</th><th>Composition</th></tr>
+  <tr><td><b>× Worlds (scenarios)</b></td><td>a world overrides the <b>level</b> today, through the existing scalar override on <code>node|assumedRps</code> — the reconciled generator total (§3), untouched (Black-Friday world = 5× level, same shape). A world may additionally override the <b>shape</b>: <code>AssumptionScenario</code> gains an optional, additive <code>curves: [{node, port, points}]</code> — the same role boundary (<code>isScenarioOverridable</code>: shape attaches only where a generator sits), the same guided refusal otherwise. Because the scalar pass consumes only k, a world's curve override never touches the engine contract either: the world's peak entry just uses <em>its</em> k. This is also how <b>one-shot events</b> are modeled: a flash-sale day is not a new mechanism — it is a world whose curve override is the flash shape (§9, tension 5).</td></tr>
+  <tr><td><b>× Monte-Carlo</b></td><td>uncertainty <code>ranges</code> draw the <b>level</b> (they already ride on <code>assumedRps</code>); each drawn scenario is judged at its own peak, <code>draw × k</code>. The tornado and SLO-confidence machinery are unchanged — the curve adds no random dimension of its own in v1 (an uncertain <em>shape</em> would need evidence we don't have; the honest form of "maybe the peak is worse" is a range on the level or a named world with a peakier curve).</td></tr>
+  <tr><td><b>× Request classes</b></td><td>a class origin is <code>{node, rps}</code> (<code>content/sda/src/request-class.ts</code>): rates per class, per node — and under declared classes the per-class origins stay authoritative, with the reconciled total supplied class-blind, exactly as today (<code>originByNode</code>). In v1 every class originating at a node inherits that node's generator curve — the common case (one product's users). Per-class shapes at one node (reads peak in the evening, batch writes at 03:00) are a real future: <code>ClassOrigin</code> gains an optional <code>curve</code> additively when a named case demands it — and the generator model already makes the natural home visible (a class's origin at a node IS a generation, so the two declarations converge rather than compete) (open question 4).</td></tr>
+  <tr><td><b>× Envelope / derived trio</b></td><td>the envelope reports both edges (§4); the derived trio keeps sizing <b>levels</b> off the envelope exactly as today — its pessimistic world stresses the level, a peakier <em>shape</em> stays an authored world.</td></tr>
+</table>
+
+<h2><span class="no">8</span>The editor &amp; surfaces</h2>
+<p class="lead">The commission asks for a curve "editable as a chart". The library survey says: build the ~250-line editor on the SVG scales the app already owns.</p>
+<h3>8.1 The options, honestly weighed</h3>
+<table>
+  <tr><th>Option</th><th>License</th><th>Weight</th><th>Fit</th></tr>
+  <tr><td><b>Hand-rolled SVG editor</b> (pointer events + <code>setPointerCapture</code>)</td><td>ours</td><td>0 KB</td><td>piecewise-linear, snapping, keyboard, touch — all first-class; reuses the house scales/ticks (<code>niceTicks</code> already lives in <code>render-html.ts</code> and <code>uncertainty.ts</code>). Edge-case catalog: <a href="https://www.redblobgames.com/making-of/draggable/examples.html">Red Blob Games — draggable objects</a>, <a href="https://blog.r0b.io/post/creating-drag-interactions-with-set-pointer-capture-in-java-script/">r0b.io on setPointerCapture</a>, <a href="https://www.petercollingridge.co.uk/tutorials/svg/interactive/dragging/">Collingridge — draggable SVG</a>.</td></tr>
+  <tr><td><b>d3-drag + d3-scale</b></td><td>ISC</td><td>~5.6 KB gz + deps (<a href="https://bundlephobia.com/package/d3-drag">bundlephobia</a>)</td><td>the only defensible dependency — but it buys pointer normalization the platform now gives via <code>setPointerCapture</code>, at the cost of adopting d3-selection's event idiom, and d3-scale duplicates scales we have.</td></tr>
+  <tr><td><b>Bezier/easing editors</b> (<a href="https://registry.npmjs.org/react-bezier-curve-editor">react-bezier-curve-editor</a>, <a href="https://registry.npmjs.org/bezier-easing-editor">bezier-easing-editor</a>, <a href="https://registry.npmjs.org/@mojs%2Fcurve-editor">@mojs/curve-editor</a>)</td><td>ISC/MIT</td><td>small–heavy (mojs bundles preact + redux)</td><td>wrong curve model (single cubic-bezier, not multi-point piecewise-linear) and/or React/preact peer deps; mojs stale since 2021.</td></tr>
+  <tr><td><b>Chart-lib draggable points</b> (Chart.js + <a href="https://github.com/artus9033/chartjs-plugin-dragdata">dragdata</a>, Highcharts, plotly)</td><td>MIT / <a href="https://shop.highcharts.com/license">commercial</a> / MIT</td><td>68 KB gz … 1.1 MB gz</td><td>a second rendering substrate (canvas) beside the house SVG charts; drag-only (add/remove/snap still DIY); Highcharts fails on license, plotly on weight (<a href="https://github.com/plotly/plotly.js/blob/master/dist/README.md">1.1 MB gz</a>); Theatre.js's keyframe editor UI is AGPL.</td></tr>
+</table>
+<div class="callout">
+<b>Recommendation: hand-roll it — and this is the low-risk option, not the proud one.</b>
+<p style="margin:8px 0 0">Every library fails at least one hard constraint (license, framework requirement, wrong curve model, or a parallel rendering substrate), while still leaving snap, add/remove and accessibility as DIY work. On top of the existing SVG chart conventions the editor is ~250 lines of vanilla TS: drag = <code>pointerdown → setPointerCapture → pointermove</code> inverse-mapped to domain, clamped to neighbours; double-click a segment inserts a point, double-click a point removes it; snap = rounding to the grid step (15 min × 0.05); keyboard = <code>role="slider"</code> per point with arrow-key nudge and <code>aria-valuetext</code>. Honest estimate: <b>1.5–2.5 dev-days</b> including touch targets and ARIA — comparable to merely <em>integrating</em> any of the candidates. Ratification requested: open question 1.</p>
+</div>
+<h3>8.2 Where the generator and its curve live on screen</h3>
+<table>
+  <tr><th>Surface</th><th>Behavior</th></tr>
+  <tr><td><b>Port function picker</b></td><td><code>generate</code> joins <code>ratio / batch / cap / window / prob</code> in the <b>same picker both shells already ship</b>, with the same wire &gt; instance &gt; manifest resolution and the same level badge (<code>doc-model.ts</code> already names the level a transform sits at). Choosing <code>generate</code> reveals the level field (req/s) and the curve affordance — <b>the curve editor's home is the port function editor</b>. Nothing new to learn: the sixth verb in a known menu.</td></tr>
+  <tr><td><b>Inspector · Assumptions</b></td><td>a generating node's Assumptions section (the role-titled group both shells already render) mirrors the generator: the level as a fact-assumption knob (it is one — the reconciled cell) plus a curve sparkline + <code>mean ×1.0 · peak ×2.3</code> chip that jumps to the port function editor. Non-generating nodes never show the row (no-filler).</td></tr>
+  <tr><td><b>The editor modal</b></td><td>fig. 4: the chart with drag points, hourly grid + 15-min snap, live readout under the cursor (<code>19:00 · ×2.6 → 450 req/s</code>), the drawn-mean line, preset dropdown, and the normalize-at-read rule stated inline ("the mean of your shape reads as ×1.0 — the level stays the day's mean"). Opened from the port function picker; identical in both shells.</td></tr>
+  <tr><td><b>System panel</b></td><td>the day strip (§5): per-window ρ tones + the backlog/drain headline; "Play the day" (§6.3) with its budget statement. Present only when a curve exists.</td></tr>
+  <tr><td><b>Generated design doc</b></td><td>the assumptions register row for a curved origin renders the sparkline + k (hand-rendered SVG, like every chart in <code>render-html.ts</code>); a new "The day" section carries the sweep strip and, when a day was played, the windowed DES results. Absent without curves.</td></tr>
+  <tr><td><b>MCP</b></td><td><code>set_generator {node, port?, level?, preset | points?}</code> / <code>clear_generator {node, port?}</code> — <code>port</code> optional, defaulting to the primary out port (the AI-reasoning contract: optional ports, self-correcting errors naming the legal ones), presets by name so an agent never hand-authors 96 points; and <code>play_day {window?}</code> returning the windowed results in the doc's shapes. Generator state rides in the same structured outputs the AI already reads, so the human and the AI see one truth.</td></tr>
+</table>
+<figure>
+<svg viewBox="0 0 720 322" role="img" aria-label="Mock of the curve editor modal: preset dropdown, drag points on a gridded chart, snap guide, live readout, keyboard hints">
+  <rect x="8" y="8" width="704" height="306" rx="10" fill="#fff" stroke="#e5e1d8"/>
+  <text class="lblb" x="28" y="34">Port function · checkout-client.out — generate(200 req/s)</text>
+  <rect x="470" y="18" width="180" height="26" rx="6" fill="#f2f0ea" stroke="#c9c4b8"/>
+  <text class="lbl" x="482" y="35">Preset: evening-peak ▾</text>
+  <text class="lbl" x="28" y="56">mean ×1.00 · peak ×2.3 → 450 req/s at 19:00 · the mean of your shape reads as ×1.0</text>
+  <!-- chart -->
+  <line class="grid" x1="70" y1="80" x2="680" y2="80"/><line class="grid" x1="70" y1="130" x2="680" y2="130"/><line class="grid" x1="70" y1="180" x2="680" y2="180"/>
+  <line class="grid" x1="222.5" y1="72" x2="222.5" y2="230"/><line class="grid" x1="375" y1="72" x2="375" y2="230"/><line class="grid" x1="527.5" y1="72" x2="527.5" y2="230"/>
+  <line class="axis" x1="70" y1="230" x2="680" y2="230"/><line class="axis" x1="70" y1="72" x2="70" y2="230"/>
+  <text class="tick" x="70" y="246" text-anchor="middle">00:00</text><text class="tick" x="222.5" y="246" text-anchor="middle">06:00</text><text class="tick" x="375" y="246" text-anchor="middle">12:00</text><text class="tick" x="527.5" y="246" text-anchor="middle">18:00</text><text class="tick" x="680" y="246" text-anchor="middle">24:00</text>
+  <text class="tick" x="62" y="234" text-anchor="end">0</text><text class="tick" x="62" y="184" text-anchor="end">×1</text><text class="tick" x="62" y="134" text-anchor="end">×2</text><text class="tick" x="62" y="84" text-anchor="end">×3</text>
+  <!-- mean line -->
+  <line x1="70" y1="172.5" x2="680" y2="172.5" stroke="#8a8577" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <!-- curve: same shape, x=70+25.42t, y=230-m*50 -->
+  <polyline fill="none" stroke="#0b6e6e" stroke-width="2" points="70,215 222.5,215 298.8,170 476.7,155 553,100 603.8,130 680,215"/>
+  <circle cx="70" cy="215" r="5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="222.5" cy="215" r="5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="298.8" cy="170" r="5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="476.7" cy="155" r="5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="603.8" cy="130" r="5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/><circle cx="680" cy="215" r="5" fill="#fff" stroke="#0b6e6e" stroke-width="2"/>
+  <!-- dragged point with halo + snap guide -->
+  <line x1="553" y1="72" x2="553" y2="230" stroke="#b4530a" stroke-width="1" stroke-dasharray="3 3"/>
+  <circle cx="553" cy="100" r="11" fill="#b4530a" opacity="0.18"/>
+  <circle cx="553" cy="100" r="5.5" fill="#b4530a"/>
+  <rect x="565" y="82" width="132" height="22" rx="5" fill="#1a1d23" opacity="0.85"/>
+  <text x="571" y="97" style="font:11.5px 'Segoe UI',sans-serif" fill="#fff">19:00 · ×2.6 → 450 req/s</text>
+  <text class="lbl" x="70" y="270">drag: move · double-click segment: add point · double-click point / Del: remove · arrows: nudge (snap 15 min × 0.05)</text>
+  <text class="lbl" x="70" y="292">each point: role="slider", aria-valuetext="19:00, ×2.6" — keyboard and screen-reader complete</text>
+</svg>
+<figcaption><b>Figure 4 — the editor, mocked, in its home: the port function editor.</b> The picker chose <code>generate</code>; the curve pane is hand-rolled on the existing SVG chart conventions — control points as pointer-captured drag handles with generous hit areas, a snap grid, a live domain readout, presets as data, and per-point keyboard/ARIA semantics. ~250 lines of vanilla TS, no dependency.</figcaption>
+</figure>
+
+<h2><span class="no">9</span>Tensions — resolved here, for ratification</h2>
+<table>
+  <tr><th>#</th><th>Tension</th><th>Resolution</th></tr>
+  <tr><td>1</td><td><b>Mean-normalize or not?</b> If the curve is stored normalized, dragging one point rewrites every other (the editor fights the hand); if it is not normalized at all, level × curve double-counts and <code>assumedRps</code> stops meaning anything.</td><td><b>Normalize at read, not at rest.</b> Stored = drawn; the engine divides by the drawn mean, so the effective shape has mean 1 by construction and <code>assumedRps</code> stays THE level = the day's mean. Peak = max/mean. No editor jump, no double-counting state, cost formulas literally unchanged (§3, §4).</td></tr>
+  <tr><td>2</td><td><b>Sustained vs peak</b> — one scalar pass cannot honestly serve both the verdict (breaks at peak) and the bill (integrates the day).</td><td><b>Don't pick — split by consumer.</b> Verdicts at level × k via a derived peak entry in the existing batch; cost/egress at the mean (= the level, by tension 1); envelope reports both edges. Badge every peak-judged verdict <code>at peak (×k)</code> (§4).</td></tr>
+  <tr><td>3</td><td><b>The DES cannot afford a real day.</b> 200 req/s × 86 400 s ≈ 17 M arrivals — two orders past the ambient budget; silently scaling rates or sampling the day would be a lie about transients.</td><td><b>Budget honesty, three tiers.</b> Ambient = steady state at the peak level (worst hour, today's budget). The whole-day film = the analytic sweep (96-window batch — exact in the quasi-static regime). True transients = explicit "play the day" that states its event budget and, when the day doesn't fit, offers the widest true-rate window it affords, centred on the peak — refusing loudly, never scaling silently (§6.3).</td></tr>
+  <tr><td>4</td><td><b>Determinism with a modulated Poisson stream.</b> Thinning (<a href="https://onlinelibrary.wiley.com/doi/10.1002/nav.3800260304">Lewis &amp; Shedler 1979</a>) consumes a variable number of RNG draws per arrival, so a curve tweak shifts every later draw and "no curve ≡ today" becomes only a statistical claim.</td><td><b>Inversion, not thinning.</b> Piecewise-linear λ(t) has a closed-form integrated rate; inversion is exact, one-uniform-per-arrival, and reduces byte-for-byte to today's exponential sampling when the profile is flat — turning the compatibility gate into a testable identity. Thinning stays documented as the fallback for non-PWL profiles (§6.2).</td></tr>
+  <tr><td>5</td><td><b>Period vs one-shot events.</b> A daily curve is periodic; a flash sale or launch day is one specific day, not every day.</td><td><b>A one-shot is a world, not a mechanism.</b> The base curve describes the operating day; a flash-sale day is a named world whose additive curve override is the flash shape — judged, compared and priced through the existing world matrix. The period stays declared (default 24 h; only 24 h ships in v1) (§7).</td></tr>
+  <tr><td>6</td><td><b>Injection vs emission</b> — does generated traffic consume the generating node's own service capacity, or appear on the wire for free?</td><td><b>It consumes — a cron eats its host</b> (owner-resolved; the §3 callout carries the full argument). A superset of today's origin physics (<code>min(capacity, level)</code> served, universal overflow unchanged), so migrated documents evaluate identically; pure emission is documented and rejected — a cost-free external pusher is already a zero-service source node, and no named case requires both on one box.</td></tr>
+  <tr><td>7</td><td><b>Which SLO judges a day with transient windows?</b> A p99 pooled over the whole day is dominated by the quiet hours (the peak drowns statistically); a p99 of only the worst window judges an hour, not the promise.</td><td><b>Capacity/utilization verdicts: the peak window — a promise broken for an hour a day is broken. Percentile SLOs: judged on the worst window's tail AND reported pooled over the played period, both shown, named for what they are (<code>p99 · worst window</code> / <code>p99 · whole day</code>).</b> The strip (§5) is the diagnosis surface; the verdict never averages a violation away. Default ratification: open question 3.</td></tr>
+</table>
+
+<h2><span class="no">10</span>Build plan — R1 → R4, each gate independently green</h2>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td><b>R1 — the generator + scalar semantics</b></td><td><code>generate</code> joins the <code>Transform</code> union (engine-core + solve arithmetic: through-flow + served level, capacity-gated, universal overflow); <code>assumedRps</code>-as-sugar compile + the deserialize mapping (the legacy chain's fourth link); reconciled level cell; <code>LoadCurve</code> on the generator, schema 8, validation with guided errors, normalize-at-read + peak factor, presets as content data; the derived peak entry in the ambient batch; verdict badging; envelope both edges</td><td>no generator ⇒ bit-for-bit today (golden); migrated <code>assumedRps</code> ≡ today on every committed example (migration goldens — the legacy chain is already guard-tested); flat curve ≡ no curve; algebra property tests (mean(ŝ)=1, k invariance under uniform point scaling; relay+generate superset laws); schema round-trip goldens</td></tr>
+  <tr><td><b>R2 — the day as a batch</b></td><td>96-window sweep over <code>EvaluateBatch</code>; fluid backlog + drain; System day strip; doc-model + renderer ("The day" section, register sparkline)</td><td>sweep vs single-point evaluations agree at every window (identity); fluid recursion property tests; doc goldens</td></tr>
+  <tr><td><b>R3 — the DES plays λ(t)</b></td><td>domain-free <code>rateProfile</code> on <code>ArrivalSource</code>; inversion NHPP; time-bounded windowed run mode; windowed accumulators + peak backlog/drain; "play the day" with budget honesty; ambient switched to peak-level steady state</td><td>flat profile ⇒ byte-identical stream (the inversion identity); NHPP validated against M(t)/M/1 known results &amp; §5's fluid backlog (differential); windowed p99 sanity vs steady-state at matched constant rate</td></tr>
+  <tr><td><b>R4 — surfaces</b></td><td><code>generate</code> in the port function picker (both shells, same resolution badges); the hand-rolled curve editor (drag/add/remove/snap/keyboard/ARIA) homed in the port function editor; Inspector Assumptions mirror row; presets dropdown; MCP <code>set_generator</code>/<code>clear_generator</code>/<code>play_day</code>; world curve overrides + their validator</td><td>editor e2e (drag → document → verdict changes); MCP round-trip incl. port-optional defaulting; both shells render the same day strip; screenshots</td></tr>
+</table>
+
+<h2><span class="no">11</span>Non-goals (v1)</h2>
+<table>
+  <tr><td>Weekly / seasonal periods</td><td>the type declares <code>periodHours</code> so the door is open, but only 24 h ships — a week is 7 named worlds before it is a 168-point curve</td></tr>
+  <tr><td>Per-class curves at one node</td><td>the form is ready (<code>ClassOrigin.curve</code>, additive) — built when a named case demands it, not speculatively</td></tr>
+  <tr><td>Uncertain / random shapes</td><td>Monte-Carlo draws levels; a curve whose points wobble would be an invented distribution — the honest form is a range on the level or a named peakier world</td></tr>
+  <tr><td>Time-varying capacity (autoscaling response)</td><td>the day varies <em>demand</em>; capacity stays the design's declared sizing. Modeling scheduled/predictive scaling reacting to the curve is a separate, large feature — and needs this one first</td></tr>
+  <tr><td>Learned curves from imported metrics</td><td>importing a CloudWatch/Prometheus day as control points is a natural roadmap item (predictive-scaling framing, §2) — out of scope until the import seam exists</td></tr>
+  <tr><td>Time-varying service times</td><td>only arrivals modulate; a service that slows at night (backups) is a world, not a curve, until evidence demands more</td></tr>
+</table>
+
+<h2><span class="no">12</span>Open questions for the owner</h2>
+<table>
+  <tr><th>#</th><th>Question</th><th>Default if unratified</th></tr>
+  <tr><td>1</td><td><b>Editor choice</b> — ratify the hand-rolled SVG editor (§8.1), homed in the port function editor, over the d3-drag micro-dependency?</td><td>hand-rolled (every alternative fails a hard constraint; estimate 1.5–2.5 days)</td></tr>
+  <tr><td>2</td><td><b>Ambient DES at the peak level</b> — the background tail verdict switches from "the mean, sustained" to "the worst hour, sustained" the moment a curve exists. Accept that ambient verdicts get strictly harsher?</td><td>yes — real by default; the mean's tail was the flat-day lie</td></tr>
+  <tr><td>3</td><td><b>Percentile SLO over a played day</b> — worst-window p99 as the judging value with pooled-day p99 alongside (tension 7), or the reverse?</td><td>worst-window judges; pooled shown, labeled</td></tr>
+  <tr><td>4</td><td><b>Per-class curves</b> — confirm deferral (v1 curve rides on the node; all classes originating there inherit it)?</td><td>deferred until a named case</td></tr>
+  <tr><td>5</td><td><b>Window width</b> — 15 min (96 windows, catches short peaks) vs 1 h (24, calmer strip) for the sweep and the DES accumulators?</td><td>15 min compute, 1 h display roll-up</td></tr>
+  <tr><td>6</td><td><b>Play-the-day budget</b> — ~2 M events (seconds in the worker) as the default explicit budget, with the truncate-to-peak-window offer?</td><td>2 M, stated in the run's own output</td></tr>
+  <tr><td>7</td><td><b>Presets list</b> — flat · business-hours · evening-peak · weekend-day · flash-sale as the shipped five?</td><td>as listed; presets are data, trivially extended</td></tr>
+  <tr><td>8</td><td><b>Multi-generator override rule</b> — a world/MC override on <code>node|assumedRps</code> scales a multi-generator node's ports <em>proportionally</em> (§3). Ratify, or require per-port override addressing from day one?</td><td>proportional; per-port addressing added when a named case splits a node's generators across worlds</td></tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <code>docs/design/load-curves.html</code> · the day as an input: <code>generate(level, curve)</code> joins the port-function family, level = the mean, curve = pure shape, generated traffic eats its host, verdicts at the worst hour, the bill at the mean, the DES plays λ(t) by inversion · verified seams: <code>graph.ts</code> Transform union + <code>applyTransform</code> · <code>des.ts</code> 509–523 · <code>sim.ts</code> 132, 172–179 (wire &gt; instance &gt; manifest) · <code>behaviors.ts</code> payPerUseCost/EGRESS/withOrigin · <code>scenario.ts</code> overrides · <code>request-class.ts</code> originByNode · <code>document.ts</code> schema 7→8 + the legacy demand-key chain.
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "Kafka — producer write, no replication (Kreps 2014)",
+  "modelPath": "kafka-cluster.sda.json",
+  "notes": "Single producer thread writing 100-byte records to a 3-broker Kafka cluster (6 partitions), NO replication — the classic Jay Kreps / LinkedIn benchmark. SDA models the cluster as one node whose aggregate write capacity is the `throughput` cell; nodeQueues reads it for rho, so the scored metric is the write throughput ceiling (msg/s at which the cluster saturates) and the calibrated tunable is stream.kafka:throughput. SHARED with the 3x-async-replication entry — one aggregate throughput must reproduce BOTH write configs, so the fit is over-determined and the residual is the honest replication overhead SDA does not model (async replication costs a few percent); the leave-one-out (fit on one, predict the other) is a genuine out-of-sample test. HONEST SCOPE: this validates the throughput CEILING of a streaming/messaging system, NOT the act-as-a-queue BACKLOG behaviour — SDA's queue metric (backlog growth/drain) is not one the corpus can score today, and the ceiling is driven by the generic `throughput` key, not a queue-family lever, so this entry strengthens coverage and out-of-sample generalization but does not flip the act-as-a-queue family. HONEST CAVEAT: Kafka throughput is enormously config-dependent (message size, partitions, batching, acks, replication — Kreps' own numbers span 421,823 msg/s at 3x-sync to 2,024,032 with three producers); this calibrates to ONE documented config (single producer, 100-byte records, 3 brokers, 6 partitions, no replication).",
+  "sources": [
+    { "url": "https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines", "note": "Jay Kreps, 'Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)', LinkedIn Engineering, 2014-04-27. Single producer thread, no replication: 821,557 records/sec (78.3 MB/sec). Hardware: three machines, each Intel Xeon 2.5 GHz six-core, six 7200 RPM SATA drives, 32 GB RAM, 1 Gb Ethernet; 100-byte records; six partitions." }
+  ],
+  "workloadSweep": { "node": "prod", "key": "throughput", "points": [200000, 500000, 800000, 821557, 1000000] },
+  "tunables": [
+    {
+      "key": "throughput",
+      "selector": { "type": "stream.kafka" },
+      "unit": "msg/s",
+      "catalogDefault": 100000,
+      "fit": { "min": 50000, "max": 3000000 },
+      "note": "Kafka cluster aggregate write capacity (msg/s) — the value nodeQueues reads for rho. Catalog default 100,000 msg/s is an ESTIMATE ('self-managed Kafka on a VM cluster'); the measured 3-broker write ceiling is ~8x higher. SHARED with the 3x-async entry: one aggregate throughput must reproduce both the no-replication (821,557) and 3x-async (786,980) write ceilings, so the fit is over-determined and the residual is the honest replication overhead one capacity value cannot capture."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 821557,
+      "unit": "msg/s",
+      "probeLoadRps": 20000,
+      "sourceUrl": "https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines",
+      "note": "Single producer thread, no replication: 821,557 records/sec (Kreps 2014). SDA's out-of-box estimate (100,000 msg/s) UNDER-predicts by ~88%; the fit corrects the aggregate cluster capacity to the measured write ceiling."
+    }
+  ]
+}

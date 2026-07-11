@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guarantee Propagation — consistency, ordering & delivery as computed verdicts · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--ok:#176b37;--warn:#a33;--code:#f2f0ea}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#241b4a,#5b3fa8);color:#fff;padding:56px 24px 44px}
+  .w{max-width:880px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.9;max-width:680px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.7;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#2d2260}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  th{background:#2d2260;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Guarantee Propagation</h1>
+  <div class="sub">Consistency, ordering and delivery semantics as <em>computed verdicts</em> along every request path — the invisible production bugs no diagram tool checks, made visible with 100%-certain lattice arithmetic.</div>
+  <div class="meta">SDA design document · 2026-07-03 · status: for owner review — not started</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a client-side tool in which a software architect draws a system architecture on a canvas and the tool <em>computes</em> the design: load, latency, availability, cost — judged against declared requirements. This document proposes a new computed dimension: qualitative <b>guarantees</b>.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>guarantee</b></td><td>a qualitative promise a path makes about data: how fresh a read is (consistency), whether messages keep their order (ordering), whether a message can be duplicated or lost (delivery).</td></tr>
+  <tr><td style="white-space:nowrap"><b>lattice</b></td><td>a small ordered set with a "weakest-wins" combining rule — the mathematical structure that makes these labels computable with certainty.</td></tr>
+  <tr><td style="white-space:nowrap"><b>flow</b></td><td>one request path through the design, from its traffic origin to its terminal.</td></tr>
+  <tr><td style="white-space:nowrap"><b>verdict</b></td><td>the tool's computed judgment of a declared requirement: ok, violation, or honestly "unknown" with what would resolve it.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The bug class this catches</h2>
+<p class="lead">A user posts a comment, refreshes, and the comment is gone — the write went to the database writer, the read came from a replica still catching up. Two order events arrive swapped — the stream passed through a fan-out that keeps no order. These failures are invisible on every diagram and surface only in production. They are also — and this is the key insight — <b>mechanically derivable from the wiring</b>, because guarantees only ever <em>degrade</em> along a path.</p>
+
+<h2><span class="no">2</span>The model — three independent dimensions, each a tiny lattice</h2>
+<table>
+  <tr><th>Dimension</th><th>Values (strongest → weakest)</th><th>Combining rule along a path</th></tr>
+  <tr><td><b>Consistency</b> (read freshness)</td><td><code>strong</code> → <code>eventual</code></td><td>weakest hop wins; a cache hop with no declared invalidation contributes <code>eventual</code></td></tr>
+  <tr><td><b>Ordering</b></td><td><code>total</code> → <code>per-key</code> (partition/group) → <code>none</code></td><td>weakest hop wins; fan-out contributes <code>none</code></td></tr>
+  <tr><td><b>Delivery</b></td><td>two independent flags: <code>may-duplicate</code>, <code>may-lose</code></td><td>monotone OR — once a hop can duplicate (at-least-once) or drop (at-most-once), the path can</td></tr>
+</table>
+<p>Every component's ports declare their contribution <b>as sourced data</b>, exactly like every other catalog number: an Aurora writer provides <code>strong</code>; a read replica provides <code>eventual</code> (replication lag is documented behavior); Kafka preserves <code>per-key</code> order and is at-least-once (<code>may-duplicate</code>); SQS standard is <code>none</code>/<code>may-duplicate</code>; SQS FIFO is <code>per-key</code> with effective exactly-once — and we already model its 300 msg/s price. The engine sees only opaque ordered tokens and the meet operation; <b>what the tokens mean is entirely content</b>, preserving domain-agnosticism.</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="740" height="150" viewBox="0 0 740 150" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker></defs>
+    <rect x="8" y="50" width="110" height="52" rx="9" fill="#eef4ff" stroke="#3b6fd4"/><text x="63" y="80" text-anchor="middle" font-size="13" font-weight="600">client</text>
+    <rect x="180" y="50" width="130" height="52" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/><text x="245" y="74" text-anchor="middle" font-size="13" font-weight="600">order service</text><text x="245" y="91" text-anchor="middle" font-size="11" fill="#176b37">strong ✓</text>
+    <rect x="372" y="50" width="130" height="52" rx="9" fill="#fdf2e2" stroke="#b4530a"/><text x="437" y="74" text-anchor="middle" font-size="13" font-weight="600">topic (fan-out)</text><text x="437" y="91" text-anchor="middle" font-size="11" fill="#a33">ordering → none</text>
+    <rect x="564" y="50" width="130" height="52" rx="9" fill="#fff" stroke="#8b8fa3"/><text x="629" y="74" text-anchor="middle" font-size="13" font-weight="600">billing worker</text><text x="629" y="91" text-anchor="middle" font-size="11" fill="#a33">receives: none ✗</text>
+    <line x1="118" y1="76" x2="175" y2="76" stroke="#4b5263" stroke-width="1.6" marker-end="url(#g)"/>
+    <line x1="310" y1="76" x2="367" y2="76" stroke="#4b5263" stroke-width="1.6" marker-end="url(#g)"/>
+    <line x1="502" y1="76" x2="559" y2="76" stroke="#4b5263" stroke-width="1.6" marker-end="url(#g)"/>
+  </svg>
+  </div>
+  <figcaption>Degradation is monotone: the label can only weaken hop by hop, so the FIRST hop where the running meet drops below the requirement is the provable root cause — deterministic attribution, the same cause-chain discipline as every other verdict.</figcaption>
+</figure>
+
+<h2><span class="no">3</span>The 100%-computability contract (the owner's condition)</h2>
+<div class="callout"><b>Everything in this feature is either certain or declared — nothing is inferred.</b></div>
+<table>
+  <tr><th>Certain (computed)</th><th>Why it is 100%</th></tr>
+  <tr><td>the path meet, the verdict, the root-cause hop</td><td>finite-lattice arithmetic on declared tokens — deterministic, no probability, no heuristics; soundness is a THEOREM (monotonicity: adding a hop can never strengthen a guarantee), pinned by property tests and a differential against an independent DataScript relational implementation (two engines must agree, our standard rigor)</td></tr>
+  <tr><th>Declared (an assumption, badge-tracked)</th><th>How it stays honest</th></tr>
+  <tr><td>each component's contribution (replica = eventual, FIFO = per-key…)</td><td>sourced from official documentation, carried as data with provenance — rows in the design document's assumptions register like every other number</td></tr>
+  <tr><td>architect overrides ("my cache invalidates on write")</td><td>explicitly set on the instance → badged <code>architect</code>; their truth is the architect's responsibility, stated in the document</td></tr>
+  <tr><th>Refused (would be a guess)</th><th>What happens instead</th></tr>
+  <tr><td>read-your-writes via session stickiness; consumer idempotency; correctness of custom invalidation logic</td><td>these depend on application code the model cannot see → the verdict reads <code>unknown</code> naming exactly which declaration would resolve it. NOT included in v1's computed lattice — no fake certainty, per the owner's rule</td></tr>
+</table>
+
+<h2><span class="no">4</span>UX/UI — how the architect sees and touches it</h2>
+<table>
+  <tr><th>Surface</th><th>Behavior</th></tr>
+  <tr><td><b>Declaring a requirement</b></td><td>the SAME gesture as every SLO: in the flow's Requirements section (web Inspector / VS Code native tree) pick "Ordering ≥ per-key" or "Consistency = strong" or "Duplicates: not allowed". No requirement anywhere → the whole feature is silent (no-filler rule).</td></tr>
+  <tr><td><b>Canvas, with a requirement declared</b></td><td>the flow's edges show a slim guarantee STRIP under the wire (distinct from transform pills): teal while the running meet still satisfies the requirement, switching to red FROM THE DEGRADING HOP onward — you literally see where the promise breaks. Hover names it: "ordering: per-key → none — a fan-out topic keeps no order".</td></tr>
+  <tr><td><b>The degrading hop</b></td><td>gets the standard violation treatment: red halo, a Problems row "flow users→billing: ordering degraded below requirement at topic1", and a REMEDIATION with computed trade-offs: "switch queue to FIFO — restores per-key; documented ceiling 300 msg/s (your flow: 45 msg/s ✓, +$X/mo)". The remediation reuses compare_options machinery — suggestions are computed, never advised from air.</td></tr>
+  <tr><td><b>Inspector (component)</b></td><td>a read-only "Guarantees" block on every port showing its declared contribution with the provenance badge (documented/est./architect) + the override control for the declarable cases (e.g. cache invalidation declared = consistency contribution becomes strong-on-hit, badge flips to architect).</td></tr>
+  <tr><td><b>System panel</b></td><td>per-flow guarantee summary line: "consistency eventual (replica1) · ordering per-key ✓ · duplicates possible (sqs1)" — the parenthesized node is the root cause, clickable to reveal.</td></tr>
+  <tr><td><b>Generated design document</b></td><td>a "Guarantees" section: per-flow table (requirement / computed / root cause), and every declared contribution appears in the assumptions register. Unknown verdicts print with their resolving declaration — honest to the review board.</td></tr>
+  <tr><td><b>MCP (AI agents)</b></td><td><code>set_guarantee_slo</code>, guarantee results in evaluate/verdicts with the same guided errors; list_components/describe_component show declared contributions.</td></tr>
+  <tr><td><b>Synthesis (level-3, R3+)</b></td><td>a declared guarantee requirement becomes a <b>clingo constraint</b> the topology enumerator must satisfy — the same seam that already enumerates protocol-legal completions now also rejects a candidate whose propagated meet would fall below the requirement (e.g. "Ordering ≥ per-key" filters out standard-SQS wirings, admits FIFO). So <code>synthesize</code>/<code>compare_options</code> return only designs that MEET the qualitative promise, cost-ranked as today — guarantees as first-class synthesis constraints, not a post-hoc filter. R1 ships the lattice + forward propagation the constraint reads; wiring it into the ASP model is R3+ scope (owner-confirmed).</td></tr>
+</table>
+
+<h2><span class="no">5</span>Build plan</h2>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td><b>R1 — engine</b></td><td>the lattice primitive: label sets, meet, path propagation, root-cause attribution; registry flag for categorical keys</td><td>property tests (monotonicity; no-labels ≡ today bit-for-bit) + DataScript differential; full doc-4 rigor</td></tr>
+  <tr><td><b>R2 — content</b></td><td>sourced contributions for every catalog component (per-port, with source/est. flags); requirement bands; verdicts + remediations wired to compare_options</td><td>e2e: the replica read story + the fan-out ordering story, both with exact root cause</td></tr>
+  <tr><td><b>R3 — surfaces</b></td><td>guarantee strips on canvas, Inspector blocks, System summary line, design-doc section + register rows, MCP tools</td><td>both shells' suites + smokes + screenshots; owner walkthrough</td></tr>
+</table>
+
+<h2><span class="no">6</span>Non-goals (v1)</h2>
+<table>
+  <tr><td>Inferring guarantees from code or configs the model can't see</td><td>refused — declarations only (the owner's 100% rule)</td></tr>
+  <tr><td>Read-your-writes / session semantics as a COMPUTED value</td><td>needs app-behavior declarations; enters only as an explicit architect declaration or stays unknown</td></tr>
+  <tr><td>Transactionality / isolation levels</td><td>a different, deeper model — revisit with a named use case</td></tr>
+</table>
+
+<footer style="margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 'Segoe UI',sans-serif;color:var(--ink2)">
+SDA · design doc <code>docs/design/guarantee-propagation.html</code> · realizes doc-8 §3 ("strong differentiators") · owner condition honored: certain, declared, or refused — never inferred.
+</footer>
+</div>
+</body>
+</html>

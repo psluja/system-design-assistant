@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow Transformations — per-port traffic transfer functions · SDA Design</title>
+<style>
+  :root{
+    --ink:#1a1d23; --ink2:#4b5263; --paper:#fbfaf7; --card:#ffffff;
+    --accent:#0b6e6e; --accent2:#b4530a; --line:#e5e1d8; --ok:#176b37; --warn:#a33; --code:#f2f0ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:17px/1.65 "Georgia","Charter",'Times New Roman',serif;}
+  header{background:linear-gradient(135deg,#0b3a3a,#0b6e6e);color:#fff;padding:56px 24px 44px}
+  .w{max-width:860px;margin:0 auto;padding:0 24px}
+  header .w{padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px;letter-spacing:-.01em}
+  .sub{font:400 17px/1.5 "Segoe UI",system-ui,sans-serif;opacity:.85;max-width:640px}
+  .meta{font:12px/1.4 "Segoe UI",system-ui,sans-serif;opacity:.65;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0b3a3a}
+  h2 .no{color:var(--accent2);margin-right:10px;font-variant-numeric:tabular-nums}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:30px 0 8px}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code,pre{font:14px/1.55 "Cascadia Code","JetBrains Mono",Consolas,monospace;background:var(--code);border-radius:6px}
+  code{padding:1px 6px}
+  pre{padding:14px 18px;overflow-x:auto;border:1px solid var(--line)}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:var(--card)}
+  th{background:#0b3a3a;color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .pill{display:inline-block;font:600 12px/1 "Segoe UI",sans-serif;padding:4px 10px;border-radius:999px}
+  .ok{background:#e2f2e8;color:var(--ok)} .no{background:#fbe9e7;color:var(--warn)} .mid{background:#fdf2e2;color:#8a5a00}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout b:first-child{font-family:"Segoe UI",system-ui,sans-serif}
+  figure{margin:28px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  figcaption{font:13px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--ink2);margin-top:12px;text-align:center}
+  .svgc{display:flex;justify-content:center}
+  footer{margin:64px 0 40px;padding-top:18px;border-top:1px solid var(--line);font:13px/1.5 "Segoe UI",sans-serif;color:var(--ink2)}
+  .kv{font:14px "Segoe UI",sans-serif;color:var(--ink2)}
+</style>
+</head>
+<body>
+<header>
+  <div class="w">
+    <h1>Flow Transformations</h1>
+    <div class="sub">Per-port traffic transfer functions — replacing the naive “every node relays 1:1” assumption with declared, solver-verifiable flow arithmetic.</div>
+    <div class="meta">SDA design document · 2026-07-02 · status: approved for build (round after universal origins)</div>
+  </div>
+</header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool in which a software architect draws a system architecture on a canvas — services, databases, queues, connected by wires — and the tool <em>computes</em> that design instead of merely drawing it: it derives each component's load, latency, availability and cost, checks them against the architect's requirements, and can search for better configurations. This document is self-contained; earlier design documents are optional further reading, not prerequisites.</p>
+<table style="margin:10px 0 2px">
+  <tr><td style='white-space:nowrap'><b>component / manifest</b></td><td>a building block on the canvas (a database, a queue, a service). Its behavior is described purely by JSON data — numbers and rules — never by code.</td></tr>
+  <tr><td style='white-space:nowrap'><b>port &amp; wire</b></td><td>components connect through named ports (in/out); a wire is one connection between two ports. Traffic flows along wires.</td></tr>
+  <tr><td style='white-space:nowrap'><b>forward evaluation</b></td><td>the instant calculation that runs on every change: given the declared traffic, compute each node's load, latency, availability, cost.</td></tr>
+  <tr><td style='white-space:nowrap'><b>DES</b></td><td>discrete-event simulation — a second engine that replays the system event by event over time; it produces true latency percentiles (p95/p99), which averages cannot give.</td></tr>
+  <tr><td style='white-space:nowrap'><b>MiniZinc / MIP</b></td><td>an exact optimization solver used when the tool runs 'backwards': find the cheapest configuration that still meets the requirements.</td></tr>
+  <tr><td style='white-space:nowrap'><b>SLO &amp; verdict</b></td><td>an SLO is a requirement the architect declares (e.g. 'latency ≤ 250 ms'); a verdict is the tool's computed judgment of that requirement: ok, violation, or honestly 'unknown'.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The bug being fixed</h2>
+<p class="lead">Today every outgoing edge of a node carries the same rate the node received (capped by capacity). Real components <em>transform</em> traffic: one request can spawn a hundred log lines, a thousand events can collapse into one aggregate.</p>
+
+<figure>
+  <div class="svgc">
+  <svg width="640" height="200" viewBox="0 0 640 200" font-family="Segoe UI,system-ui,sans-serif">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4b5263"/></marker>
+    </defs>
+    <!-- client -->
+    <rect x="10" y="75" width="120" height="50" rx="9" fill="#eef4ff" stroke="#3b6fd4"/>
+    <text x="70" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="#1a1d23">client</text>
+    <text x="70" y="113" text-anchor="middle" font-size="12" fill="#4b5263">1,000 req/s</text>
+    <!-- report generator -->
+    <rect x="250" y="75" width="150" height="50" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/>
+    <text x="325" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="#1a1d23">report generator</text>
+    <text x="325" y="113" text-anchor="middle" font-size="12" fill="#4b5263">in: 1,000 req/s</text>
+    <!-- done sink -->
+    <rect x="510" y="20" width="120" height="46" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="570" y="39" text-anchor="middle" font-size="13" font-weight="600" fill="#1a1d23">events</text>
+    <text x="570" y="56" text-anchor="middle" font-size="12" fill="#176b37">1,000 /s ✓</text>
+    <!-- logs sink -->
+    <rect x="510" y="134" width="120" height="46" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="570" y="153" text-anchor="middle" font-size="13" font-weight="600" fill="#1a1d23">log system</text>
+    <text x="570" y="170" text-anchor="middle" font-size="12" fill="#a33">100,000 /s ⚠</text>
+    <!-- edges -->
+    <line x1="130" y1="100" x2="245" y2="100" stroke="#4b5263" stroke-width="1.6" marker-end="url(#arr)"/>
+    <line x1="400" y1="88" x2="505" y2="48" stroke="#4b5263" stroke-width="1.6" marker-end="url(#arr)"/>
+    <line x1="400" y1="112" x2="505" y2="152" stroke="#4b5263" stroke-width="1.6" marker-end="url(#arr)"/>
+    <!-- transform labels -->
+    <rect x="424" y="42" width="66" height="22" rx="11" fill="#e2f2e8"/>
+    <text x="457" y="57" text-anchor="middle" font-size="12" font-weight="600" fill="#176b37">ratio 1</text>
+    <rect x="424" y="136" width="66" height="22" rx="11" fill="#fbe9e7"/>
+    <text x="457" y="151" text-anchor="middle" font-size="12" font-weight="600" fill="#a33">ratio 100</text>
+  </svg>
+  </div>
+  <figcaption>The owner’s example: one report request emits <b>one</b> “done” event but <b>one hundred</b> log lines. Today SDA shows 1,000 req/s on <em>both</em> edges — the log tier’s real load (100,000/s) is invisible, so its verdicts lie.</figcaption>
+</figure>
+
+<p>The same gap hides aggregators (100 : 1), cache-miss pass-through (1 : 0.2 toward the DB), event fan-out (1 : N), sampling, and dead-letter splits. Prior art exists in performance-engineering research — <i>Layered Queueing Networks</i> (visit ratios), Palladio, JMT — but no interactive design canvas computes this live. It is a genuine differentiator.</p>
+
+<h2><span class="no">2</span>The design in one sentence</h2>
+<div class="callout">
+<b>Any port — IN or OUT — may declare a transfer function from a closed, solver-verified set. A node becomes: <code>arrivals → f<sub>in</sub> → service (capacity/queue) → f<sub>out</sub> per port → edges</code>. Default everywhere: <code>ratio(1)</code> — today’s behavior, bit for bit.</b>
+</div>
+<p>Ownership decides the side (owner’s correction, 2026-07-02): <b>emission belongs to the sender</b> (“I emit 100 log lines per request” — <code>ratio(100)</code> on the generator’s OUT port), <b>consumption shape belongs to the receiver</b> (“I aggregate whatever arrives, 100 : 1, from any sender” — <code>batch(100)</code> on the aggregator’s IN port; putting it on every sender would assign the property to the wrong component). Transforms are pure <b>data</b> on the manifest port (components stay JSON; the engine stays domain-agnostic — an opaque function tag + parameters, arithmetic only). A per-instance override knob follows the same pattern as every config value.</p>
+<div class="callout warn">
+<b>Deliberate boundary — queues and throttles.</b> Transforms give the <em>rate arithmetic</em> of a queue (batch consumption, drain ratios) and <code>cap(r)</code> IS a steady-state throttle (the excess lands in the existing <code>overflow</code> — the 429 mechanism). But a queue is <em>memory over time</em> — backlog growth, waiting time, drops after the buffer fills — and a memoryless function must not pretend otherwise: dynamics stay in the DES (<code>queueMode</code>: drainRate/maxBacklog). Semantics preserved: a <b>throttle rejects</b> (overflow verdict), a <b>queue defers</b> (DES) — the component declares which it is.</div>
+
+<h2><span class="no">3</span>The function set — what fits without a revolution</h2>
+<p>The dividing line is the <b>backward solver</b>: optimize / repair / synthesize run on MiniZinc + COIN-BC, a <em>linear</em> (MIP) solver. Anything linear or piecewise-linear rides today’s machinery; genuine non-linearities would demand a different solver class — a revolution we refuse for v1.</p>
+
+<table>
+  <tr><th>Function</th><th>Semantics (edge rate)</th><th>Covers</th><th>Forward</th><th>DES</th><th>Optimize (MIP)</th></tr>
+  <tr><td><code>ratio(k)</code></td><td><code>out = k · in</code></td><td>log amplification (k=100), event fan-out (k=3), aggregation (k=0.01), cache-miss to DB (k=0.2), sampling (k=0.1)</td>
+      <td><span class="pill ok">yes</span></td><td><span class="pill ok">yes</span></td><td><span class="pill ok">linear</span></td></tr>
+  <tr><td><code>batch(n)</code></td><td><code>out = in / n</code></td><td>aggregators, batchers (100 : 1) — sugar over ratio, reads like the architecture</td>
+      <td><span class="pill ok">yes</span></td><td><span class="pill ok">yes</span></td><td><span class="pill ok">linear</span></td></tr>
+  <tr><td><code>cap(r)</code></td><td><code>out = min(in, r)</code></td><td>rate limiters, throttles, flush ceilings</td>
+      <td><span class="pill ok">yes</span></td><td><span class="pill ok">yes</span></td><td><span class="pill ok">piecewise (min already in our algebra)</span></td></tr>
+  <tr><td><code>window(ms)</code></td><td><code>out = min(in, 1000/ms)</code></td><td>time-window aggregation (metrics flushed every 10 s → ≤ 0.1 msg/s)</td>
+      <td><span class="pill ok">yes</span></td><td><span class="pill ok">yes</span></td><td><span class="pill ok">piecewise</span></td></tr>
+  <tr><td><code>prob(p)</code></td><td><code>out = p · in</code> (per-job Bernoulli in DES)</td><td>error/DLQ splits (1%), A/B routing</td>
+      <td><span class="pill ok">yes</span></td><td><span class="pill ok">yes — true randomness</span></td><td><span class="pill ok">linear</span></td></tr>
+  <tr><td><code>log / quadratic / custom expr</code></td><td>—</td><td>no named infra case; “retry storms” are feedback dynamics (DES scenario), not a static function</td>
+      <td><span class="pill mid">possible</span></td><td><span class="pill mid">possible</span></td><td><span class="pill no">breaks exact MIP — deferred, out of v1</span></td></tr>
+</table>
+
+<div class="callout">
+<b>Observation that keeps this cheap:</b> every real case the owner named — 1:1 events, 1:100 logs, 100:1 aggregation — is <b>linear</b>. The “activation function” intuition is right about <em>shape declared per port</em>, but infrastructure traffic arithmetic is ratios and caps, not sigmoids. A closed set keeps the honesty contract testable: each function gets a JS↔MiniZinc differential test; an arbitrary expression could not be verified this way.</div>
+
+<h2><span class="no">4</span>What changes, layer by layer</h2>
+<table>
+  <tr><th>Layer</th><th>Change</th><th>Size</th></tr>
+  <tr><td><b>Meta-model</b> (doc-3)</td><td>OUT port gains optional <code>transform: {fn, k}</code>; instance-level override key. Pure data.</td><td>S</td></tr>
+  <tr><td><b>engine/solve</b></td><td>The heart: throughput becomes a <b>per-edge</b> value. The network builder applies the port’s transform to the node’s served inflow when seeding each out-edge; the merger’s fan-in sum is unchanged. Property + differential tests mandatory (first engine-core change since the quality gate closed).</td><td>M</td></tr>
+  <tr><td><b>MiniZinc emitter</b></td><td>Linear terms for ratio/batch/prob; <code>min</code> encoding for cap/window (already used elsewhere). Differential JS↔MZN per function.</td><td>S–M</td></tr>
+  <tr><td><b>engine/sim (DES)</b></td><td>Per-edge multiplicity: one completion spawns k jobs downstream (fractional → probabilistic); prob(p) as Bernoulli.</td><td>S–M</td></tr>
+  <tr><td><b>Content</b></td><td>Real ratios where documented (logging sidecars, aggregators); everything else stays ratio(1).</td><td>S</td></tr>
+  <tr><td><b>UI (both shells)</b></td><td>Edge labels finally show the <em>transformed</em> rate (1,000 → 100,000); transform badge on the port; inspector knob.</td><td>S</td></tr>
+  <tr><td><b>MCP</b></td><td><code>describe_component</code> lists transforms; <code>set_config</code> override; instructions one-liner.</td><td>S</td></tr>
+</table>
+
+<figure>
+  <div class="svgc">
+  <svg width="680" height="150" viewBox="0 0 680 150" font-family="Segoe UI,system-ui,sans-serif">
+    <defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#0b6e6e"/></marker></defs>
+    <rect x="8" y="45" width="140" height="60" rx="9" fill="#e9f5f2" stroke="#0b6e6e"/>
+    <text x="78" y="70" text-anchor="middle" font-size="13" font-weight="600">node</text>
+    <text x="78" y="88" text-anchor="middle" font-size="12" fill="#4b5263">served inflow s</text>
+    <rect x="238" y="45" width="180" height="60" rx="30" fill="#fdf2e2" stroke="#b4530a" stroke-dasharray="5 3"/>
+    <text x="328" y="70" text-anchor="middle" font-size="13" font-weight="600" fill="#8a5a00">port transform</text>
+    <text x="328" y="88" text-anchor="middle" font-size="13" fill="#8a5a00" font-family="Consolas,monospace">f(s)</text>
+    <rect x="508" y="45" width="160" height="60" rx="9" fill="#fff" stroke="#8b8fa3"/>
+    <text x="588" y="70" text-anchor="middle" font-size="13" font-weight="600">edge carries</text>
+    <text x="588" y="88" text-anchor="middle" font-size="13" fill="#176b37" font-family="Consolas,monospace">f(s) req/s</text>
+    <line x1="148" y1="75" x2="233" y2="75" stroke="#0b6e6e" stroke-width="1.8" marker-end="url(#arr2)"/>
+    <line x1="418" y1="75" x2="503" y2="75" stroke="#0b6e6e" stroke-width="1.8" marker-end="url(#arr2)"/>
+  </svg>
+  </div>
+  <figcaption>The single conceptual change: the edge no longer inherits the node’s rate — it carries the port’s function of it. With <code>f = identity</code> nothing anywhere changes.</figcaption>
+</figure>
+
+<h2><span class="no">5</span>What this unlocks beyond the bug</h2>
+<p><b>Mid-chain origination completes.</b> The universal-origins round (shipped) recorded one honest limit: a node that both relays and self-originates cannot add its origin to the emitted flow, because per-node throughput doubles as capacity. Per-edge emission is exactly the seam that removes it — origin injection becomes an additive term of the same edge arithmetic.</p>
+<p><b>Aggregation pipelines stop lying.</b> Kafka consumers, metric pipelines, CDC batchers — the 100:1 stages finally show their true downstream pressure, and optimize sizes the tail tiers for the <em>real</em> rate.</p>
+
+<h2><span class="no">6</span>Honesty & compatibility contract</h2>
+<table>
+  <tr><td class="kv">Default</td><td><code>ratio(1)</code> everywhere — every existing design and file evaluates <b>bit-for-bit identically</b> (pinned by a golden test).</td></tr>
+  <tr><td class="kv">Declared, never guessed</td><td>Transforms come from the manifest (sourced) or the architect’s explicit override — the engine never infers a ratio.</td></tr>
+  <tr><td class="kv">Differential</td><td>Each function of the set ships with a JS↔MiniZinc differential test and a DES cross-check (scalar mean vs simulated mean).</td></tr>
+  <tr><td class="kv">Refused for v1</td><td>Arbitrary expressions and non-linear shapes — would silently break exact optimization; revisit only with a named, sourced use case.</td></tr>
+</table>
+
+<h2><span class="no">7</span>Build plan</h2>
+<table>
+  <tr><th>Round</th><th>Scope</th><th>Gate</th></tr>
+  <tr><td><b>R1 — engine</b></td><td>meta-model field · per-edge throughput in solve · MZN emitter · DES multiplicity · property/differential suites</td><td>doc-4 §9 rigor: all four paradigms still differential-green; golden compat test</td></tr>
+  <tr><td><b>R2 — surface</b></td><td>content ratios · edge-rate labels in both shells · inspector/MCP knobs · design-doc generator shows transforms</td><td>all shells’ suites + browser smokes; MCP guided errors updated</td></tr>
+</table>
+
+<footer>
+  SDA — System Design Assistant · design doc <code>docs/design/flow-transformations.html</code> · pairs with doc-2 (Property System), doc-4 (Engine Calculus), doc-8 (Coverage Map).<br>
+  Origin: owner’s finding 2026-07-02 (“węzeł nie przepuszcza ruchu 1:1 — potrzebujemy funkcji na wyjściach”). Approved direction; build queued after universal origins.
+</footer>
+</div>
+</body>
+</html>

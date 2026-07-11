@@ -1,0 +1,23 @@
+{
+  "name": "system-design-assistant",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A domain-agnostic engine for live, verified system-design simulation (client-side, WASM solvers).",
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --filter @sda/web dev",
+    "build": "pnpm --filter @sda/web build",
+    "preview": "pnpm --filter @sda/web preview",
+    "test": "vitest run",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "catalogs": "node scripts/generate-catalogs.mjs",
+    "calibrate": "pnpm --filter @sda/calibration calibrate",
+    "calibrate:check": "pnpm --filter @sda/calibration calibrate:check",
+    "fidelity": "pnpm --filter @sda/calibration fidelity"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

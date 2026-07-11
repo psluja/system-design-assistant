@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peaks, Integrated — how load-stages should connect to every feature · SDA Design</title>
+<style>
+  :root{--ink:#1a1d23;--ink2:#4b5263;--paper:#fbfaf7;--card:#fff;--accent:#0b6e6e;--accent2:#b4530a;--line:#e5e1d8;--code:#f2f0ea;--good:#2f7d4f;--warn:#b48908;--bad:#b3261e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 Georgia,Charter,serif}
+  header{background:linear-gradient(135deg,#0e2f3a,#1c6e7a);color:#fff;padding:56px 24px 44px}
+  .w{max-width:940px;margin:0 auto;padding:0 24px}
+  h1{font:600 34px/1.2 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 10px}
+  .sub{font:400 17px/1.5 "Segoe UI",sans-serif;opacity:.92;max-width:760px}
+  .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.12em}
+  h2{font:600 24px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:52px 0 14px;color:#0e3540}
+  h2 .no{color:var(--accent2);margin-right:10px}
+  h3{font:600 18px/1.3 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:28px 0 10px;color:#0e3540}
+  p{margin:0 0 14px}
+  .lead{font-size:19px;color:var(--ink2)}
+  code{font:14px/1.55 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:6px;padding:1px 6px}
+  pre{font:13.5px/1.5 "Cascadia Code",Consolas,monospace;background:var(--code);border-radius:8px;padding:14px 16px;overflow-x:auto}
+  a{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:18px 0;font:15px/1.5 "Segoe UI",sans-serif;background:var(--card)}
+  .scroll{overflow-x:auto}
+  th{background:#0e3540;color:#fff;text-align:left;padding:10px 14px;font-weight:600;vertical-align:top}
+  td{border-bottom:1px solid var(--line);padding:10px 14px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:16px 20px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout.warn{border-left-color:var(--accent2)}
+  .callout.big{border-left-width:6px;background:#f5faf9}
+  .callout b:first-child{font-family:"Segoe UI",sans-serif}
+  figure{margin:26px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px 10px}
+  figure svg{display:block;max-width:100%;height:auto}
+  figcaption{font:13.5px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin-top:10px;padding-bottom:6px}
+  .small{font:13.5px/1.55 "Segoe UI",sans-serif;color:var(--ink2)}
+  .tag{display:inline-block;font:11px/1 "Segoe UI",sans-serif;font-weight:600;padding:3px 7px;border-radius:5px;vertical-align:middle}
+  .tag.new{background:#fdf2e2;color:#b4530a}
+  .tag.gone{background:#fbe7e7;color:#b3261e}
+  .tag.keep{background:#e9f5f2;color:#0b6e6e}
+  .tag.done{background:#e7f3ea;color:#2f7d4f}
+  .v-high{background:#e7f3ea;color:#2f7d4f}
+  .v-med{background:#fdf2e2;color:#b4530a}
+  .v-low{background:#eee9df;color:#6b6456}
+  .fn{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+  .rank{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;background:#0e3540;color:#fff;font:600 13px "Segoe UI",sans-serif;margin-right:8px}
+  ol.build{list-style:none;padding-left:0;counter-reset:step}
+  ol.build>li{position:relative;padding:12px 0 12px 44px;border-bottom:1px solid var(--line);counter-increment:step}
+  ol.build>li::before{content:counter(step);position:absolute;left:0;top:12px;width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;background:var(--accent);color:#fff;font:600 14px "Segoe UI",sans-serif}
+  .matrix td:first-child{font-weight:600;white-space:nowrap}
+  .q{font-weight:600;color:#0e3540}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>Peaks, Integrated</h1>
+  <div class="sub">Load stages just landed. The owner's brief for the next round is not "more peak features" — it is that <em>everything should hook into everything</em>: <b>„wszystko spinało się ze wszystkim… jak to wpływa na promises na nodach? jak zobaczę które nody nie wyrobiły przez peaki?"</b>. This document scans every shipped feature, grounds each connection in code, and proposes the ONE elegant form the integration should take — <b>consolidate, don't accrete</b>. The through-line: a peak is not a new subsystem. <b>A peak is a derived world</b> — a demand the machinery already knows how to overlay, judge and size for.</div>
+  <div class="meta">SDA design document · 2026-07-06 · HEAD 2ca5f61 · status: PLAN (docs-only, no code) · R4 (per-node peak verdicts) is the assumed foundation · scope: how load-stages connects to the other 20 features</div>
+</div></header>
+<div class="w">
+
+<div class="callout" style="border-left-color:#4b5263">
+<b>About this document &amp; the project (context for the outside reader).</b>
+<p style="margin-top:8px"><b>SDA (System Design Assistant)</b> is a fully client-side tool that computes an architecture drawn on a canvas — its throughput, latency, availability and cost — against declared requirements, live on every edit, and can run backwards to size or repair a design. A domain-agnostic engine does the math (a fixpoint solver for the forward pass, a discrete-event simulator for tails, a native search for optimization); all cloud meaning is <em>content</em>. <b>Load stages</b> (the feature just shipped, <a href="load-stages.html">load-stages.html</a>) let a traffic origin declare that its load <em>changes over time</em> — a launch spike, a diurnal rhythm, a quarterly season — as a k6/Gatling-style table of steps wrapped in periodic cycles. This document plans how that time-varying load should tie into the features it currently sits beside rather than inside. Definitions, stated positively:</p>
+<table style="margin:10px 0 2px">
+  <tr><td style="white-space:nowrap"><b>baseline level</b></td><td>the generator's steady rate — the <code>×1</code> the shape's multipliers are relative to. It is the same reconciled <code>assumedRps</code> cell that worlds and Monte-Carlo already manipulate (<span class="fn">load-stages.ts:112</span> <code>generatorRate</code>). A design with no cycles evaluates byte-for-byte as today.</td></tr>
+  <tr><td style="white-space:nowrap"><b>λ(t) / the shape</b></td><td>the instantaneous rate <code>level · Π<sub>cycles</sub> multiplier(t)</code> — the exact scalar the sweep reads per window (<span class="fn">load-stages.ts:112</span>). <b>Mean</b> and <b>peak</b> are DERIVED from it: <code>derivedMean</code> bills, <code>derivedPeak</code> judges (<span class="fn">load-stages.ts:180, :194</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>Tier-1 sweep</b></td><td>the cheap analytic core: partition the auto-derived season into windows, and at each window <b>override every origin's <code>assumedRps</code> to its λ(t)</b> and evaluate the steady M/M/c response (<span class="fn">time-sweep.ts:144</span>, using <code>applyScenarioToGraph</code>). It yields a <code>TimeSweep</code>: the ρ-envelope, the <b>worst window</b>, the <b>cost integral</b> (mean bill) and the fraction of the span in violation (<span class="fn">time-sweep.ts:47–62</span>).</td></tr>
+  <tr><td style="white-space:nowrap"><b>rhoByNode / worst window</b></td><td>per window, ρ = offered/capacity for every station (<span class="fn">time-sweep.ts:37</span>); <code>worstWindowIndex</code> is where cycles superimpose worst. <code>peakLoadByNode(sweep)</code> projects each node's <b>own</b> worst ρ and WHEN it peaks — a <code>NodePeak {rho, atS}</code> (<span class="fn">time-sweep.ts:207, :192</span>). This is the per-node peak read.</td></tr>
+  <tr><td style="white-space:nowrap"><b>Tier-2 transient</b></td><td>the expensive proof: on the one worst window, a targeted DES measures the true backlog build-up/drain and returns a <code>StressVerdict</code> — survives?, recovery time, peak backlog, windowed p99, <b>lost requests</b>, retry amplification (<span class="fn">two-tier.ts:64–82</span>), basis <code>measured (transient)</code>.</td></tr>
+  <tr><td style="white-space:nowrap"><b>R4 (the foundation)</b> <span class="tag new">in progress</span></td><td>a concurrent agent is wiring the per-node peak into the <em>presenter</em>: the canvas ρ chip, a "Load" verdict row in the Inspector, and the System ρ rows now read <code>peakReadOf(steadyRho, NodePeak)</code> and append "· peak 141% ⚠ @18:00" (<span class="fn">peak-view.ts:56, :70</span>; <span class="fn">node-detail.ts:168</span>). This document treats R4 as done and plans everything downstream of it.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">1</span>The one idea — a peak is a derived world</h2>
+<p class="lead">Every integration below is one question asked of one feature: <b>does it read the steady graph, or the peak-overridden graph?</b></p>
+<p>The load-stages feature already made the load-bearing choice for us. To evaluate a shaped design, the Tier-1 sweep does not invent a new evaluation path — at each window it takes the origin's instantaneous rate and <em>overrides <code>node|assumedRps</code> to that scalar</em>, then calls the ordinary forward evaluator (<span class="fn">time-sweep.ts:141–147</span>). That override is byte-identical to what a <b>named world</b> does: <code>applyScenarioToGraph</code> substitutes a fact-assumption input cell (<span class="fn">scenario.ts:154</span>), and Monte-Carlo does the same per draw (<span class="fn">uncertainty.ts:363</span>). The worst window is therefore nothing more exotic than <b>a scenario whose demand vector is the peak λ(t)</b>.</p>
+<div class="callout big">
+<b>The consolidation.</b>
+<p style="margin-top:8px">SDA already has three consumers of "overlay a demand and re-judge": <b>worlds</b> (<code>evaluateWorlds</code>, <span class="fn">scenario.ts:215</span>), <b>Monte-Carlo</b> (<code>runUncertainty</code>, <span class="fn">uncertainty.ts:350</span>) and <b>robust improve</b> (<code>robustOptimize</code>, <span class="fn">robust.ts:154</span>). Each already accepts an <code>AssumptionScenario</code>. The elegant integration for peaks is to express the worst window as <b>one derived scenario</b> — the "peak world" — and let it flow through the seams that already exist, exactly as the auto-trio (<span class="fn">derived-scenarios.ts:95</span>) flows through them. No new evaluation engine; a new <em>demand source</em>. That reframes the whole matrix: most rows are "feed the peak scenario into a seam that already takes a scenario."</p>
+</div>
+<p>The counter-current, and the honesty this document must keep: <b>a peak is not always a fact-assumption override.</b> Two connections resist the "peak = world" reduction and need real design — (a) the <b>cost integral</b> is a whole-<em>season</em> mean, not a single overlaid point; (b) <b>Tier-2</b>'s survival is a measured dynamic, not a re-evaluation. Those are flagged as they arise.</p>
+
+<h2><span class="no">2</span>The integration matrix</h2>
+<p>Every shipped feature (from <a href="../FEATURES.md">FEATURES.md</a>), where load-stages should connect, whether the seam already carries it, the honest build cost, and the value. Cost is in <b>rounds</b> (R ≈ a focused implementation slice with its own green gate). Value weighs how much the connection closes the owner's question — "which nodes fail SLO because of peaks, and what does it cost to survive them?"</p>
+<div class="scroll">
+<table class="matrix">
+<tr><th>Feature</th><th>Where it connects</th><th>Seam ready?</th><th>Cost</th><th>Value</th></tr>
+<tr>
+  <td>Per-node promises &amp; verdicts</td>
+  <td>Promote R4's presenter peak into the canonical verdict list <code>realAwareVerdicts</code> so every consumer (MCP, doc, worlds, MC) sees peak, not just the canvas. <span class="fn">verdict.ts:77</span> · <span class="fn">peak-view.ts:56</span></td>
+  <td>Partial — R4 does the presenter; the shared list is still steady</td>
+  <td><span class="tag new">R2</span></td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+<tr>
+  <td>Robust Improve / optimize / repair</td>
+  <td>Derive a "peak world" from the worst-window demand and run the EXISTING robust search over it — "cheapest config that survives the daily peak." <span class="fn">robust.ts:154</span> · <span class="fn">search.ts:228</span> · <span class="fn">load-stages.ts:194</span></td>
+  <td>Yes — robust already sizes across worlds by knob-wise max</td>
+  <td><span class="tag new">R2</span></td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+<tr>
+  <td>Worlds / scenarios</td>
+  <td>Add a peak-ρ / worst-window column to the matrix; let a world override the SHAPE (cycles), not only the level — "Black Friday world" = its own spike. <span class="fn">scenario.ts:160, :53</span></td>
+  <td>Partial — matrix + override exist; shape override + column new</td>
+  <td><span class="tag new">R1–R2</span></td>
+  <td><span class="tag v-high">high</span></td>
+</tr>
+<tr>
+  <td>Capacity envelope</td>
+  <td>Compute the edge at PEAK: the max baseline such that the peak (not the steady) still holds every SLO. <span class="fn">envelope.ts:308, :246</span></td>
+  <td>Partial — inversion exists; the constraint graph must be the peak overlay</td>
+  <td><span class="tag new">R2</span></td>
+  <td><span class="tag v-med">med</span></td>
+</tr>
+<tr>
+  <td>Monte-Carlo uncertainty</td>
+  <td>Range the baseline LEVEL × the deterministic shape → "in X% of sampled worlds the daily peak still holds." <span class="fn">uncertainty.ts:350, :332</span></td>
+  <td>Yes — the batch seam + the `scenario` centering arg already exist</td>
+  <td><span class="tag new">R2</span></td>
+  <td><span class="tag v-med">med</span></td>
+</tr>
+<tr>
+  <td>System cost promise</td>
+  <td>Judge the whole-design cost against the day's <b>cost integral</b> (mean bill), not the steady snapshot — the sweep already computes it. <span class="fn">system-promise.ts:111</span> · <span class="fn">time-sweep.ts:183</span></td>
+  <td>Partial — the integral is computed; the judge reads the steady total</td>
+  <td><span class="tag new">R1</span></td>
+  <td><span class="tag v-med">med</span></td>
+</tr>
+<tr>
+  <td>Tail / lag SLOs</td>
+  <td>Judge percentile &amp; lag SLOs at the peak window (Tier-2 already yields a windowed p99 there). <span class="fn">two-tier.ts:73</span> · <span class="fn">simulate.ts:59</span> · <span class="fn">lag-slo.ts:94</span></td>
+  <td>Partial — Tier-2 measures p99During; it is not yet a tail-SLO verdict</td>
+  <td><span class="tag new">R2</span></td>
+  <td><span class="tag v-med">med</span></td>
+</tr>
+<tr>
+  <td>Design-doc generator</td>
+  <td>A "peak behaviour" section: ρ-envelope, worst window, which nodes saturate at peak, cost integral, survival verdict. <span class="fn">doc-model.ts:710, :588</span></td>
+  <td>Partial — the model is a closed section canon; add one key, gated no-filler</td>
+  <td><span class="tag new">R1</span></td>
+  <td><span class="tag v-med">med</span></td>
+</tr>
+<tr>
+  <td>Reliability advisor</td>
+  <td>Flag a node that saturates ONLY at peak (a hidden availability risk the steady read misses). <span class="fn">reliability.ts:97</span></td>
+  <td>No — advisor reads series-product availability, not ρ over time</td>
+  <td><span class="tag new">R1</span></td>
+  <td><span class="tag v-low">low–med</span></td>
+</tr>
+<tr>
+  <td>Request classes <span class="tag keep">frozen</span></td>
+  <td>Per-class shapes (report class = quarterly, user class = diurnal) — forward-compatible; naturally expressible once per-class DES lands. <span class="fn">request-class.ts</span></td>
+  <td>Latent — the Cycle already rides a per-port generate; classes are per-wire</td>
+  <td><span class="tag gone">defer</span></td>
+  <td><span class="tag v-low">forward-compat</span></td>
+</tr>
+</table>
+</div>
+<p class="small">Three creative, non-obvious connections are handled separately in §14 (the guarantee lattice, the ideal layout / C4, and escalation labelling). They are lower-value but they answer the owner's "be creative — what SHOULD connect."</p>
+
+<h2><span class="no">3</span>The foundation this rests on — R4, and the gap it leaves</h2>
+<p>R4 is doing exactly the right first thing: it turns the sweep's <code>peakLoadByNode</code> into a per-node display so the canvas, Inspector and System panel answer the owner's <em>„które nody nie wyrobiły przez peaki"</em> directly — a node calm at the mean but saturated at 18:00 now reads "ρ 141% · saturated · at peak (18:00)" (<span class="fn">peak-view.ts:77</span>; <span class="fn">node-detail.ts:168–170</span>). That is the visible half.</p>
+<div class="callout warn">
+<b>The gap R4 does not close (and this plan's spine).</b>
+<p style="margin-top:8px">R4 threads the peak into the <b>presenter</b> — the view-models the two shells render. It does <em>not</em> touch <code>realAwareVerdicts</code> (<span class="fn">verdict.ts:77</span>), the single canonical verdict list that MCP <code>evaluate</code>, the design doc (<span class="fn">doc-model.ts:95</span>), the worlds matrix (<span class="fn">scenario.ts:272</span>) and Monte-Carlo SLO confidence (<span class="fn">uncertainty.ts:395</span>) all consume. So today the human sees a peak violation on the canvas while <b>the AI reading MCP <code>evaluate</code>, and the generated deliverable, still see the steady green.</b> That violates the project's own "web is a dumb renderer / one truth" invariant (memory: <em>web-is-a-dumb-renderer</em>). Closing it — promoting the peak from a presenter read into the shared verdict list — is integration #1 and the enabler for half the matrix.</p>
+</div>
+
+<h2><span class="no">4</span>Integration #1 — per-node promises inherit peak-awareness <span class="tag v-high">TOP 3</span></h2>
+<h3>The elegant design</h3>
+<p>Give <code>realAwareVerdicts</code> an optional peak read and let it do, in the shared list, exactly what R4 does in the presenter. Today the function recomputes each scalar latency SLO against the node's <em>real (steady)</em> response and raises a saturation violation for every steady ρ≥1 tier (<span class="fn">verdict.ts:112–128</span>). The one-form extension: accept an optional <code>Map&lt;string, NodePeak&gt;</code> (the sweep's <code>peakLoadByNode</code>) and, for a node whose <b>peak</b> ρ≥1 while its steady ρ&lt;1, emit a saturation violation carrying a <code>basis: 'peak'</code> tag and the clock instant — the identical judgement R4 already makes, now in the list every surface reads.</p>
+<p>Because the sweep already overrides <code>assumedRps</code> to λ(t) and re-runs the ordinary evaluator (<span class="fn">time-sweep.ts:144</span>), the peak-overlaid verdicts are just <code>realAwareVerdicts</code> run on the worst-window graph. The cleanest form is: <b>verdicts are a function of a demand overlay; the steady list is the base overlay, the peak list is the worst-window overlay, and a node's shown verdict is the worse of the two</b> (a max over demand, exactly as R4's <code>peakReadOf</code> takes the peak only when it exceeds steady — <span class="fn">peak-view.ts:60</span>).</p>
+<h3>Feasibility (code-grounded)</h3>
+<p>Direct. <code>realAwareVerdicts</code> is pure over <code>(graph, value, queues)</code> (<span class="fn">verdict.ts:77</span>); the worst-window graph and its <code>value</code>/<code>queues</code> are already built inside the sweep loop (<span class="fn">time-sweep.ts:145–150</span>) — they are simply not returned per node today (only ρ is kept). Two honest sub-tasks: (1) have the sweep retain the worst window's verdicts (or re-derive them on demand from the retained overlay); (2) merge them into the canonical list with a peak basis. No new solver, no new addressing.</p>
+<h3>Cost &amp; tension</h3>
+<p><b>R2.</b> The tension is <b>labelling</b>: a verdict that fails only at 18:00 must never read like a permanent failure. The list must carry <code>basis: 'peak'</code> + the instant so a renderer/agent can say "holds at the mean, saturates at the daily peak (18:00)" — the same two-basis honesty load-stages already keeps between analytic and transient (<span class="fn">two-tier.ts:60</span>). Get this wrong and every shaped design screams red at the AI. This is the single most important honesty decision in the whole plan.</p>
+
+<h2><span class="no">5</span>Integration #2 — Improve sizes for the worst window <span class="tag v-high">TOP 3</span></h2>
+<p class="lead">The highest-value connection. "Give me the cheapest configuration that survives the daily peak" is the question a staff architect actually asks, and SDA is one derived scenario away from answering it.</p>
+<h3>The elegant design</h3>
+<p>Robust improve already sizes a design to hold every SLO across a <em>set of worlds</em>, by running the native search once per world and taking each provisioning knob's maximum (<span class="fn">robust.ts:154, :107</span>). A world is just a fact-assumption overlay. So: <b>derive a "peak world" whose demand overrides are each origin's <code>derivedPeak</code></b> (<span class="fn">load-stages.ts:194</span>) and hand it to <code>robustOptimize</code>/<code>robustRepair</code> as one more world. The result — "size db.concurrency to 40, bound by world <em>peak</em>" — falls out of the existing <code>bindingWorld</code> machinery (<span class="fn">robust.ts:110</span>), and enacts through the existing <code>apply_solution</code> path (<span class="fn">search.ts:363</span>). The surface is the <code>worlds</code> argument that already exists on <code>repair</code>/<code>optimize</code> (<span class="fn">search.ts:266, :314</span>) — add a reserved value like <code>worlds:"peak"</code> that <code>resolveWorlds</code> (<span class="fn">search.ts:228</span>) maps to the derived peak world.</p>
+<figure>
+<svg viewBox="0 0 860 210" role="img" aria-label="Peak world flows through the existing robust search">
+  <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#0b6e6e"/></marker></defs>
+  <rect x="16" y="70" width="176" height="66" rx="8" fill="#f5faf9" stroke="#0b6e6e"/>
+  <text x="104" y="98" text-anchor="middle" class="lblb" font-family="Segoe UI" font-size="13">derivedPeak(level, cycles)</text>
+  <text x="104" y="118" text-anchor="middle" class="lbl" font-family="Segoe UI" font-size="12">load-stages.ts:194</text>
+  <rect x="248" y="70" width="176" height="66" rx="8" fill="#fdf2e2" stroke="#b4530a"/>
+  <text x="336" y="92" text-anchor="middle" class="lblb" font-family="Segoe UI" font-size="13">"peak world"</text>
+  <text x="336" y="110" text-anchor="middle" class="lbl" font-family="Segoe UI" font-size="12">AssumptionScenario</text>
+  <text x="336" y="126" text-anchor="middle" class="lbl" font-family="Segoe UI" font-size="12">(demand overrides)</text>
+  <rect x="480" y="70" width="176" height="66" rx="8" fill="#fff" stroke="#0e3540"/>
+  <text x="568" y="92" text-anchor="middle" class="lblb" font-family="Segoe UI" font-size="13">robustOptimize</text>
+  <text x="568" y="110" text-anchor="middle" class="lbl" font-family="Segoe UI" font-size="12">per-world solve +</text>
+  <text x="568" y="126" text-anchor="middle" class="lbl" font-family="Segoe UI" font-size="12">knob-wise max · robust.ts:154</text>
+  <rect x="712" y="70" width="132" height="66" rx="8" fill="#e7f3ea" stroke="#2f7d4f"/>
+  <text x="778" y="98" text-anchor="middle" class="lblb" font-family="Segoe UI" font-size="13">cheapest config</text>
+  <text x="778" y="118" text-anchor="middle" class="lbl" font-family="Segoe UI" font-size="12">that survives peak</text>
+  <line x1="192" y1="103" x2="246" y2="103" stroke="#0b6e6e" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="424" y1="103" x2="478" y2="103" stroke="#0b6e6e" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="656" y1="103" x2="710" y2="103" stroke="#0b6e6e" stroke-width="2" marker-end="url(#ar)"/>
+</svg>
+<figcaption>The peak reuses the whole robust pipeline: a derived demand scenario, the per-world solve, the knob-wise-max combine, the binding-world attribution, the <code>apply_solution</code> enactment. Nothing new but the demand source.</figcaption>
+</figure>
+<h3>Feasibility &amp; the monotonicity question (the task's specific ask)</h3>
+<p><b>Does worst-window sizing stay in the native monotone class, or escalate to the MIP?</b> It stays native. The native search is exact and fast precisely because the design is a monotone function of the provisioning knobs, and it decides feasibility at one box corner (ALGORITHMS.md → <code>native/search.ts</code>). <b>The demand is a fixed input to each solve, not a knob</b> — a peak demand is simply a larger constant, so a peak-world solve is no harder, and no less monotone, than a base-world solve. The escalation trigger is <em>budget coupling</em> (a cost ceiling fighting the objective — <span class="fn">search.ts:291</span>), which is orthogonal to whether the demand is peak or steady. So sizing for the peak does <b>not</b> by itself force the reference MIP.</p>
+<p>Where non-monotonicity <em>can</em> bite is the robust combine, and robust already guards it: after the knob-wise max it re-verifies every world and DECLINES honestly (<code>did-not-converge</code>, naming the world) if the max-combine left the monotone class (<span class="fn">robust.ts:124–128</span>). The peak world inherits that guard for free.</p>
+<h3>Cost &amp; the design decision</h3>
+<p><b>R2.</b> One real choice: <b>the single global worst window vs. each node's own worst instant.</b> <code>peakLoadByNode</code> gives every node its <em>own</em> peak instant (<span class="fn">time-sweep.ts:207</span>) — a fan-out node may peak when a downstream node does not. Sizing to the single global worst window (one peak-demand vector) is cheaper and usually right; sizing each node to its personal worst instant is the true robust answer and is the per-window generalization of robust's knob-wise max (max over <em>time windows</em> instead of over <em>worlds</em>). Recommendation: ship the single-global-worst-window peak world first (one extra world, trivially correct), and treat per-window-max as a later exactness upgrade. Flagged as an open question (§16).</p>
+
+<h2><span class="no">6</span>Integration #3 — worlds gain a shape, and a peak column <span class="tag v-high">TOP 3</span></h2>
+<h3>The elegant design — two moves</h3>
+<p><b>(a) A world overrides the SHAPE, not only the level.</b> Today a world overrides fact-assumption scalars — including a source's demand (<span class="fn">scenario.ts:80, :90</span>). "Black Friday" is not a bigger baseline; it is a different <em>shape</em> — a taller, wider spike. The elegant form: extend <code>ScenarioOverride</code> so a world may also carry <code>cycles</code> for an origin (its own load-stages table), overlaid the same way the level is. A "Black Friday world" then IS the diurnal design with the spike preset swapped in, evaluated through the exact same overlay. This keeps the promise that a world is a concrete point in the assumption space — the point just now includes the shape.</p>
+<p><b>(b) The worlds matrix gains a peak column.</b> <code>WorldSummary</code> already carries <code>peakRho</code> — but it is the peak ρ <em>across nodes at the single evaluated point</em> (<span class="fn">scenario.ts:291</span>), not across time. When a world is shaped, each world's row should instead report its <b>worst-window ρ and instant</b> (run the Tier-1 sweep per world, read <code>rhoEnvelope</code>'s max), and its <b>cost integral</b> beside its steady cost. The matrix becomes: per world, cost (mean bill) · worst-window ρ · when · survives?.</p>
+<h3>Feasibility</h3>
+<p>Move (a) is a schema-additive change to <code>ScenarioOverride</code> (<span class="fn">scenario.ts:53</span>) plus teaching <code>applyScenarioToGraph</code> to overlay a <code>generate</code> transform's cycles (it overlays fixed input cells today — <span class="fn">scenario.ts:327</span>; a transform lives on the port, so this is a genuinely new overlay target, honestly the harder half). Move (b) is pure composition: <code>evaluateWorlds</code> (<span class="fn">scenario.ts:215</span>) already iterates worlds; run <code>timeSweep</code> per world (it is sync-capable via the DI'd <code>EvaluateGraph</code> — <span class="fn">time-sweep.ts:64</span>) when that world is shaped and fold the peak read into <code>summarizeWorld</code> (<span class="fn">scenario.ts:260</span>).</p>
+<h3>Cost &amp; tension</h3>
+<p><b>R1</b> for the peak column over already-shaped designs; <b>R2</b> if move (a) (shape-per-world) is included. Tension: cost. Running a full Tier-1 sweep per world multiplies the ambient cost by the world count — acceptable for the ≤3 auto-trio, but the matrix should sweep lazily (only shaped worlds, coarse <code>livePointsPerCycle</code> — <span class="fn">load-stages.ts:43</span>) to stay ambient.</p>
+
+<h2><span class="no">7</span>Integration #4 — the capacity envelope, computed at peak</h2>
+<h3>The elegant design</h3>
+<p>The envelope answers "how much sustained load can each origin carry with every SLO green?" by freeing the origin's demand and maximizing it subject to the SLOs (<span class="fn">envelope.ts:246</span>). For a shaped design the honest edge is not "how high can the <em>baseline</em> go" but "how high can the baseline go <b>such that the PEAK still holds</b>." Because peak = baseline × <code>peakMultiplier</code> (a constant for a fixed shape — <span class="fn">load-stages.ts:194</span>), the peak-aware maxRps is simply the steady maxRps <b>divided by the shape's peak multiplier</b>. That is a one-line post-scaling of the existing inversion — beautifully cheap — and the reported edge becomes "baseline ≤ 550 rps (peak ×1.8 → 990 rps at the SLO edge)."</p>
+<h3>Feasibility &amp; tension</h3>
+<p>Two grades. The cheap grade (scale the existing edge by the peak multiplier) is exact when the binding SLO is capacity/ρ, which is monotone in demand — sound, <b>R1</b>. The exact grade (free the baseline but constrain the <em>peak-overlaid</em> graph inside the solver) needs the native model to evaluate at λ<sub>peak</sub>, i.e. the peak overlay must be the graph the inversion constrains — feasible (<span class="fn">envelope.ts:311</span> builds the graph it inverts) but more invasive, <b>R2</b>. Tension: the <b>queueing knee</b> (<span class="fn">envelope.ts:264</span>) is where reality bites — at peak the knee arrives at a lower baseline, and reporting both ("knee at baseline 400 / capacity edge at 550") is the honest, and genuinely useful, output.</p>
+
+<h2><span class="no">8</span>Integration #5 — Monte-Carlo over baseline × shape</h2>
+<h3>The elegant design</h3>
+<p>Monte-Carlo turns declared ranges into distributions (<span class="fn">uncertainty.ts:350</span>). The natural marriage with peaks: <b>range the baseline LEVEL (the uncertain quantity) while the shape stays deterministic (the known pattern)</b>, and report a new confidence — <b>"the daily peak holds in X% of sampled baselines."</b> Each draw multiplies its sampled baseline by the fixed peak multiplier and judges the peak. This is the cleanest possible statement of the owner's uncertainty-meets-peaks question: not "will the mean hold" but "how sure are we the <em>peak</em> holds."</p>
+<h3>Feasibility</h3>
+<p>The seams are already there. Ranges live on <code>assumedRps</code> (the baseline). The batch evaluator overlays each draw (<span class="fn">uncertainty.ts:366</span>). Crucially, <code>runUncertainty</code> already accepts an optional <code>scenario</code> to <b>center the sample on an active world</b> before drawing (<span class="fn">uncertainty.ts:332, :363</span>) — feed it the <em>peak world</em> and every draw is judged at peak demand, and the existing SLO-confidence loop (<span class="fn">uncertainty.ts:398–403</span>) becomes peak confidence with no new code path. The only genuinely new piece is one metric spec — "peak ρ at the busiest tier" — added to <code>metricSpecs</code> (<span class="fn">uncertainty.ts:428</span>) so the tornado can attribute which ranged input drives peak strain.</p>
+<h3>Cost &amp; tension</h3>
+<p><b>R2.</b> Tension: v1 Monte-Carlo drives the forward pass only, and DES-only keys are honestly excluded (<span class="fn">uncertainty.ts:342</span>). "Does the peak <em>survive</em> (Tier-2)" is a dynamic, not a forward read, so MC can answer "does the peak ρ stay &lt;1 in X% of baselines" (analytic) but must NOT claim to sample the transient survival — the same honesty line load-stages already draws between Tier-1 and Tier-2.</p>
+
+<h2><span class="no">9</span>Integration #6 — the system cost promise reads the day's integral</h2>
+<h3>The elegant design</h3>
+<p>The system cost promise judges the whole-design monthly bill against a ceiling (<span class="fn">system-promise.ts:111, :134</span>). Today it reads <code>systemSummary(...).totalCostUsdMonth</code> — the <em>steady</em> snapshot. For a shaped design the honest bill is the <b>cost integral</b>: the mean whole-design cost over the season, which the Tier-1 sweep <em>already computes</em> as <code>costIntegral</code> (<span class="fn">time-sweep.ts:183</span>, "the mean bill"). The elegant integration: when a shape exists, the system cost promise reads the sweep's integral instead of the steady total. A 120-second spike inside a quarter barely moves the bill — and the promise should say so, honestly, rather than either over-charging at peak or ignoring the season.</p>
+<h3>Feasibility &amp; tension</h3>
+<p><b>R1</b>, and mostly a wiring choice. The integral is a scalar the sweep already returns; <code>systemPromiseVerdicts</code> takes a <code>value</code> lookup (<span class="fn">system-promise.ts:111</span>), so the caller passes the integral-derived total when shaped, the steady total otherwise. Tension — and it is a real one: <b>this must stay consistent with the backward search's budget.</b> The system promise and the search share ONE sum today (<code>systemBandsOf</code> → <code>Objective.total</code>, <span class="fn">system-promise.ts:166</span>; <span class="fn">search.ts:287</span>). If the verdict reads the integral but the optimizer still holds the steady total, they diverge — the anti-drift invariant breaks. So this connection is only honest if it lands together with a decision about which bill the search budgets to (recommend: the search budgets the steady/provisioned ceiling — capacity is reserved at peak — while the verdict may additionally show the pay-per-use integral; the two costs are already separate models in the doc, <span class="fn">doc-model.ts:435</span>).</p>
+
+<h2><span class="no">10</span>Integration #7 — tail &amp; lag SLOs judged at the peak window</h2>
+<h3>The elegant design</h3>
+<p>Tier-2 already runs a DES over the worst window and measures the windowed p99 <em>during</em> the peak (<code>p99DuringMs</code> — <span class="fn">two-tier.ts:73, :305</span>). A percentile SLO is set on a terminal and today judged by the steady-state <code>simulate</code> run (<span class="fn">simulate.ts:59</span>). The elegant unification: <b>a tail SLO should be judged against the worst-window p99, not only the steady tail</b> — the peak is exactly where a p99 deadline is at risk. The mechanism is already 90% built: Tier-2 produces the windowed p99; it simply is not yet routed into <code>checkTailBands</code>. The same holds for lag SLOs — a CDC/replication deadline is most likely to blow during the peak backlog, and the two-pass lag verdict (<span class="fn">lag-slo.ts:94</span>) can take the Tier-2-measured lag at the worst window as its <code>measured</code> basis.</p>
+<h3>Feasibility &amp; tension</h3>
+<p><b>R2.</b> Feasible: Tier-2's per-window metrics are already surfaced through <code>simulate</code>'s <code>loadStages.transient</code> (<span class="fn">simulate.ts:155–166</span>). Tension: <b>which run judges the tail?</b> A design can have both a steady tail (the 50k-completion measured run, <span class="fn">simulate.ts:53</span>) and a worst-window tail (Tier-2). The honest answer is to report both with their bases — "steady p99 210ms ✓ · peak-window p99 640ms ✗ @18:00" — never collapsing them, matching the two-basis discipline. This is the tail-SLO twin of integration #1's labelling problem.</p>
+
+<h2><span class="no">11</span>Integration #8 — a "peak behaviour" section in the deliverable</h2>
+<h3>The elegant design</h3>
+<p>The generated design doc is a pure function of the verified model (<span class="fn">doc-model.ts:710</span>). It has a closed, out-of-domain-free section canon (<span class="fn">doc-model.ts:588</span>). Peaks earn one new in-domain section — <b>"Peak behaviour"</b> — carrying the ρ-envelope series, the worst window (node + instant + ρ), which tiers saturate at peak, the cost integral, the %-of-span in violation, and the Tier-2 survival verdict (survives / recovers-in / peak backlog / lost requests). Every one of those is a scalar/series the sweep and two-tier already return; the doc-model's job is only to shape them into a section, its established discipline ("DATA in, never computed here" — <span class="fn">doc-model.ts:44</span>).</p>
+<h3>Feasibility &amp; tension</h3>
+<p><b>R1.</b> Feasible and idiomatic: it mirrors the optional guarantees/scenarios sections exactly — a new <code>SectionKey</code>, present ONLY when a shaped generator exists, spliced into <code>sectionOrder</code> like <code>scenarios</code> is (<span class="fn">doc-model.ts:868, :595</span>). Natural placement: right after §5 capacity (it IS the capacity story over time). Tension: <b>the no-filler rule</b> — a flat design must produce byte-identical docs (the golden-test contract, <span class="fn">doc-model.ts:126</span>), so the section is strictly gated on a non-empty sweep, exactly as <code>guaranteeVerdicts</code> gates §7b (<span class="fn">doc-model.ts:838</span>).</p>
+
+<h2><span class="no">12</span>Integration #9 — the reliability advisor flags a peak-only saturator</h2>
+<h3>The elegant design</h3>
+<p>The reliability advisor turns computed series-product availability into an AWS nines tier and a sourced remedy (<span class="fn">reliability.ts:97</span>). It is currently blind to time — availability is a static product. The creative connection: <b>a node that saturates only at peak is an availability risk the steady read cannot see</b> — at ρ≥1 the queue is unbounded and requests time out, so effective availability at peak is below the nameplate SLA the advisor quotes. The elegant, honest form is a one-line advisory: when <code>peakLoadByNode</code> shows a hard dependency saturating at peak, the advisor notes "the computed availability assumes ρ&lt;1; <em>node X saturates at 18:00</em>, so peak availability is lower — add capacity or shed load before adding redundancy." It reuses the advisor's existing "weakest dependency" wording (<span class="fn">reliability.ts:102</span>).</p>
+<h3>Feasibility &amp; tension</h3>
+<p><b>R1</b>, additive. Tension: keep it advisory, not a recomputed number — the advisor's credibility rests on sourced AWS figures (<span class="fn">reliability.ts:12</span>), and "peak availability = 1 − time-in-saturation" would be an invented number. The connection is a <em>flag</em> ("your nines assume no saturation; here is where that assumption breaks"), not a new availability computation. Lower value than #1–#3, but it closes a genuine blind spot for near-zero cost.</p>
+
+<h2><span class="no">13</span>Integration #10 — per-class shapes (forward-compatible only)</h2>
+<p>Request classes are frozen and partial: forward/scalar per-class ships, but per-class tails and backward search are honestly declined until per-class DES routing lands (FEATURES.md; <span class="fn">simulate.ts:38</span>). The peak connection is <b>latent and clean</b>: a <code>Cycle</code> rides a per-port <code>generate</code> transform, and class membership is per-wire, so nothing structurally prevents a report class carrying a quarterly shape while a user class carries a diurnal one — the sum-across-generators rule (<span class="fn">load-stages.ts:24</span>) already composes them. <b>Recommendation: defer, but note the invariant now</b> — when per-class DES arrives, the worst window becomes per-class (each commodity has its own λ(t)), and the sweep's origin detection (<span class="fn">time-sweep.ts:84</span>) generalizes to per-class origins. No work today; a one-paragraph forward-compat note in the request-classes doc so the seam is not accidentally closed.</p>
+
+<h2><span class="no">14</span>The creative connections — the non-obvious ones the owner asked for</h2>
+<div class="scroll">
+<table>
+<tr><th>Connection</th><th>The insight</th><th>Honest verdict</th></tr>
+<tr>
+  <td><b>Guarantee lattice / delivery</b><br><span class="fn">two-tier.ts:75</span></td>
+  <td>Categorical guarantees (consistency/ordering) are token meets — <b>peak-invariant</b>, a peak does not change a lattice rank. But <b>delivery is different</b>: Tier-2 already <em>measures lost requests</em> at the peak (<code>StressVerdict.lostRequests</code>). An at-least-once / exactly-once claim is a promise that messages are not dropped — and the peak is exactly when a bounded async queue overflows its retention and drops. So the peak is where a <em>delivery</em> guarantee is physically stressed, even though the propagated token is unchanged.</td>
+  <td>Real, and grounded — but subtle. Don't recompute the token (the lattice is right). DO surface, at peak, "N requests lost at the worst window — a declared at-least-once guarantee is at risk here." <span class="tag v-low">low value, high honesty</span> · defer.</td>
+</tr>
+<tr>
+  <td><b>Ideal layout / C4</b><br><span class="fn">doc-model.ts:243</span></td>
+  <td>The ideal layout is a semantic tidy over topology; it reads no ρ and should not (a layout that jumps when load changes is hostile). The <em>architecture view</em> in the doc, though, carries per-node data — it could <b>mark the node that saturates at peak</b> (the same worst-window read), so the C4 diagram in the deliverable visually points at the tier that fails at 18:00.</td>
+  <td>The layout itself: <b>no connection, correctly.</b> The C4/architecture render: a peak marker is cheap and useful. <span class="tag v-low">low</span> · rides integration #8.</td>
+</tr>
+<tr>
+  <td><b>Escalation labelling → "peak-bound"</b><br><span class="fn">two-tier.ts:60</span></td>
+  <td>Honest escalation labels an answer with the engine that produced it (native vs reference-MIP). Load-stages already added a <em>basis</em> vocabulary — <code>analytic (quasi-static)</code> vs <code>measured (transient)</code>. The natural extension across the whole verdict surface is a <b>demand basis</b>: <code>steady</code> vs <code>peak</code>. A verdict, a promise, an SLO can then be labelled "peak-bound" — it holds at the mean and fails (or binds) only at the peak.</td>
+  <td>This is the <b>unifying label</b> that makes integrations #1, #6, #7 honest. Not a feature — a shared <code>basis</code> field the whole verdict family adopts. <span class="tag v-med">med, enabling</span> · lands with #1.</td>
+</tr>
+</table>
+</div>
+
+<h2><span class="no">15</span>Ranked build order</h2>
+<p>Ordered by value-per-round, and by dependency — the labelling primitive and the canonical peak verdict unlock the rest.</p>
+<ol class="build">
+  <li><b>The peak <code>basis</code> label + peak in <code>realAwareVerdicts</code></b> (integration #1, §4). <span class="tag new">R2</span> The spine. Promote R4's presenter peak into the shared verdict list with a <code>basis:'peak'</code> tag + instant, so the AI, the doc and the worlds matrix stop lying about the steady green. Every later row reads this list. <b>Do this first.</b></li>
+  <li><b>Improve sizes for the peak world</b> (integration #2, §5). <span class="tag new">R2</span> Highest user value — "cheapest config that survives the daily peak" — and it reuses the entire robust pipeline. Ships behind <code>worlds:"peak"</code>; stays native (no MIP escalation).</li>
+  <li><b>Peak column + cost integral in the surfaces that already iterate</b> (integrations #3b, #6, §6/§9). <span class="tag new">R1</span> Add the worst-window ρ/instant column to the worlds matrix and route the sweep's <code>costIntegral</code> into the system cost promise — both are composition over existing loops, gated by the anti-drift budget decision.</li>
+  <li><b>The "Peak behaviour" doc section</b> (integration #8, §11). <span class="tag new">R1</span> Once the canonical verdicts and the integral exist, the deliverable is a pure re-shaping — the authored artifact finally tells the peak story, gated no-filler.</li>
+  <li><b>Tail/lag SLOs at the peak window</b> (integration #7, §10). <span class="tag new">R2</span> Route Tier-2's windowed p99 into <code>checkTailBands</code> and the Tier-2 lag into the lag verdict, both dual-basis (steady + peak).</li>
+  <li><b>Peak-aware envelope + Monte-Carlo peak confidence</b> (integrations #4, #5, §7/§8). <span class="tag new">R2</span> The cheap envelope grade (scale by peak multiplier) is nearly free; MC peak confidence reuses the <code>scenario</code>-centering arg.</li>
+  <li><b>Shape-per-world + reliability peak flag + creative labels</b> (integrations #3a, #9, §14). <span class="tag new">R1–R2</span> Nice-to-haves: the "Black Friday world" shape override, the reliability advisory, the delivery-at-peak note.</li>
+  <li><b>Per-class shapes</b> (integration #10, §13). <span class="tag gone">defer</span> No work; record the forward-compat invariant so the seam stays open.</li>
+</ol>
+
+<h2><span class="no">16</span>Open questions for the owner</h2>
+<p><span class="q">1. Peak vs mean labelling — the honesty line.</span> A design that saturates only at 18:00 is neither "green" nor "red." Confirm the desired wording contract: a distinct <code>peak</code> basis everywhere ("holds at mean, saturates at daily peak @18:00"), never a bare violation. This is the single most consequential decision (§4).</p>
+<p><span class="q">2. Single global worst window, or each node's own worst instant?</span> Sizing/verdicts against one peak-demand vector is cheap and usually right; per-node worst-instant is the exact robust answer (§5). Ship the former first, upgrade later — agreed?</p>
+<p><span class="q">3. Which bill does Improve budget to?</span> If the cost promise reads the day's integral but the search budgets the steady/provisioned ceiling, they must be reconciled to preserve the one-sum anti-drift invariant (§9). Recommendation: search budgets the reserved (provisioned) ceiling; the verdict additionally shows the pay-per-use integral. Confirm.</p>
+<p><span class="q">4. Does Improve size for the peak by default, or on opt-in?</span> Default-to-peak is the safest design ("survive what you declared"); opt-in (<code>worlds:"peak"</code>) is the least surprising for existing agents. Which?</p>
+<p><span class="q">5. May a world override the SHAPE (cycles), not only the level?</span> The "Black Friday world" is the motivating case (§6). It is more invasive (a new overlay target — a port transform, not an input cell). Worth R2, or is level-only enough for v1?</p>
+<p><span class="q">6. Is the delivery-guarantee-at-peak connection in scope?</span> It is real and grounded (lost requests at peak stress an at-least-once claim, §14) but subtle. Surface it, or leave delivery guarantees peak-agnostic for now?</p>
+
+<div class="callout" style="border-left-color:#4b5263;margin-top:40px">
+<b>Provenance &amp; guardrails.</b>
+<p style="margin-top:8px" class="small">This is a planning document — no code was changed and no owner example was modified. Every claim is grounded in the named <code>file:line</code> at HEAD 2ca5f61 (the catalogs <a href="../FEATURES.md">FEATURES.md</a> / <a href="../ALGORITHMS.md">ALGORITHMS.md</a> are the code-truth source). The concurrent R4 work (per-node peak verdicts in the presenter) is treated as the foundation; this document deliberately does not touch it, and identifies the one thing R4 leaves for a follow-up: promoting the peak from a presenter read into the shared verdict list (§3–§4). The night loop's package (<code>engine/solver-contract</code>) is untouched.</p>
+</div>
+
+</div>
+</body>
+</html>

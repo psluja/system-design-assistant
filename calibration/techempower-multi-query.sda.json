@@ -1,0 +1,72 @@
+{
+  "schema": 11,
+  "id": "techempower-multi-query",
+  "name": "TechEmpower — Multiple Queries (20 per request) (calibration #2)",
+  "instances": [
+    {
+      "id": "client",
+      "type": "client.web",
+      "config": {
+        "throughput": 5900
+      }
+    },
+    {
+      "id": "svc",
+      "type": "compute.service",
+      "config": {
+        "concurrency": 512,
+        "perRequestDuration": 0.2,
+        "latency": 0.2,
+        "cpuCores": 28,
+        "cpuTimePerRequestMs": 0.2692
+      }
+    },
+    {
+      "id": "db",
+      "type": "db.postgres",
+      "config": {
+        "concurrency": 28,
+        "perRequestDuration": 0.2373,
+        "latency": 0.2373
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["client", "out"],
+      "to": ["svc", "in"],
+      "semantics": "sync"
+    },
+    {
+      "from": ["svc", "db"],
+      "to": ["db", "in"],
+      "semantics": "sync",
+      "transform": {
+        "kind": "ratio",
+        "value": 20
+      }
+    }
+  ],
+  "layout": {
+    "client": { "x": 60, "y": 80 },
+    "svc": { "x": 420, "y": 80 },
+    "db": { "x": 780, "y": 80 }
+  },
+  "labels": {
+    "client": "wrk load (512 conns)",
+    "svc": "web framework tier",
+    "db": "PostgreSQL (World table)"
+  },
+  "descriptions": {
+    "client": "TechEmpower load generator, swept toward saturation (measured 20-query operating point = 5,900 req/s).",
+    "svc": "The web framework under test — same CPU station as the single-query model (28 cores / 0.2692 ms => ~104,000 req/s). At 20 queries per request the DB saturates at 5,900 req/s, far below the framework CPU, so this workload stays DB-bound (the framework CPU is present but not the bottleneck here).",
+    "db": "One PostgreSQL server, SAME tier as the single-query model (capacity = 118,000 queries/s). The ratio(20) transform on the svc->db edge means each request fans out to 20 DB queries, so the DB saturates at 118,000 / 20 = 5,900 req/s — the request ceiling divided by the query fan-out. This 20x relationship is SDA's structural prediction."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

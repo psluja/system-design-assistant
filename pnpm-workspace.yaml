@@ -1,0 +1,12 @@
+# Monorepo layout per Backlog doc-1 (00 — Architecture): engine ↓ content ↓ app.
+# Dependencies point downward only; the engine imports nothing above it.
+packages:
+  - 'engine/*'
+  - 'content/*'
+  - 'app/*'
+  - 'testing'
+  - 'calibration' # the calibration harness (TASK-93): corpus data + deterministic fitter; reads content, never mutates it
+allowBuilds:
+  '@vscode/vsce-sign': false # marketplace signing — not needed for a local .vsix
+  esbuild: true
+  keytar: false # legacy credential store pulled by vsce — unused here

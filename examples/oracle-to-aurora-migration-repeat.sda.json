@@ -1,0 +1,166 @@
+{
+  "schema": 3,
+  "id": "oracle-to-aurora-migration-repeat",
+  "name": "Oracle On-Prem to Aurora PostgreSQL Migration Repeat",
+  "instances": [
+    {
+      "id": "oracle_source",
+      "type": "db.sql",
+      "config": {
+        "throughput": 2000,
+        "latency": 80,
+        "availability": 0.995,
+        "unitCost": 0.15
+      }
+    },
+    {
+      "id": "aurora_destination",
+      "type": "db.aurora",
+      "config": {
+        "concurrency": 300,
+        "latency": 30,
+        "availability": 0.9999,
+        "unitCost": 0.9
+      }
+    },
+    {
+      "id": "full_load_service",
+      "type": "compute.service",
+      "config": {
+        "concurrency": 140,
+        "perRequestDuration": 130,
+        "latency": 90,
+        "availability": 0.999,
+        "unitCost": 0.24
+      }
+    },
+    {
+      "id": "cdc_capture",
+      "type": "compute.service",
+      "config": {
+        "concurrency": 53,
+        "perRequestDuration": 100,
+        "latency": 90,
+        "availability": 0.999,
+        "unitCost": 0.24
+      }
+    },
+    {
+      "id": "cdc_queue",
+      "type": "queue.sqs",
+      "config": {
+        "throughput": 1500,
+        "unitCost": 0.05
+      }
+    },
+    {
+      "id": "cdc_loader",
+      "type": "compute.service",
+      "config": {
+        "concurrency": 100,
+        "perRequestDuration": 100,
+        "latency": 90,
+        "availability": 0.999,
+        "unitCost": 0.24
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "full_load_service",
+        "db"
+      ],
+      "to": [
+        "oracle_source",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "full_load_service",
+        "db"
+      ],
+      "to": [
+        "aurora_destination",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cdc_capture",
+        "db"
+      ],
+      "to": [
+        "oracle_source",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cdc_capture",
+        "out"
+      ],
+      "to": [
+        "cdc_queue",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "cdc_queue",
+        "out"
+      ],
+      "to": [
+        "cdc_loader",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "cdc_loader",
+        "db"
+      ],
+      "to": [
+        "aurora_destination",
+        "in"
+      ],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "full_load_service": {
+      "x": -371.1255069421942,
+      "y": -117.67570892380536
+    },
+    "cdc_capture": {
+      "x": -371.12550694219425,
+      "y": 271.5
+    },
+    "oracle_source": {
+      "x": -154.1249442846316,
+      "y": 73.57224419338964
+    },
+    "cdc_queue": {
+      "x": 106.19595082457874,
+      "y": 261
+    },
+    "cdc_loader": {
+      "x": 442.70557697104226,
+      "y": 260.1586472099294
+    },
+    "aurora_destination": {
+      "x": 661.6485821523892,
+      "y": -147.85222736458834
+    }
+  },
+  "labels": {},
+  "descriptions": {},
+  "groups": [],
+  "components": []
+}

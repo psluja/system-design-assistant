@@ -1,0 +1,6 @@
+This directory contains a WebAssembly build of:
+
+  clingo      — MIT License, source: https://github.com/potassco/clingo
+  clingo-wasm — Apache License 2.0 (packaging), source: https://github.com/domoritz/clingo-wasm
+
+See THIRD_PARTY_NOTICES.md at the repository root for details.

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the code proves itself — tests, the harness, and the corpus · SDA</title>
+<style>
+  :root{
+    --ink:#20242c; --ink2:#4b5263; --ink3:#7a8194; --paper:#fbfaf7; --card:#ffffff;
+    --accent:#0b6e6e; --accent2:#b4530a; --line:#e7e3da; --code:#f3f1ea;
+    --good:#2f7d4f; --warn:#b48908; --bad:#b3261e;
+    --sans:"Segoe UI","Avenir Next",system-ui,sans-serif; --serif:Georgia,Charter,serif;
+    --mono:"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 var(--serif)}
+  header{background:linear-gradient(135deg,#0e2f3a,#1c6e7a);color:#fff;padding:52px 24px 40px}
+  .w{max-width:900px;margin:0 auto;padding:0 24px}
+  h1{font:600 32px/1.2 var(--sans);margin:0 0 12px}
+  .sub{font:400 17px/1.55 var(--sans);opacity:.93;max-width:760px}
+  .meta{font:12px/1.4 var(--sans);opacity:.72;margin-top:18px;text-transform:uppercase;letter-spacing:.11em}
+  h2{font:600 23px/1.3 var(--sans);margin:48px 0 6px;color:#0e3540}
+  h2 .n{color:var(--accent2);margin-right:10px}
+  h2 .q{display:block;font:400 15px/1.4 var(--sans);color:var(--ink3);margin-top:4px}
+  h3{font:600 17px/1.3 var(--sans);margin:26px 0 8px;color:#0e3540}
+  p{margin:0 0 14px}
+  .lead{font-size:18px;color:var(--ink2)}
+  code{font:14px/1.5 var(--mono);background:var(--code);border-radius:5px;padding:1px 6px}
+  a{color:var(--accent)}
+  .path{font:13px/1.5 var(--mono);color:var(--accent);background:#eaf4f3;border-radius:5px;padding:1px 6px;white-space:nowrap}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font:15px/1.5 var(--sans);background:var(--card)}
+  .scroll{overflow-x:auto}
+  th{background:#0e3540;color:#fff;text-align:left;padding:9px 13px;font-weight:600;vertical-align:top}
+  td{border-bottom:1px solid var(--line);padding:9px 13px;vertical-align:top}
+  tr:nth-child(even) td{background:#faf8f3}
+  td:first-child{white-space:nowrap}
+  .callout{border-left:4px solid var(--accent);background:var(--card);padding:15px 19px;margin:22px 0;border-radius:0 8px 8px 0;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .callout b:first-child{font-family:var(--sans)}
+  figure{margin:26px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px 8px}
+  figure svg{display:block;max-width:100%;height:auto}
+  figcaption{font:13.5px/1.5 var(--sans);color:var(--ink2);margin-top:10px;padding-bottom:6px}
+  ul.files{list-style:none;padding-left:0;margin:14px 0}
+  ul.files>li{padding:9px 0;border-bottom:1px solid var(--line)}
+  ul.files>li:last-child{border-bottom:none}
+  ul.files .d{color:var(--ink2);font:15px/1.5 var(--sans)}
+  ol.read{padding-left:22px}
+  ol.read>li{margin:8px 0;font:15.5px/1.55 var(--sans);color:var(--ink2)}
+  .foot{margin:44px 0 20px;padding-top:16px;border-top:1px solid var(--line);font:13.5px/1.6 var(--sans);color:var(--ink3)}
+</style>
+</head>
+<body>
+<header><div class="w">
+  <h1>How the code proves itself</h1>
+  <div class="sub">A guide to three parts of this repository — the <b>tests</b>, the <b>harness</b>, and the <b>corpus</b>. Read this before you read the code. It explains the one idea they share and where each part lives, so you can find your way and trust what you find.</div>
+  <div class="meta">System Design Assistant · developer onboarding · docs/design/tests-corpus-harness.html</div>
+</div></header>
+<div class="w">
+
+<h2><span class="n">1</span>The one idea</h2>
+<p class="lead">This tool computes numbers that a professional will stake a real design on: how much traffic it serves, how fast, how much it costs, how reliable it is. The tool has one promise — <b>it must not lie</b>. Every number it shows is either backed by a source or marked <em>unknown</em>. It never guesses.</p>
+<p>A promise like that cannot be kept by good intentions. It has to be <b>proven</b>. So the codebase proves its own correctness at three levels, and those three levels are exactly the three parts of this guide.</p>
+<div class="scroll"><table>
+  <tr><th>Part</th><th>The question it answers</th><th>In plain words</th></tr>
+  <tr><td><b>The tests</b></td><td>Does each piece behave as intended?</td><td>The everyday safety net. Thousands of small checks, next to the code they check.</td></tr>
+  <tr><td><b>The harness</b></td><td>Are the equations solved correctly?</td><td>Two independent engines must agree with each other, and both must agree with textbook mathematics. This is called <em>verification</em>.</td></tr>
+  <tr><td><b>The corpus</b></td><td>Are they the right equations for the real world?</td><td>Our predictions are compared against real, measured systems. This is called <em>validation</em>.</td></tr>
+</table></div>
+<p>Verification and validation are different questions, and mixing them is how simulators quietly start lying. A perfectly-solved wrong model is still wrong. A right model solved by a broken engine is still wrong. You need both, and they are kept separate on purpose.</p>
+
+<h2><span class="n">2</span>The tests<span class="q">Does each piece behave as intended?</span></h2>
+<p>Tests live <b>next to the code they test</b>, not in a separate folder. A file named <span class="path">optimize.ts</span> is tested by <span class="path">optimize.test.ts</span> in the same directory. There are about <b>220</b> such files across the project. When you open any source file, its test is one step away.</p>
+<p>The most useful thing to know is that <b>the file name tells you what kind of proof it is</b>. The suffix is the signal:</p>
+<div class="scroll"><table>
+  <tr><th>File name ends with…</th><th>What kind of test</th><th>What it proves</th></tr>
+  <tr><td><code>.test.ts</code></td><td>Ordinary unit test</td><td>One piece does what it should on chosen examples.</td></tr>
+  <tr><td><code>.property.test.ts</code></td><td>Property test</td><td>Throws hundreds of <em>random</em> inputs at the code and checks that a <b>law</b> always holds — for example, "the result never becomes negative". It looks for the example you did not think of.</td></tr>
+  <tr><td><code>.differential.test.ts</code></td><td>Differential test</td><td>Two <em>independent</em> ways of computing the same answer must match. If they ever disagree, one of them is wrong — and we find out.</td></tr>
+  <tr><td><code>.e2e.test.ts</code></td><td>End-to-end test</td><td>A whole real design is run from start to finish, the way a user would. There are about 46 of these, including named reference architectures (a Netflix-style playback path, an Uber-style dispatch, a serverless checkout).</td></tr>
+  <tr><td><code>.golden.test.ts</code></td><td>Golden test</td><td>A generated file (such as a design document) must be <b>byte-for-byte</b> identical to a saved reference. If the output drifts, even by a space, the test fails.</td></tr>
+</table></div>
+<div class="callout"><b>Why the property and differential tests matter most.</b><p style="margin-top:8px">Ordinary tests check the cases you imagined. Property tests and differential tests check the cases you did <em>not</em> imagine. They are the reason a claim in this project can be trusted rather than merely hoped for.</p></div>
+
+<h2><span class="n">3</span>The harness<span class="q">Are the equations solved correctly?</span></h2>
+<p>The harness lives in <span class="path">engine/solver-contract/src/</span>. Its job is to prove that the engine solves problems correctly — not on a handful of examples, but on <b>hundreds of generated ones</b>.</p>
+<p>The idea is a simple three-step loop: <b>make a problem, make the certified answer, then grade a candidate against it.</b></p>
+
+<figure>
+<svg viewBox="0 0 760 190" role="img" aria-label="The generator makes a random design; the oracle computes the certified answer using the reference engine; the candidate engine computes its own answer; the harness compares the two and any disagreement is a reproducible bug">
+  <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M1,1 L8,4 L1,7 Z" fill="#8a8577"/></marker></defs>
+  <rect x="20" y="66" width="150" height="58" rx="9" fill="#f5faf9" stroke="#0b6e6e"/>
+  <text x="95" y="90" text-anchor="middle" font-family="Segoe UI,sans-serif" font-weight="600" font-size="13" fill="#0e3540">generator.ts</text>
+  <text x="95" y="108" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="11.5" fill="#4b5263">makes a random design</text>
+  <line x1="170" y1="95" x2="214" y2="95" stroke="#8a8577" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="216" y="24" width="150" height="58" rx="9" fill="#fdf7ef" stroke="#b4530a"/>
+  <text x="291" y="48" text-anchor="middle" font-family="Segoe UI,sans-serif" font-weight="600" font-size="13" fill="#0e3540">oracle.ts</text>
+  <text x="291" y="66" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="11.5" fill="#4b5263">certified answer</text>
+  <rect x="216" y="108" width="150" height="58" rx="9" fill="#fff" stroke="#7a8194"/>
+  <text x="291" y="132" text-anchor="middle" font-family="Segoe UI,sans-serif" font-weight="600" font-size="13" fill="#0e3540">native/ (candidate)</text>
+  <text x="291" y="150" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="11.5" fill="#4b5263">the fast engine's answer</text>
+  <line x1="170" y1="88" x2="212" y2="55" stroke="#8a8577" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="170" y1="102" x2="212" y2="135" stroke="#8a8577" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="366" y1="53" x2="470" y2="86" stroke="#8a8577" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="366" y1="137" x2="470" y2="104" stroke="#8a8577" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="472" y="66" width="160" height="58" rx="9" fill="#0e3540"/>
+  <text x="552" y="90" text-anchor="middle" font-family="Segoe UI,sans-serif" font-weight="600" font-size="13" fill="#fff">harness.ts</text>
+  <text x="552" y="108" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="11.5" fill="#cfe3e3">compares the two</text>
+  <line x1="632" y1="95" x2="676" y2="95" stroke="#8a8577" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="738" y="86" text-anchor="middle" font-family="Segoe UI,sans-serif" font-weight="600" font-size="12" fill="#2f7d4f">agree</text>
+  <text x="738" y="104" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="11" fill="#b3261e">or a bug</text>
+</svg>
+<figcaption><b>The harness loop.</b> A generated design goes to two engines. The reference engine (the oracle) gives the answer we trust; the fast engine gives the answer we ship. The harness compares them. If they ever disagree, that single design is a reproducible bug report.</figcaption>
+</figure>
+
+<h3>The parts</h3>
+<ul class="files">
+  <li><span class="path">harness/generator.ts</span><div class="d">Builds the random designs. It does not just scatter noise — it aims at hard cases on purpose: requirements placed exactly on the edge of what is possible, extreme numbers, very deep chains, several requirements at once, and more.</div></li>
+  <li><span class="path">harness/oracle.ts</span><div class="d">Computes the answer we treat as certified. It uses the reference engine and then double-checks that answer a second, independent way.</div></li>
+  <li><span class="path">harness/harness.ts</span><div class="d">Runs a candidate engine and compares it to the oracle. A disagreement fails the test and prints a one-line command to reproduce that exact case.</div></li>
+  <li><span class="path">harness/metamorphic.ts</span><div class="d">Checks laws that must hold no matter what — for example, "double the traffic, and the answer doubles too." These catch bugs that both engines might share.</div></li>
+  <li><span class="path">native/</span><div class="d">The fast engine — the candidate, the one the product actually runs.</div></li>
+  <li><span class="path">incumbent/</span><div class="d">The reference engine (well-tested industrial solvers). It is slower but trusted, so it is the oracle's source of truth.</div></li>
+  <li><span class="path">capability/</span><div class="d">The six things the engine can do — evaluate a design, size it to meet a goal, repair it, explain why it is impossible, list valid options, and run many scenarios at once. Each has its own test.</div></li>
+</ul>
+<div class="callout"><b>One detail worth knowing early.</b><p style="margin-top:8px">Every generated design carries the number (the "seed") that produced it, and the code never uses the clock or true randomness. So any result is exactly reproducible: given the seed, you rebuild the same design, byte for byte. A bug found at night can be replayed in the morning.</p></div>
+
+<h2><span class="n">4</span>The corpus<span class="q">Are they the right equations for the real world?</span></h2>
+<p>The harness proves we solve the equations correctly. It cannot tell us the equations are <em>right about reality</em> — only measurement can do that. That is the corpus, which lives in <span class="path">calibration/</span>.</p>
+<p>The corpus is a small collection of <b>real, measured systems</b>. For each one, we hold a saved design, the workload, the source of the published numbers, and the numbers themselves. The tool predicts each system with its own engine, and we report how far off we are.</p>
+
+<h3>The data</h3>
+<ul class="files">
+  <li><span class="path">calibration/corpus/*.json</span><div class="d">One file per measured system. Today there are eight, covering four real architectures: DeathStarBench (a microservice social network), TechEmpower (a web-framework benchmark), Redis (an in-memory store), and Kafka (a streaming platform). Each file names who measured it, what they measured, and the source link.</div></li>
+  <li><span class="path">calibration/*.sda.json</span><div class="d">The same systems drawn in our own design format — the model the tool actually runs.</div></li>
+</ul>
+
+<h3>The code</h3>
+<ul class="files">
+  <li><span class="path">src/predict.ts</span><div class="d">Runs our engine over a model and reads back the number we want to compare (for example, the throughput ceiling).</div></li>
+  <li><span class="path">src/fit.ts</span><div class="d">Tunes the handful of unknown component defaults to fit reality, and reports the <b>residual</b> — the error that remains after the best fit. That leftover error is the honest output: not "we matched", but "here is exactly how far off, and where". It also holds out each system in turn and predicts it from the others, which tests how well the model generalizes to systems it has not seen.</div></li>
+  <li><span class="path">src/report.ts</span> → <span class="path">CALIBRATION-REPORT.md</span><div class="d">Writes the full derivation: measured versus predicted, per system.</div></li>
+  <li><span class="path">src/coverage.ts</span> + <span class="path">src/fidelity.ts</span> → <span class="path">docs/FIDELITY.md</span><div class="d">Generate the honest headline: which behaviors are validated against real systems, which rest on theory, and which are cited facts. Green only where evidence exists; every gap is shown in plain sight.</div></li>
+  <li><span class="path">src/baseline.ts</span><div class="d">The pinned numbers a standing guard watches. If a change makes a prediction worse than the pinned value, the guard fails and names the system.</div></li>
+</ul>
+<div class="callout"><b>Adding a measured system is data, not code.</b><p style="margin-top:8px">You write one new JSON file and run <code>pnpm calibrate</code>. The report re-fits and updates itself. No model change is required for a new datapoint, and no AI is involved.</p></div>
+
+<h2><span class="n">5</span>How to start reading</h2>
+<p>If you have thirty minutes and want to understand the idea from the code itself, read in this order:</p>
+<ol class="read">
+  <li><span class="path">docs/FIDELITY.md</span> — the honest state of the whole thing, in one page. Start here to see what is proven and what is not.</li>
+  <li><span class="path">engine/solver-contract/src/harness/harness.ts</span> — the grading loop. It shows how a candidate is held to the oracle.</li>
+  <li><span class="path">engine/solver-contract/src/harness/generator.ts</span> (the top comment) — what kinds of hard designs are generated, and why.</li>
+  <li><span class="path">calibration/src/fit.ts</span> — how a real measurement becomes a residual, and how the leave-one-out check works.</li>
+  <li>Any <span class="path">*.e2e.test.ts</span> under <span class="path">app/mcp/</span> — a real design exercised end to end, which ties everything together.</li>
+</ol>
+
+<div class="foot">
+  This document describes the organization of the tests, the harness, and the corpus. For the wider strategy behind them, see <a href="verification-and-validation.html">Verification &amp; Validation</a>. For the generated evidence itself, see <a href="../FIDELITY.md">the fidelity report</a>. Everything here is checked into the repository; if a name or path drifts from the code, the code is the source of truth.
+</div>
+
+</div>
+</body>
+</html>

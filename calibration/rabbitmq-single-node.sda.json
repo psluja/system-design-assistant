@@ -1,0 +1,47 @@
+{
+  "schema": 11,
+  "id": "rabbitmq-single-node",
+  "name": "RabbitMQ — single node (calibration #6, RabbitMQ 4.0 classic queue)",
+  "instances": [
+    {
+      "id": "bench",
+      "type": "client.web",
+      "config": {
+        "throughput": 80000
+      }
+    },
+    {
+      "id": "rabbit",
+      "type": "queue.rabbitmq",
+      "config": {
+        "latency": 2
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["bench", "out"],
+      "to": ["rabbit", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "bench": { "x": 60, "y": 80 },
+    "rabbit": { "x": 480, "y": 80 }
+  },
+  "labels": {
+    "bench": "PerfTest publisher",
+    "rabbit": "RabbitMQ classic queue (single node)"
+  },
+  "descriptions": {
+    "bench": "A publisher driving one RabbitMQ classic queue directly, swept toward saturation. The vendor run used AMQP 0.9.1 with 12-byte messages, persistent + 192 publisher confirms, QoS prefetch 200. (The client speaks HTTP in the catalog; here it stands for the AMQP-speaking benchmark client — the numeric capacity path is protocol-agnostic.)",
+    "rabbit": "One RabbitMQ classic queue modeled as a fixed-throughput store: the `throughput` cell (msg/s) is the single write path's ceiling that sets rho — there is no concurrency/pool knob (a broker's per-queue write is the bottleneck). throughput is the fitted tunable; its catalog default (20,000 msg/s) is an ESTIMATE corrected to the measured 88,534 msg/s."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}
