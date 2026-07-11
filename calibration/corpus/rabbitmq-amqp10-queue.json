@@ -1,0 +1,29 @@
+{
+  "name": "RabbitMQ — classic queue (single node, AMQP 1.0)",
+  "modelPath": "rabbitmq-single-node.sda.json",
+  "notes": "The SAME RabbitMQ 4.0 single classic queue as the AMQP 0.9.1 entry, driven over the native AMQP 1.0 protocol on the SAME Intel NUC 11 hardware. AMQP 1.0's more efficient wire path reaches a higher end-to-end ceiling (99,413 msg/s) than AMQP 0.9.1 (88,534 msg/s) against the identical broker and queue. SDA models ONE protocol-independent write capacity for queue.rabbitmq, so this entry SHARES the queue.rabbitmq:throughput tunable with the AMQP 0.9.1 entry — the pair is OVER-DETERMINED (two measured ceilings, one free capacity), exactly the TechEmpower single/multi and Redis SET/LPUSH and Kafka no-repl/3x-async pattern. The post-fit residual is therefore the honest protocol-to-protocol spread (~±6%) that one capacity value cannot remove, and the leave-one-out (fit on AMQP 0.9.1, predict AMQP 1.0) is a genuine out-of-sample test. The scored metric is the throughput ceiling; it validates the CEILING, not the tail (the broker's internal latency is a structural factor SDA does not model, doc section 9).",
+  "sources": [
+    { "url": "https://www.rabbitmq.com/blog/2024/08/21/amqp-benchmarks", "note": "Official RabbitMQ 4.0 benchmark (RabbitMQ team). Native AMQP 1.0 against ONE classic queue: 'End-to-end rate 99,413 messages/s'. Config: 12-byte durable messages, 200 link credits, no publisher confirms (AMQP 1.0 uses settlement instead). Hardware: Intel NUC 11, 8 CPU cores, 32 GB RAM — the SAME setup and queue as the AMQP 0.9.1 entry (88,534 msg/s), so the two share one modeled capacity." }
+  ],
+  "workloadSweep": { "node": "bench", "key": "throughput", "points": [20000, 50000, 90000, 99413, 130000] },
+  "tunables": [
+    {
+      "key": "throughput",
+      "selector": { "type": "queue.rabbitmq" },
+      "unit": "msg/s",
+      "catalogDefault": 20000,
+      "fit": { "min": 10000, "max": 300000 },
+      "note": "RabbitMQ single-node classic-queue write capacity (msg/s) — SHARED with the AMQP 0.9.1 entry: one capacity must reproduce BOTH the AMQP 0.9.1 (88,534) and AMQP 1.0 (99,413) ceilings on the same broker/queue, so the joint fit is over-determined and the residual is the honest protocol spread one capacity value cannot remove."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 99413,
+      "unit": "msg/s",
+      "probeLoadRps": 8000,
+      "sourceUrl": "https://www.rabbitmq.com/blog/2024/08/21/amqp-benchmarks",
+      "note": "RabbitMQ 4.0, single classic queue, native AMQP 1.0, 12-byte durable messages, 200 link credits, Intel NUC 11 (8 cores / 32 GB): 'End-to-end rate 99,413 messages/s'. The shared single-node capacity (fit jointly with the AMQP 0.9.1 point) lands between the two protocol ceilings; the leftover is the honest AMQP 0.9.1↔1.0 spread."
+    }
+  ]
+}

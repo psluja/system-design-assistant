@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: CI only needs to read the repo.
+permissions:
+  contents: read
+
+# One in-flight run per ref; a new push cancels the old run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# TODO(scorecard, sha-pinning): after the repo is public — pin these actions to full commit SHAs and
+# add an OpenSSF Scorecard workflow + badge. (Both require a public GitHub repo.)
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      # The differential/optimize tests shell out to the native `minizinc` binary and DO NOT skip when
+      # it is absent — they fail with ENOENT. So CI installs MiniZinc (see the step below) and points
+      # this variable at it. Without this, three packages (@sda/engine-solve, @sda/content, @sda/mcp)
+      # would fail. See .github/CONTRIBUTING.md → "The native-MiniZinc caveat".
+      MINIZINC: /opt/minizinc/bin/minizinc
+      MINIZINC_VERSION: 2.9.7
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # Install the official MiniZinc bundle (includes Gecode, Chuffed, and COIN-BC). This is what the
+      # numeric differential tests and the optimize/repair/search tests run against — the same
+      # distribution contributors install locally. Downloaded from the official GitHub release, so it
+      # is version-pinned and needs no third-party action.
+      - name: Install MiniZinc
+        run: |
+          set -euo pipefail
+          url="https://github.com/MiniZinc/MiniZincIDE/releases/download/${MINIZINC_VERSION}/MiniZincIDE-${MINIZINC_VERSION}-bundle-linux-x86_64.tgz"
+          curl -fsSL "$url" -o /tmp/minizinc.tgz
+          mkdir -p /opt/minizinc
+          tar -xzf /tmp/minizinc.tgz -C /opt/minizinc --strip-components=1
+          echo "/opt/minizinc/bin" >> "$GITHUB_PATH"
+
+      - name: Verify MiniZinc
+        run: /opt/minizinc/bin/minizinc --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (all packages, strict)
+        run: pnpm -r typecheck
+
+      # Run each package's test suite explicitly. `pnpm -r --if-present test` only covers the two
+      # packages that declare a `test` script, so we invoke Vitest per package to cover all ten. Every
+      # command below is proven to pass locally.
+      #
+      # NOTE: the VS Code end-to-end tests (@vscode/test-electron, in app/vscode/test/runTest.mjs) need
+      # a running display and are NOT wired into `vitest`; they run locally after a build, not in CI.
+      # `vitest run` for sda-vscode covers only the pure extension-host tests (src/**/*.test.ts).
+      - name: Test @sda/engine-core
+        run: pnpm --filter @sda/engine-core exec vitest run
+      - name: Test @sda/engine-solve
+        run: pnpm --filter @sda/engine-solve exec vitest run
+      - name: Test @sda/solver-contract
+        run: pnpm --filter @sda/solver-contract exec vitest run
+      - name: Test @sda/engine-sim
+        run: pnpm --filter @sda/engine-sim exec vitest run
+      - name: Test @sda/content
+        run: pnpm --filter @sda/content exec vitest run
+      - name: Test @sda/core
+        run: pnpm --filter @sda/core exec vitest run
+      - name: Test @sda/presenter
+        run: pnpm --filter @sda/presenter exec vitest run
+      - name: Test @sda/mcp
+        run: pnpm --filter @sda/mcp exec vitest run
+      - name: Test @sda/bridge
+        run: pnpm --filter @sda/bridge exec vitest run
+      - name: Test @sda/web
+        run: pnpm --filter @sda/web exec vitest run
+      - name: Test sda-vscode (host tests)
+        run: pnpm --filter sda-vscode exec vitest run
+
+      - name: Build web app
+        run: pnpm --filter @sda/web build
+
+      - name: Build VS Code extension
+        run: pnpm --filter sda-vscode run build

@@ -1,0 +1,630 @@
+@import '@xyflow/react/dist/style.css';
+
+:root{
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+:root[data-theme="light"]{
+  --bg:#eef1f6;--panel:#fff;--panel2:#f7f9fc;--ink:#0d1626;--ink2:#5a6b85;--ink3:#8a99b3;
+  --line:#dde3ee;--line2:#cbd4e3;--accent:#2563eb;--accent-deep:#1d4ed8;--accent-tint:#e7eefe;
+  --ok:#0e9f6e;--ok-tint:#e3f5ee;--warn:#d97706;--warn-tint:#fdf0db;--bad:#dc2626;--bad-tint:#fbe6e6;
+  --grid:#c2cbdd;--edge:#9fb0d0;
+}
+:root[data-theme="dark"]{
+  --bg:#0a0e1a;--panel:#10162a;--panel2:#0c1120;--ink:#e9edfb;--ink2:#9aa6c8;--ink3:#5f6b8e;
+  --line:#1d2742;--line2:#2a3760;--accent:#7c8bff;--accent-deep:#a9b4ff;--accent-tint:#18203c;
+  --ok:#34d399;--ok-tint:#0f2b22;--warn:#fbbf24;--warn-tint:#2c2410;--bad:#fb7185;--bad-tint:#2c1320;
+  --grid:rgba(124,139,255,.20);--edge:#33406a;
+}
+*{box-sizing:border-box}html,body,#root{margin:0;height:100%}
+body{font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:13.5px;-webkit-font-smoothing:antialiased}
+
+.app{height:100vh;display:grid;grid-template-rows:50px 1fr 40px;min-width:0}
+/* min-width:0 + overflow:hidden let the header COMPRESS instead of forcing the whole .app grid wider than the
+   viewport (the off-screen-Inspector bug at <1128px: the non-shrinking flex row was the hard floor). */
+.top{display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line);min-width:0;overflow:hidden}
+/* Header FIT TIERS. The full header measures ~1415px at natural width (measured); any narrower viewport squeezed
+   the flex row until multi-word buttons ("＋ New", "Link AI · MCP", "Design doc", the verdict pill) wrapped to two
+   lines — worst in the 1100–1250px band, where the old ≤1100px compact rule never engaged. Two graduated tiers
+   keep every load-bearing control (Import / Export / Design doc / verdict) on ONE row instead:
+   · slim (≤1439px): the demo filler sheds — the static crumb path, the avatar, the MCP pill's "tools" word — and
+     the gap tightens a notch (14→12px). Header need ≈1223px, so 1251–1439px renders full-size buttons, unwrapped.
+   · compact (≤1250px): additionally the two icon buttons with keyboard equivalents (⌘K opens the palette, ? the
+     cheatsheet — both reachable by their shortcut and via the command palette) hide, and gap/padding compress.
+     Header need ≈1075px — the whole 1100–1250px band AND the <1100px range (the previous rule's territory) fit
+     in one form. Web shell only. */
+@media (max-width:1439px){ .top{gap:12px} .top .slim-hide{display:none} }
+@media (max-width:1250px){ .top{gap:8px;padding:0 10px} .top .compact-hide{display:none} }
+/* Belt-and-braces in the supported range: no header control may ever render two lines. Below ~1080px (under the
+   compact tier's ~1075px need) the legacy squeeze-and-wrap remains, so nothing is clipped off-screen on a window
+   smaller than the app supports. */
+@media (min-width:1080px){ .top .btn,.top .pill,.top .verdict-pill,.top .crumb{white-space:nowrap} }
+.logo{display:flex;align-items:center;gap:9px;font-weight:700}
+.logo .mk{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#7c5cff);display:grid;place-items:center}
+.logo .mk svg{width:14px;height:14px;color:#fff}
+/* min-width:0 lets the crumb be the header's shrink sink (its project name / path is the least load-bearing pixel);
+   the truncating child (.projname) keeps it from clipping mid-word. */
+.crumb{color:var(--ink3);font-size:12.5px;display:flex;align-items:center;min-width:0}.crumb b{color:var(--ink2);font-weight:600}
+.projname{font:700 13px var(--sans);color:var(--ink);background:transparent;border:1px solid transparent;border-radius:6px;padding:3px 7px;outline:none;width:11ch}
+.projname:hover{border-color:var(--line2);background:var(--panel2)}.projname:focus{border-color:var(--accent);background:var(--panel2);width:16ch}
+.spacer{flex:1}
+.pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font:600 12px var(--sans);color:var(--ink2)}
+button.pill{cursor:pointer}
+button.pill:hover{border-color:var(--line2)}
+.pill .caret{font-size:8px;opacity:.55;margin-left:-1px}
+/* MCP tools dropdown (informational list of the commands an agent can drive) */
+.ai-tools-pop{width:344px;max-height:62vh;display:flex;flex-direction:column}
+.ai-tools-pop p{font:500 11px var(--sans);color:var(--ink3);margin:2px 0 9px;line-height:1.5}
+.ai-tools{overflow:auto;display:flex;flex-direction:column;gap:1px;border-top:1px solid var(--line);padding-top:6px}
+.ai-tool{display:flex;flex-direction:column;gap:1px;padding:5px 6px;border-radius:6px}
+.ai-tool:hover{background:var(--panel2)}
+.ai-tool code{font:700 11px var(--mono);color:var(--accent-deep)}
+.ai-tool span{font:500 10.5px var(--sans);color:var(--ink3);line-height:1.4}
+.pill .d{width:7px;height:7px;border-radius:50%;background:var(--ink3)}
+.pill .d.live{background:var(--ok);box-shadow:0 0 0 3px var(--ok-tint)}
+.pill .d.warn{background:var(--warn);box-shadow:0 0 0 3px var(--warn-tint)}
+.pill code{font:700 11px var(--mono);color:var(--ink)}
+.aibtn{cursor:pointer}.aibtn:hover{border-color:var(--line2)}
+.aibtn.on{background:var(--accent-tint);border-color:var(--accent);color:var(--accent-deep)}
+.aibtn.on .d.live{animation:aipulse 1.6s ease-in-out infinite}
+@keyframes aipulse{0%,100%{box-shadow:0 0 0 2px var(--ok-tint)}50%{box-shadow:0 0 0 5px var(--ok-tint)}}
+.ai-toast{position:fixed;left:50%;top:62px;transform:translateX(-50%);z-index:60;display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;padding:8px 15px;border-radius:999px;font:600 12px var(--sans);box-shadow:0 8px 24px rgba(37,99,235,.35);animation:aitoast .26s ease-out}
+.ai-toast.bad{background:var(--bad);box-shadow:0 8px 24px rgba(220,38,38,.35)}
+.ai-toast code{font:700 11.5px var(--mono);color:#fff;opacity:.95}
+.ai-spark{font-size:13px}
+@keyframes aitoast{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+.ai-link-wrap{display:inline-flex}
+.ai-pop{position:absolute;top:38px;right:0;z-index:70;width:288px;background:var(--panel);border:1px solid var(--line2);border-radius:11px;padding:13px;box-shadow:0 14px 40px rgba(0,0,0,.22)}
+.ai-pop-h{font:700 12.5px var(--sans);color:var(--ink);margin-bottom:6px}
+.ai-pop p{font-size:11.5px;color:var(--ink2);line-height:1.5;margin:0 0 9px}
+.ai-pop code{font:600 10.5px var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--ink)}
+.ai-pop input{width:100%;box-sizing:border-box;font:600 12px var(--mono);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:8px 10px}
+.ai-pop input:focus{border-color:var(--accent);outline:none}
+.ai-pop-row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.ai-pop-row .btn{padding:6px 13px}
+/* Header popovers (MCP tools / AI-link token / Design-doc formats) render FIXED at the viewport level, anchored
+   under their control at open time (inline top/right measured from the control's rect — see topPopAnchor in
+   app.tsx). Necessary because .top clips its own box (overflow:hidden, the <1128px header-compression fix), so
+   an absolutely-positioned card would be cut at the header's bottom edge and read as "under the canvas". Same
+   viewport-level escape the context menu (.ctxmenu) and the transform/range editors use. */
+.top-pop{position:fixed}
+/* The Design-doc SPLIT control: the primary "Design doc" button + a thin caret that opens a format popover. The
+   caret hugs the primary button (shared right edge, no gap) so the two read as one control. The popover reuses the
+   .ai-pop card language; a compact vertical menu of format buttons (z above the shared ctx-backdrop). */
+.split-btn{display:inline-flex}
+.split-btn>.btn:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.split-caret{padding:5px 7px;border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-1px;font-size:10px}
+.doc-menu{z-index:71;width:auto;min-width:160px;display:flex;flex-direction:column;gap:6px;padding:8px}
+.doc-menu .btn{justify-content:flex-start;text-align:left;width:100%}
+/* global styled tooltip (portal) — any element with data-tip gets a rich hover description */
+.tip-box{position:fixed;z-index:300;background:var(--ink);color:var(--panel);font:500 11.5px/1.55 var(--sans);padding:9px 12px;border-radius:9px;box-shadow:0 12px 30px rgba(0,0,0,.34);pointer-events:none;letter-spacing:.005em;white-space:pre-line;animation:tipin .12s ease-out}
+@keyframes tipin{from{opacity:0;transform:translateY(2px)}to{opacity:1}}
+.tip-box{animation:tipin .12s ease-out}
+label[data-tip],h6[data-tip],.k[data-tip]{cursor:help;text-decoration:underline dotted var(--line2);text-underline-offset:3px}
+/* Units live in a FIXED-WIDTH gutter to the RIGHT of the input, so every input box shares one right edge
+   (a clean number column) regardless of how wide its unit label is (ms vs $/unit·mo). */
+.unit-suffix{color:var(--ink3);font:600 11px var(--sans);white-space:nowrap;width:50px;flex:none;text-align:left}
+.slo-input{display:flex;flex-direction:column;align-items:flex-end}
+.slo-row{display:flex;align-items:center;justify-content:flex-end;gap:7px}
+.slo-now{font:600 10px var(--mono);color:var(--ink3);margin-top:4px;margin-right:57px}
+.slo-now.bad{color:var(--bad)}.slo-now.ok{color:var(--ok)}
+.syshdr{font:700 10px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin:13px 0 7px;border-top:1px solid var(--line);padding-top:11px}
+/* System panel layout: a full-width VERDICT line on top, then a TWO-COLUMN body where each column is its
+   OWN vertical stack — cards pack tight top-to-bottom with no ragged wrap-gaps (the earlier flex-wrap dashboard
+   aligned each wrapped ROW to its tallest card, leaving big holes under short ones). Collapses to one column on a
+   narrow drawer. Overrides the generic `.sysbody > *` flex-item sizing for this one root. */
+.sysbody > .sysroot{flex:1 1 100%;max-width:none;min-width:0;display:flex;flex-direction:column}
+.sysroot > .verdict-sec{padding-bottom:14px}
+.verdict-nums{margin:9px 2px 0}
+.syscols{display:flex;align-items:flex-start;gap:0 30px}
+.syscol{flex:1 1 0;min-width:0;display:flex;flex-direction:column}
+.syscol > .sec{border-bottom:1px solid var(--line)}
+.syscol > .sec:last-child{border-bottom:none}
+.syscount{margin:14px 2px 2px;font-size:11px;color:var(--ink3)}
+.syscount-risks{cursor:pointer;text-decoration:underline}
+.syscount-risks:hover{color:var(--accent-deep)}
+@media (max-width:960px){.syscols{flex-direction:column}}
+/* Command palette (Ctrl/Cmd+K) — a keyboard-first index of actions */
+.cmd-backdrop{position:fixed;inset:0;z-index:200;background:rgba(6,10,20,.42);display:flex;justify-content:center;align-items:flex-start;padding-top:12vh}
+.cmd-box{width:min(560px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden}
+.cmd-input{width:100%;box-sizing:border-box;padding:14px 16px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:500 14px var(--sans);outline:none}
+.cmd-input::placeholder{color:var(--ink3);font-weight:400}
+.cmd-list{max-height:min(52vh,380px);overflow-y:auto;padding:6px}
+.cmd-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer}
+.cmd-row.active{background:var(--accent-tint)}
+.cmd-row.disabled{opacity:.4;cursor:default}
+.cmd-grp{font:700 9.5px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);min-width:58px}
+.cmd-label{flex:1;font:500 13px var(--sans);color:var(--ink)}
+.cmd-hint{font:600 11px var(--mono);color:var(--ink3);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+.cmd-empty{padding:18px;text-align:center;color:var(--ink3);font:400 13px var(--sans)}
+/* Quick-add picker — an in-canvas popover anchored at the drop point / CTA / viewport centre.
+   Same visual language as the command palette (cmd-*), compact (~320px) and positioned rather than centred. */
+.qp-backdrop{position:fixed;inset:0;z-index:210}
+.qp-box{position:fixed;width:320px;max-width:92vw;background:var(--panel);border:1px solid var(--line2);border-radius:11px;box-shadow:0 18px 50px rgba(0,0,0,.42);overflow:hidden;display:flex;flex-direction:column}
+.qp-input{width:100%;box-sizing:border-box;padding:11px 13px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:500 13.5px var(--sans);outline:none}
+.qp-input::placeholder{color:var(--ink3);font-weight:400}
+.qp-list{max-height:min(46vh,340px);overflow-y:auto;padding:5px}
+.qp-group + .qp-group{margin-top:2px}
+.qp-grp{font:700 9px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:6px 8px 3px}
+.qp-row{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;cursor:pointer}
+.qp-row.active{background:var(--accent-tint)}
+.qp-ic{width:15px;height:15px;flex:0 0 15px;color:var(--ink2);display:flex}
+.qp-ic svg{width:15px;height:15px}
+.qp-label{flex:1;font:500 12.5px var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qp-empty{padding:16px;text-align:center;color:var(--ink3);font:400 12.5px var(--sans)}
+/* First-run onboarding card: a small, dismissible "Start here" shown once on a fresh profile over the
+   untouched seed. Reuses the .ai-pop card language; positioned top-centre over the canvas, under the HUD, so it
+   never blocks the palette or the footer. Web shell only (VS Code has its native walkthrough). */
+.onboard{position:absolute;left:50%;top:56px;transform:translateX(-50%);z-index:6;width:340px;max-width:calc(100% - 24px);background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 16px 44px rgba(0,0,0,.24);padding:14px 15px;animation:onboardin .22s ease-out}
+@keyframes onboardin{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+.onboard-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.onboard-h b{font:700 13px var(--sans);color:var(--ink)}
+.onboard-x{border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:15px;line-height:1;padding:2px 5px;border-radius:6px}
+.onboard-x:hover{background:var(--panel2);color:var(--ink)}
+.onboard ul{list-style:none;margin:0 0 11px;padding:0;display:flex;flex-direction:column;gap:8px}
+.onboard li{display:flex;align-items:baseline;gap:9px;font:500 12px/1.45 var(--sans);color:var(--ink2)}
+.onboard li kbd{flex:none}
+.onboard li .ob-ic{flex:none;width:15px;text-align:center;color:var(--accent);font-weight:700}
+.onboard .btn{width:100%;justify-content:center}
+.onboard-scope{margin:0 0 11px;font:500 11px/1.5 var(--sans);color:var(--ink3);border-top:1px solid var(--line);padding-top:10px}
+/* Empty-canvas ghost CTA — n8n's "Add first step". Non-blocking, centred over the canvas. */
+.ghost-cta{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:4;display:flex;flex-direction:column;align-items:center;gap:6px;padding:26px 34px;border:2px dashed var(--line2);border-radius:14px;background:var(--panel);color:var(--ink3);cursor:pointer;font:600 14px var(--sans);box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.ghost-cta:hover{border-color:var(--accent);color:var(--accent)}
+.ghost-cta .ghost-plus{font-size:26px;line-height:1;font-weight:400}
+.ghost-cta small{font:400 11.5px var(--sans);color:var(--ink3)}
+/* Keyboard shortcuts cheatsheet (? key) */
+.help-box{width:min(440px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden}
+.help-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.help-hd h4{margin:0;font:700 13px var(--sans);color:var(--ink)}
+.help-scope{margin:0;padding:11px 16px;font:500 12px/1.55 var(--sans);color:var(--ink2);border-bottom:1px solid var(--line);background:var(--panel2)}
+[hidden]{display:none!important}
+.help-list{padding:8px 10px}
+.help-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:7px 8px;border-radius:6px}
+.help-row:nth-child(odd){background:var(--panel2)}
+.help-label{font:500 12.5px var(--sans);color:var(--ink2)}
+.help-keys{white-space:nowrap;color:var(--ink3)}
+kbd{font:600 11px var(--mono);background:var(--panel2);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:2px 6px;color:var(--ink)}
+/* WCAG 2.2 (2.4.11/2.4.13): a consistent, visible focus ring for KEYBOARD users on every interactive element
+   (browsers apply :focus-visible for keyboard focus, not mouse clicks). Placed last so it wins over the
+   `outline:none` some inputs set for the mouse. */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
+.react-flow__node:focus-visible,.react-flow__node.selected:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* Saved / Saving indicator in the header */
+.savedot{margin-left:8px;font:600 10.5px var(--sans);letter-spacing:.02em}
+.savedot.is-saved{color:var(--ok)}
+.savedot.is-saving{color:var(--ink3)}
+/* Undo toast: a recoverable-action notice with an inline Undo button */
+.undo-toast{display:flex;align-items:center;gap:12px}
+.undo-toast button{font:700 11.5px var(--sans);color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:3px 11px;cursor:pointer}
+.undo-toast button:hover{background:rgba(255,255,255,.3)}
+.toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);z-index:50;background:var(--bad);color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:70vw;cursor:pointer}
+.toast.info{background:var(--accent)}
+.ctx-backdrop{position:fixed;inset:0;z-index:70}
+.ctxmenu{position:fixed;z-index:71;min-width:170px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.32);padding:5px;display:flex;flex-direction:column;gap:1px}
+.ctxmenu button{text-align:left;border:0;background:transparent;color:var(--ink);font:500 12.5px var(--sans);padding:7px 10px;border-radius:7px;cursor:pointer}
+.ctxmenu button:hover{background:var(--accent-tint)}
+.ctxmenu button.danger{color:var(--bad)}.ctxmenu button.danger:hover{background:var(--bad-tint)}
+.ctx-sep{height:1px;background:var(--line);margin:3px 6px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:60}
+.modal{width:580px;max-width:92vw;max-height:86vh;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--line)}
+.modal-body{padding:14px 16px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.code{width:100%;min-height:300px;resize:vertical;font:12px/1.5 var(--mono);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:11px;color:var(--ink);outline:none;white-space:pre;tab-size:2}
+.modal-err{background:var(--bad-tint);color:var(--bad);border:1px solid var(--bad);border-radius:8px;padding:8px 11px;font:12px var(--mono)}
+.modal-actions{display:flex;align-items:center;gap:8px}
+.custom-list{border-top:1px solid var(--line);padding-top:10px}
+.custom-list h6{margin:0 0 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.btn{font:600 12.5px var(--sans);border:1px solid var(--line2);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:7px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink2)}
+.btn.ghost:hover{border-color:var(--line2);color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+/* ── the per-port TRANSFORM editor popover (R2, doc: flow-transformations-r2 §4). Reuses .ai-pop; positioned by
+   inline left/top at the click anchor. A transparent backdrop dismisses on outside click. ── */
+.tf-backdrop{position:fixed;inset:0;z-index:69}
+.tf-pop{width:262px}
+.tf-select{width:100%;box-sizing:border-box;font:600 12px var(--sans);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:8px 10px;margin-bottom:9px;cursor:pointer}
+.tf-select:focus{border-color:var(--accent);outline:none}
+.tf-value{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tf-value input{flex:1;min-width:0;font:600 13px var(--mono);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:8px 10px}
+.tf-value input:focus{border-color:var(--accent);outline:none}
+.tf-hint{font:600 10.5px var(--sans);color:var(--ink3);white-space:nowrap;flex:none}
+.tf-help{font-size:11px;color:var(--ink3);line-height:1.45;margin:0 0 8px}
+.tf-err{font:600 11px var(--sans);color:var(--bad);margin:0 0 8px}
+.tf-actions{display:flex;align-items:center;gap:7px}
+.tf-actions .btn{padding:6px 12px;font-size:12px}
+/* ── the GENERATOR stages table (load-stages R3 §11, Fig. 5) — a k6-style table pane inside the SAME popover when
+   `generate` is chosen. The card widens; a preset dropdown pre-fills; per-cycle {durationS, multiplier} rows are
+   typed and diffable; a read-only SVG sparkline mirrors the shape. No new surface, no pointer-drag. ── */
+.tf-pop-gen{width:340px;max-height:86vh;overflow-y:auto}
+.tf-gen{margin-bottom:8px}
+.tf-gen-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tf-gen-lbl{font:600 10.5px var(--sans);color:var(--ink3);white-space:nowrap;flex:none}
+.tf-preset{flex:1;min-width:0;font:600 11.5px var(--sans);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 9px;cursor:pointer}
+.tf-preset:focus{border-color:var(--accent);outline:none}
+.tf-cycle{border:1px solid var(--line);border-radius:9px;padding:8px;margin-bottom:8px;background:var(--panel2)}
+.tf-cycle-h{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tf-cycle-t{font:700 11px var(--sans);color:var(--ink2);flex:1}
+.tf-table{display:flex;flex-direction:column;gap:3px}
+.tf-tr{display:grid;grid-template-columns:20px 1fr 1fr 22px;align-items:center;gap:6px}
+.tf-th{font:600 10px var(--sans);color:var(--ink3);text-transform:none;padding:0 0 2px}
+.tf-th span{padding-left:2px}
+.tf-idx{font:600 11px var(--mono);color:var(--ink3);text-align:center}
+/* .tf-gen-scoped so these beat `.ai-pop input` (specificity 0,1,1) which would otherwise force width:100% on every
+   cell (blowing out the periodS field and stretching the disable checkbox). */
+.tf-gen .tf-cell{width:100%;box-sizing:border-box;font:600 12px var(--mono);border:1px solid var(--line2);background:var(--panel);color:var(--ink);border-radius:7px;padding:5px 7px}
+.tf-gen .tf-cell:focus{border-color:var(--accent);outline:none}
+.tf-gen .tf-cell-period{width:92px;flex:none}
+.tf-x{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font:600 11px var(--sans);color:var(--bad);background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer;padding:0}
+.tf-x:hover{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.tf-add{align-self:flex-start;font:600 10.5px var(--sans);color:var(--accent);background:transparent;border:1px dashed var(--line2);border-radius:7px;padding:4px 9px;cursor:pointer;margin-top:3px}
+.tf-add:hover{border-color:var(--accent)}
+.tf-add-cycle{display:block;margin:0 0 9px}
+.tf-preview{margin:2px 0 9px}
+.tf-preview-cap{font:600 10.5px var(--sans);color:var(--ink3);margin-bottom:3px}
+.tf-spark{display:block;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+.tf-spark.dim{opacity:.4}
+.tf-spark-base{stroke:var(--ink3);stroke-width:1;opacity:.55}
+.tf-spark-line{stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.tf-disable{display:flex;align-items:flex-start;gap:7px;font:600 11px var(--sans);color:var(--ink2);line-height:1.4;margin-bottom:4px;cursor:pointer}
+.tf-disable input{margin-top:1px;flex:none;width:auto}
+/* ── the per-knob uncertainty ± RANGE affordance + editor popover (doc: uncertainty-monte-carlo §4). The ± button
+   sits in the Configuration knob row, COLLAPSED by default (a bare "±"); once a range is declared it shows the compact
+   ±(lo–hi) indicator, accent-tinted, so a ranged knob reads distinctly. The popover reuses the .tf-* language above,
+   with three lo/mode/hi fields laid out in a row. ── */
+.knob-range-btn{flex:none;font:600 10.5px var(--mono);border:1px dashed var(--line2);background:transparent;color:var(--ink3);border-radius:7px;padding:4px 8px;cursor:pointer;white-space:nowrap}
+.knob-range-btn:hover{border-color:var(--accent);color:var(--accent)}
+.knob-range-btn.has-range{border-style:solid;border-color:var(--accent);background:var(--accent-tint);color:var(--accent-deep)}
+.range-fields{display:flex;gap:7px;margin-bottom:8px}
+.range-fields label{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font:600 9.5px var(--sans);color:var(--ink3);text-transform:uppercase;letter-spacing:.03em}
+.range-fields input{width:100%;box-sizing:border-box;font:600 12px var(--mono);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:7px 8px}
+.range-fields input:focus{border-color:var(--accent);outline:none}
+.tf-preview{font:600 11px var(--mono);color:var(--accent-deep);margin:0 0 8px}
+/* Inspector PORTS section (R2) — one row per port: direction chip + name + protocols, and a transform chip that
+   opens the editor. A "modified" tag marks an override (GitLens-style). */
+.port-row{padding:6px 0;border-bottom:1px solid var(--line)}
+.port-row:last-child{border-bottom:none}
+.port-row-h{display:flex;align-items:center;gap:7px;min-width:0}
+.port-dir{font:700 9px var(--sans);text-transform:uppercase;letter-spacing:.05em;padding:2px 5px;border-radius:5px;flex:none}
+.port-dir.in{background:var(--accent-tint);color:var(--accent-deep)}
+.port-dir.out{background:var(--warn-tint);color:var(--warn)}
+.port-dir.bi{background:var(--ok-tint);color:var(--ok)}
+.port-name{font:600 12px var(--mono);color:var(--ink);flex:none}
+.port-protos{font:500 10.5px var(--sans);color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.port-row-tf{display:flex;align-items:center;gap:6px;margin-top:4px}
+.port-tf-btn{display:inline-flex;align-items:center;gap:6px;font:600 11px var(--sans);border:1px dashed var(--line2);background:transparent;color:var(--ink3);border-radius:7px;padding:4px 9px;cursor:pointer}
+.port-tf-btn:hover{border-color:var(--accent);color:var(--accent)}
+.port-tf-btn.has-tf{border-style:solid;border-color:var(--warn);background:var(--warn-tint);color:var(--warn)}
+.port-tf-fn{font:700 11px var(--mono)}
+.port-tf-mod{font:700 8.5px var(--sans);text-transform:uppercase;letter-spacing:.04em;color:var(--accent-deep);background:var(--accent-tint);padding:1px 5px;border-radius:4px}
+.port-tf-none{opacity:.8}
+.port-tf-clear{font:600 11px var(--sans);border:1px solid var(--line2);background:var(--panel);color:var(--ink3);border-radius:6px;width:22px;height:22px;cursor:pointer;line-height:1}
+.port-tf-clear:hover{border-color:var(--bad);color:var(--bad)}
+/* The headline verdict is a STATUS (colour = health), not a generic primary action competing with Import/Export. */
+.verdict-pill{display:inline-flex;align-items:center;gap:7px;font:700 12.5px var(--sans);border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid transparent}
+.verdict-pill.ok{background:var(--ok-tint);border-color:var(--ok);color:var(--ok)}
+.verdict-pill.bad{background:var(--bad-tint);border-color:var(--bad);color:var(--bad)}
+.verdict-pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.iconbtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);color:var(--ink2);display:grid;place-items:center;cursor:pointer}
+.avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c5cff);color:#fff;display:grid;place-items:center;font-weight:700;font-size:11px}
+
+.mid{display:grid;grid-template-columns:222px 1fr;min-height:0;min-width:0}
+/* right column = work area (canvas + inspector) on top, System drawer at the bottom */
+.right{display:grid;grid-template-rows:1fr auto;min-height:0;min-width:0}
+/* Canvas | inspector. The inspector column carries a thin grip strip on its LEFT so it can be collapsed to just
+   that strip — mirroring the System drawer's sd-grip affordance — freeing the whole width for the canvas on a
+   narrow laptop (1366px) where a fixed 320px panel would push the canvas below usable. */
+.work{display:grid;grid-template-columns:1fr 14px 320px;min-height:0;min-width:0}
+.work.insp-collapsed{grid-template-columns:1fr 14px 0}
+/* The collapse grip: a full-height slim rail with a centred chevron, same visual language as .sd-grip. */
+.insp-grip{border:none;border-left:1px solid var(--line);background:var(--panel2);color:var(--ink2);cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl}
+.insp-grip:hover{background:var(--line);color:var(--ink)}
+.insp-grip .chev{font-size:11px;line-height:1}
+/* Collapsed: the inspector aside is zero-width and clipped (its border-left would otherwise show a seam). */
+.work.insp-collapsed .insp{width:0;min-width:0;border-left:none;overflow:hidden}
+/* System drawer (whole-design lenses) — collapsible bottom panel under canvas + inspector */
+/* FIXED height when open (height, not max-height) so the drawer never resizes as the eye switches System/Improve/
+   Problems tabs — a tab with less content keeps the same box, its body just scrolls. Collapsed = header only. */
+.sysdrawer{border-top:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0;height:44vh}
+.sysdrawer.collapsed{height:auto}
+.sysdrawer-h{display:flex;align-items:center;gap:10px;padding:5px 12px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.sysdrawer.collapsed .sysdrawer-h{border-bottom:none}
+.sd-grip{border:none;background:transparent;color:var(--ink2);cursor:pointer;font-size:12px;line-height:1;padding:3px 5px;border-radius:5px}
+.sd-grip:hover{background:var(--line)}
+.sd-title{font:700 10.5px var(--sans);text-transform:uppercase;letter-spacing:.07em;color:var(--ink3)}
+.sd-tabs{display:flex;gap:2px;margin-left:4px}
+.sd-tabs button{font:600 12px var(--sans);border:0;background:transparent;color:var(--ink2);padding:5px 13px;border-radius:7px;cursor:pointer}
+.sd-tabs button.on{background:var(--accent-tint);color:var(--accent-deep)}
+.sd-tabs button:hover:not(.on){background:var(--line)}
+.sysbody{flex:1;display:flex;flex-wrap:wrap;align-items:flex-start;gap:2px 18px;overflow:auto;padding:8px 14px 22px;min-height:0}
+.sysbody > *{flex:1 1 280px;min-width:240px;max-width:420px}
+/* inspector header (per-selection scope label) */
+.insp-h{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;border-bottom:1px solid var(--line);font:700 11px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
+.insp-scope{font:600 9.5px var(--sans);text-transform:none;letter-spacing:0;color:var(--ink3)}
+.rail{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:12px}
+.rail h5{margin:14px 6px 6px;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+.rail h5:first-child{margin-top:2px}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:8px;padding:7px 10px;color:var(--ink3);font-size:12.5px;margin-bottom:8px;background:var(--panel2)}
+.search input{border:0;background:transparent;color:var(--ink);font:inherit;outline:none;width:100%}
+.facets{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 8px}
+.facet{font:600 11px var(--sans);border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);border-radius:999px;padding:3px 9px;cursor:pointer}
+.facet.on{background:var(--accent-tint);border-color:var(--accent);color:var(--accent-deep)}
+.rail-h{display:flex;align-items:center;justify-content:space-between;margin:14px 6px 6px}
+.rail-h h5{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+.palette{display:grid;gap:4px}
+.pi{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+.pi:hover{background:var(--accent-tint);border-color:var(--line2)}
+.pi .ic{width:26px;height:26px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent)}
+.pi .ic svg{width:15px;height:15px}
+.pi b{font-weight:600;font-size:12.5px}.pi span{display:block;color:var(--ink3);font-size:10.5px}
+/* edit/customize a component type — revealed on row hover so it never competes with the add affordance */
+.pi-edit{margin-left:auto;flex:none;opacity:0;border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:13px;line-height:1;padding:4px 5px;border-radius:6px;transition:opacity .12s,background .12s,color .12s}
+.pi:hover .pi-edit{opacity:1}
+.pi-edit:hover{background:var(--panel);color:var(--ink)}
+/* inspector: edit the selected node's underlying type definition */
+.type-edit{margin-left:7px;border:none;background:transparent;color:var(--accent);cursor:pointer;font:600 10.5px var(--sans);padding:1px 5px;border-radius:5px}
+.type-edit:hover{background:var(--accent-tint)}
+
+.cv{position:relative;min-width:0}
+.cv .react-flow{height:100%;width:100%}
+.cv .hud{position:absolute;left:12px;top:10px;z-index:5;display:flex;gap:8px;align-items:center}
+.tagpill{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:5px 10px;font-size:11.5px;color:var(--ink2)}
+.hud-btn{background:var(--panel);border:1px solid var(--line2);border-radius:7px;padding:5px 11px;font:600 11.5px var(--sans);color:var(--ink);cursor:pointer}
+.hud-btn:hover{background:var(--accent-tint);border-color:var(--accent)}
+.hud-btn.on{background:var(--accent-tint);border-color:var(--accent);color:var(--accent-deep)}
+.hud-badge{align-self:center;font:700 10px var(--sans);padding:2px 8px;border-radius:999px;background:var(--accent-tint);color:var(--accent-deep)}
+.lnk{background:none;border:0;color:var(--accent);font:600 11px var(--sans);cursor:pointer;padding:0}
+
+.node{width:160px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.08),0 6px 16px rgba(0,0,0,.08);position:relative}
+.node .hd{display:flex;align-items:center;gap:9px;padding:9px 11px 7px}
+.node .hd .ic{width:24px;height:24px;border-radius:6px;background:var(--accent-tint);color:var(--accent);display:grid;place-items:center}
+.node .hd .ic svg{width:15px;height:15px}
+.node .hd > div{min-width:0;flex:1}
+.node .hd .nm{font-weight:700;font-size:12.5px;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.node .hd .desc{color:var(--ink2);font-size:10.5px;line-height:1.3;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.node .hd .ty{color:var(--ink3);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
+.node .mt{display:flex;gap:6px;padding:7px 11px 10px;flex-wrap:wrap}
+.chip{font:600 10px var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--ink2)}
+.chip.warn{background:var(--warn-tint);color:var(--warn)}.chip.ok{background:var(--ok-tint);color:var(--ok)}.chip.bad{background:var(--bad-tint);color:var(--bad)}
+/* per-node DECLARED-vs-REAL readouts: the capacity utilisation bar (real load ÷ declared capacity) + the
+   service→queueing latency pair. Real is the lighter, health-coloured consequence; declared stays the label. */
+.node .meter{padding:2px 11px 0;display:flex;flex-direction:column;gap:2px}
+.node .meter-h{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.node .meter-nums{font:600 10.5px var(--mono);color:var(--ink2);white-space:nowrap}
+/* ONE-FORM rps: a capacity-less rate (a source / pure-delay hop) is toned to its verdict; 'ok' stays neutral ink2. */
+.node .meter-nums.warn{color:var(--warn)}.node .meter-nums.bad{color:var(--bad)}
+.node .meter-pct{font:700 10px var(--sans);white-space:nowrap}
+.node .meter-pct.ok{color:var(--ok)}.node .meter-pct.warn{color:var(--warn)}.node .meter-pct.bad{color:var(--bad)}
+.node .meter-track{height:4px;border-radius:3px;background:var(--panel2);overflow:hidden;border:1px solid var(--line)}
+.node .meter-fill{height:100%;border-radius:3px;transition:width .25s ease}
+.node .meter-fill.ok{background:var(--ok)}.node .meter-fill.warn{background:var(--warn)}.node .meter-fill.bad{background:var(--bad)}
+/* PEAK-AWARE load (doc: load-stages R4): the worst-window ρ shown beside the steady meter — a shaped generator's
+   declared peak. `bad` = saturates at the peak (unbounded queue at that instant), `warn` = runs tight there. */
+.node .meter-peakrow{font:700 9.5px var(--sans);white-space:nowrap;line-height:1.1;margin-top:-1px;color:var(--ink3)}
+.node .meter-peak.warn{color:var(--warn)}.node .meter-peak.bad{color:var(--bad)}
+/* Latency COMPOSITION bar (doc-15): base (declared, blue) | queue (THIS tier's congestion, RED = cascade culprit)
+   | downstream (inherited, grey); length ∝ ms on a 0–1 s track, tick at 200 ms; the response number is threshold-
+   coloured. A segmented multi-colour strip (not a single fill) so it reads as a breakdown, never as "headroom". */
+/* SINGLE-TRUTH LATENCY (owner decree): the MEASURED p50→p99 range bar. p50 "typical" is a calm anchor, p99 "tail" a
+   warning-leaning anchor; the fill gradients from the calm to the tail tone. The whole bar is verdict-aware — a
+   violated latency SLO paints it red, a warning ambers it. `.refreshing` dims it while a fresh sim is in flight. */
+.node .latbar{padding:2px 11px 0;display:flex;flex-direction:column;gap:2px}
+.node .latbar-nums{font:600 10.5px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}
+.node .lat-typical{color:var(--accent)}      /* p50 — the calm "typical" anchor */
+.node .lat-arrow{color:var(--ink3);font-weight:400}
+.node .lat-tail{color:var(--warn);font-weight:700}  /* p99 — the "tail" anchor, warning-leaning */
+.node .latbar.ok .lat-typical{color:var(--ok)}
+.node .latbar.warn .lat-typical{color:var(--warn)}
+.node .latbar.bad .lat-typical,.node .latbar.bad .lat-tail{color:var(--bad)}
+.node .latbar-track{position:relative;height:5px;border-radius:3px;background:var(--panel2);overflow:hidden;border:1px solid var(--line)}
+.node .latbar-range{height:100%;width:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--warn))}
+.node .latbar.ok .latbar-range{background:linear-gradient(90deg,var(--ok),var(--warn))}
+.node .latbar.bad .latbar-range{background:linear-gradient(90deg,var(--warn),var(--bad))}
+.node .latbar.refreshing{opacity:.5}
+/* per-node response-composition picker (inspector) */
+.comp-select{width:100%;font:600 12px var(--sans);padding:5px 7px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);color:var(--ink);cursor:pointer}
+/* Problems list (IDE-style Error List): one row per non-green verdict; click selects the node */
+.sd-tabs button.has-problems{color:var(--bad)}
+.problems{width:100%;border-collapse:collapse;font:500 12px var(--sans)}
+.problems th{text-align:left;font:700 10.5px var(--sans);text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:4px 10px;border-bottom:1px solid var(--line)}
+.problems td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.problems tbody tr{cursor:pointer}
+.problems tbody tr:hover{background:var(--panel2)}
+.problems .p-ic{width:22px;font-weight:800}
+.problems tr.sev-violation .p-ic{color:var(--bad)}
+.problems tr.sev-warning .p-ic{color:var(--warn)}
+.problems tr.sev-unknown .p-ic{color:var(--ink3)}
+.problems .p-node{font-weight:700;white-space:nowrap}
+.problems .p-key{white-space:nowrap;color:var(--ink2)}
+.problems .p-val{font-family:var(--mono);white-space:nowrap}
+.problems .p-fix{color:var(--ink2)}
+.problems-hdr{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.p-fix-btn{font:700 11px var(--sans);padding:4px 12px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-tint);color:var(--accent-deep);cursor:pointer}
+.p-fix-btn:hover{background:var(--accent);color:#fff}
+.row.row-link{cursor:pointer}
+.row.row-link:hover .tagmode{background:var(--accent-tint);color:var(--accent-deep)}
+.flag{position:absolute;top:-9px;right:-7px;width:18px;height:18px;border-radius:50%;background:var(--bad);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,.3);z-index:3}
+/* Port labels sit OUTSIDE the card next to their handle, so they never cover the title/chips. The panel
+   backing keeps them legible where an edge passes behind. */
+.node .port{position:absolute;font:600 9px var(--mono);color:var(--ink2);transform:translateY(-50%);pointer-events:none;letter-spacing:.02em;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--panel);padding:0 3px;border-radius:4px;line-height:1.4}
+.node .port.portL{right:calc(100% + 7px);left:auto;text-align:right}
+.node .port.portR{left:calc(100% + 7px);right:auto;text-align:left}
+/* Inline "+" on an OPEN port: a hover-revealed affordance sitting JUST OUTSIDE the port label, so it
+   never overlaps the handle's drag hit-area. CSS-only visibility (opacity), revealed on node hover or focus so it
+   is keyboard-reachable. The slot is a zero-size absolute anchor at the node edge; the button clears the label
+   (max-width 64px + gutters) so the two never collide. A wired port renders no slot at all — unchanged look. */
+/* The slot needs a DETERMINISTIC box for translateY(-50%): as a bare inline span its height came from
+   line-height and the button sat on the BASELINE — visually a few px below the handle circle's centre. */
+.node .port-plus-slot{position:absolute;transform:translateY(-50%);z-index:3;display:grid;place-items:center;height:16px}
+.node .port-plus-slot.ppsL{right:calc(100% + 80px);left:auto}
+.node .port-plus-slot.ppsR{left:calc(100% + 80px);right:auto}
+/* ONE vector icon (an SVG circle+plus inside the button) - a font glyph sat below the geometric centre and
+   CSS-drawn bars looked crude; the SVG is exact and crisp at every zoom/DPI. */
+.node .port-plus{display:block;width:16px;height:16px;padding:0;border:0;background:transparent;cursor:pointer;opacity:0;transition:opacity .12s ease;pointer-events:auto;line-height:0}
+.node .port-plus .pp-ring{fill:var(--panel);stroke:var(--accent);stroke-width:1.2}
+.node .port-plus .pp-cross{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linecap:round}
+.node .port-plus:hover .pp-ring{fill:var(--accent)}
+.node .port-plus:hover .pp-cross{stroke:#fff}
+.react-flow__node:hover .node .port-plus,.node .port-plus:focus-visible{opacity:1}
+.pi{cursor:grab}.pi:active{cursor:grabbing}
+
+.insp{background:var(--panel);border-left:1px solid var(--line);overflow:auto;display:flex;flex-direction:column}
+/* A visible (but restrained) scrollbar on every scrollable panel — so it's obvious there is more content below
+   (the Inspector's Verdict/Suggestions, the System panel's Requirements/SLO inputs) rather than a hidden overflow. */
+.insp::-webkit-scrollbar,.sysbody::-webkit-scrollbar,.rail::-webkit-scrollbar,.ai-tools::-webkit-scrollbar{width:11px;height:11px}
+.insp::-webkit-scrollbar-thumb,.sysbody::-webkit-scrollbar-thumb,.rail::-webkit-scrollbar-thumb,.ai-tools::-webkit-scrollbar-thumb{background:var(--line2);border-radius:7px;border:3px solid var(--panel)}
+.insp::-webkit-scrollbar-thumb:hover,.sysbody::-webkit-scrollbar-thumb:hover,.rail::-webkit-scrollbar-thumb:hover,.ai-tools::-webkit-scrollbar-thumb:hover{background:var(--ink3)}
+.insp,.sysbody,.rail,.ai-tools{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.ih{padding:12px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.ih .ic{width:30px;height:30px;border-radius:8px;background:var(--accent-tint);color:var(--accent);display:grid;place-items:center}
+.ih .ic svg{width:17px;height:17px}.ih b{font-size:14px}.ih span{display:block;color:var(--ink3);font-size:11px}
+.ih .rename{font:700 14px var(--sans);color:var(--ink);background:transparent;border:1px solid transparent;border-radius:6px;padding:2px 6px;margin:-2px -6px 0;width:100%;outline:none}
+.ih .rename:hover{border-color:var(--line2);background:var(--panel2)}
+.ih .rename:focus{border-color:var(--accent);background:var(--panel2)}
+.ih .descedit{font:500 11.5px var(--sans);color:var(--ink2);background:transparent;border:1px solid transparent;border-radius:6px;padding:2px 6px;margin:1px -6px 2px;width:100%;outline:none}
+.ih .descedit::placeholder{color:var(--ink3);font-style:italic}
+.ih .descedit:hover{border-color:var(--line2);background:var(--panel2)}
+.ih .descedit:focus{border-color:var(--accent);background:var(--panel2);color:var(--ink)}
+.sec{padding:12px 15px;border-bottom:1px solid var(--line)}
+.sec h6{margin:0 0 9px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+/* A one-line plain caption under an inspector section title (Assumptions / Resource limits / Promises) — tells a
+   first-time reader what to fill, when and why. Sits tight under the h6, quiet (ink3), above the fields. */
+.insp-cap{color:var(--ink3);font-size:11px;line-height:1.45;margin:-3px 0 10px}
+/* The last-resort crash panel (error-boundary.tsx) — shown instead of a blank page when a render throws. */
+.crash{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:24px}
+.crash-box{max-width:640px;width:100%;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.crash-box h2{margin:0 0 8px;font:700 17px var(--sans);color:var(--ink)}
+.crash-box p{margin:0 0 16px;font:400 13px var(--sans);color:var(--ink2);line-height:1.5}
+.crash-actions{display:flex;gap:10px;margin-bottom:16px}
+.crash-detail{font:500 12px var(--sans);color:var(--ink3)}
+.crash-detail summary{cursor:pointer;user-select:none}
+.crash-detail pre{margin:10px 0 0;padding:12px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font:400 11px var(--mono);color:var(--ink2);white-space:pre-wrap;word-break:break-word;max-height:280px;overflow:auto}
+/* The Improve ("solve backwards") panel flows its sections into COLUMNS (like the System panel), so it uses the
+   drawer width instead of a narrow left strip beside a blank right half. It sits in .sysbody (whose children are
+   capped at 420px) so it must opt OUT of that cap and span the full width; the header spans the full top. */
+.sysbody > .modepanel{flex:1 1 100%;max-width:none;min-width:0;display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:22px}
+.modepanel > .ih{flex:1 1 100%}
+.modepanel > .sec{flex:1 1 290px;min-width:250px;max-width:440px;border-bottom:none}
+.field{display:flex;align-items:center;justify-content:space-between;margin:7px 0}
+.field label{color:var(--ink2);font-size:12px}
+.field input{font:600 12px var(--mono);background:var(--panel2);border:1px solid var(--line2);border-radius:7px;padding:5px 9px;width:104px;text-align:right;color:var(--ink);outline:none}
+.field input[type=checkbox]{width:auto;accent-color:var(--accent);transform:scale(1.15)}
+.field select{font:600 12px var(--sans);background:var(--panel2);border:1px solid var(--line2);border-radius:7px;padding:5px 8px;color:var(--ink);outline:none;cursor:pointer;min-width:140px}
+.field select:focus{border-color:var(--accent)}
+.vr{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin:7px 0;background:var(--panel2)}
+.vr .k{font-size:12px;color:var(--ink2)}.vr .v{font:600 11.5px var(--mono)}
+.vr .v.bad{color:var(--bad)}.vr .v.warn{color:var(--warn)}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+.st::before{content:"";width:6px;height:6px;border-radius:50%}
+.st.ok{background:var(--ok-tint);color:var(--ok)}.st.ok::before{background:var(--ok)}
+.st.warn{background:var(--warn-tint);color:var(--warn)}.st.warn::before{background:var(--warn)}
+.st.violation,.st.bad{background:var(--bad-tint);color:var(--bad)}.st.violation::before,.st.bad::before{background:var(--bad)}
+.st.unknown{background:var(--panel2);color:var(--ink3)}.st.unknown::before{background:var(--ink3)}
+.fix{margin-top:10px;background:var(--accent-tint);border:1px solid var(--line2);border-radius:9px;padding:10px 11px;font-size:12px;color:var(--accent-deep);line-height:1.5}
+.muted{color:var(--ink3);font-size:12px;margin:0}
+.sg{margin:8px 0}
+.sg-h{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--ink2);margin-bottom:6px}
+.sg-h b{color:var(--ink)}
+.sg-opts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sg-opt{display:flex;align-items:center;gap:7px;font:600 12px var(--sans);border:1px solid var(--line2);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer;min-width:0}
+.sg-opt:hover{background:var(--accent-tint);border-color:var(--accent)}
+.sg-opt .ic{width:18px;height:18px;color:var(--accent);display:grid;place-items:center}
+.sg-opt .ic svg{width:14px;height:14px}
+.spec .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.spec .row .lbl{color:var(--ink2);font-size:12.5px}.spec .row .val{font:600 12px var(--mono);text-align:right}
+.tagmode{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--panel2);color:var(--ink3)}
+.tagmode.computed{background:var(--ok-tint);color:var(--ok)}.tagmode.provided{background:var(--accent-tint);color:var(--accent-deep)}.tagmode.unknown{background:var(--bad-tint);color:var(--bad)}
+
+/* Assumption model (doc: assumption-model §7) — the active-world lens selector + the badge that TAGS which world the canvas is coloured by (never a silent mix). */
+.world-lens{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:5px 0 9px}
+.wlens-btn{font:600 11px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink2);padding:3px 9px;border-radius:7px;cursor:pointer}
+.wlens-btn:hover{background:var(--line)}
+.wlens-btn.on{background:var(--accent-tint);color:var(--accent-deep);border-color:var(--accent-tint)}
+/* A world's lens button + its ↻ reset, kept together (doc: assumption-model §5.3). */
+.wlens-world{display:inline-flex;align-items:center;gap:2px}
+.wlens-reset{font:600 11px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink3);padding:3px 6px;border-radius:7px;cursor:pointer;line-height:1}
+.wlens-reset:hover{background:var(--line);color:var(--ink2)}
+.world-badge{font:700 10px var(--sans);padding:2px 8px;border-radius:999px;background:var(--accent-tint);color:var(--accent-deep);margin-left:8px}
+
+.bottom{display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--panel);border-top:1px solid var(--line)}
+.metric{display:flex;align-items:center;gap:8px}
+.metric .lab{font-size:10.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+.metric .num{font:700 13px var(--mono)}
+.sep{width:1px;height:20px;background:var(--line)}
+
+/* React Flow overrides */
+.react-flow__node{font-family:var(--sans)}
+/* THE IDEAL LAYOUT — the resting-handshake MORPH (doc: ideal-layout §3.6). When the background polisher applies the
+   better layout, the canvas gets `.morphing` for ~0.5s so every node position change eases into place (no jump).
+   Scoped to that window only, so it never lags a live drag/Tidy. Respects reduced-motion. */
+.cv.morphing .react-flow__node{transition:transform .42s cubic-bezier(.4,0,.2,1)}
+@media (prefers-reduced-motion: reduce){.cv.morphing .react-flow__node{transition:none}}
+.react-flow__node.selected .node{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-tint),0 8px 20px rgba(37,99,235,.18)}
+.react-flow__handle{width:9px;height:9px;background:var(--panel);border:2px solid var(--accent);border-radius:50%}
+.react-flow__handle-left{left:-5px}.react-flow__handle-right{right:-5px}
+.react-flow__attribution{display:none}
+.react-flow__controls{box-shadow:0 4px 14px rgba(0,0,0,.18);border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.react-flow__controls-button{background:var(--panel);border-bottom:1px solid var(--line);color:var(--ink2);fill:var(--ink2)}
+.react-flow__minimap{border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.sda-edge{stroke-dasharray:6 7;animation:sda-dash linear infinite}
+@keyframes sda-dash{to{stroke-dashoffset:-26}}
+/* travelling "packet" dot — round-trip speed encodes this hop's latency; a thin background-coloured ring
+   keeps it legible where it crosses the wire (paint-order draws the ring under the fill). */
+.sda-dot{stroke:var(--panel);stroke-width:1.1;paint-order:stroke;pointer-events:none}
+/* GUARANTEE STRIP (doc: guarantee-propagation §4) — a slim, non-animated "promise" band riding just under the wire,
+   drawn ONLY when the selected flow declares a guarantee requirement this edge participates in. Teal holds · red from
+   the degrading hop · gray unknown (colours set inline per segment). Rounded caps + a soft opacity read it as a
+   separate band from the animated health stroke; `cursor:help` hints the hover names the transition. */
+.sda-guarantee-strip{cursor:help}
+/* ── RATES ON THE WIRE (doc: flow-transformations-r2 §3) — pills rendered via EdgeLabelRenderer (screen-space HTML
+   overlaid on the canvas). The fat transparent hit-path lets the thin animated wire be hovered/selected easily. */
+.sda-edge-hit{cursor:pointer}
+/* identity edge: a quiet rate that only appears on hover (default hidden), so the 1:1 wires stay clean. Positioned
+   by an inline transform; the group's :hover reveals it. `pointer-events:none` keeps it from blocking the wire. */
+.edge-hoverpill{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s ease;
+  font:600 10.5px var(--mono);color:var(--ink2);background:var(--panel);border:1px solid var(--line);
+  border-radius:999px;padding:2px 8px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.10);z-index:5}
+.react-flow__edge:hover .edge-hoverpill{opacity:1}
+/* transformed edge: a PERSISTENT, clickable pill announcing the function + resulting rate. Tone reads the SHAPE. */
+.edge-pill{position:absolute;pointer-events:all;cursor:pointer;z-index:6;
+  font:700 10.5px var(--mono);letter-spacing:.01em;line-height:1;white-space:nowrap;
+  border:1px solid;border-radius:999px;padding:3px 9px;box-shadow:0 2px 9px rgba(0,0,0,.14);
+  transition:transform .1s ease,box-shadow .1s ease}
+.edge-pill:hover{box-shadow:0 4px 14px rgba(0,0,0,.22)}
+.edge-pill:active{transform:translate(-50%,-50%) scale(.96) !important}
+.edge-pill:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.edge-pill.edge-pill-ro{cursor:default;pointer-events:none}
+.edge-pill-chev{margin-right:3px;opacity:.7;font-weight:800}
+/* amber = amplification (k>1): the surprising, load-multiplying case the feature exists to surface. */
+.tp-amp{color:var(--warn);background:var(--warn-tint);border-color:var(--warn)}
+/* teal = reduction (k<1, batch): traffic collapsing — a distinct, calmer hue than the amber amplify. */
+.tp-reduce{color:#0e7c86;background:#e3f6f8;border-color:#59c3cd}
+/* gray = a ceiling (cap/window): a throttle, not a multiplier — reads as neutral/structural. */
+.tp-cap{color:var(--ink2);background:var(--panel2);border-color:var(--line2)}
+/* dashed = probabilistic split (prob): the border dash signals "a fraction, sampled" at a glance. */
+.tp-prob{color:var(--accent-deep);background:var(--accent-tint);border-color:var(--accent);border-style:dashed}
+:root[data-theme="dark"] .tp-reduce{color:#5fe3ee;background:#0e2b2e;border-color:#1f6b72}
+/* cost breakdown — exposes the price MODEL (base × driver = $/mo) so it is never a hidden literal */
+.costcalc{font:500 11.5px var(--sans);color:var(--ink2);padding:3px 0 1px}
+.cm-formula{display:inline-block;font:600 11px var(--mono);color:var(--accent-deep);background:var(--accent-tint);padding:2px 7px;border-radius:6px}
+.cm-sub{margin-top:5px;color:var(--ink3)}
+.cm-sub b{color:var(--ink);font-weight:600}
+/* compare_options ranked alternatives (clingo enumerate → MiniZinc size → rank) */
+.cmp-list{margin-top:8px;display:flex;flex-direction:column;gap:1px}
+.cmp-row{display:flex;flex-direction:column;gap:2px;padding:5px 6px;border-radius:6px}
+.cmp-row:hover{background:var(--panel2)}
+.cmp-row.cur{background:var(--accent-tint)}
+.cmp-head{display:flex;align-items:center;gap:8px}
+.cmp-t{flex:1;font:600 11.5px var(--mono);color:var(--ink2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-row.cur .cmp-t{color:var(--accent-deep)}
+.cmp-meta{font:500 11px var(--sans);color:var(--ink3);line-height:1.45}
+.cmp-c{font-weight:600;color:var(--ink)}
+.cmp-warn{color:var(--bad);font-weight:600}
+/* group / boundary container */
+.react-flow__node-group{background:transparent;border:none;border-radius:14px;padding:0}
+.groupbox{width:100%;height:100%;border:1.5px dashed var(--line2);border-radius:14px;background:rgba(124,139,255,.06)}
+.groupbox.sel{border-color:var(--accent);background:rgba(124,139,255,.10)}
+.gr-label{position:absolute;top:-11px;left:14px;background:var(--panel);border:1px solid var(--line2);border-radius:7px;padding:2px 10px;font:700 11px var(--sans);color:var(--ink2);letter-spacing:.02em;white-space:nowrap}
+.gr-line{border-color:var(--accent)}
+.gr-handle{width:9px;height:9px;background:var(--panel);border:2px solid var(--accent);border-radius:2px}

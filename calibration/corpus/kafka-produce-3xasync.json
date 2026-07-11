@@ -1,0 +1,29 @@
+{
+  "name": "Kafka — producer write, 3x async replication (Kreps 2014)",
+  "modelPath": "kafka-cluster.sda.json",
+  "notes": "Single producer thread writing 100-byte records to a 3-broker Kafka cluster (6 partitions), 3x ASYNCHRONOUS replication — the realistic production durability config, from the SAME Kreps 2014 benchmark as the no-replication entry. Modeled identically — SDA models the aggregate cluster throughput, not the replication factor, so both are the same cluster under a different durability config (the analogue of TechEmpower single/multi and Redis SET/LPUSH: one architecture, two configs, one shared tunable). The shared tunable stream.kafka:throughput makes the fit over-determined; the leave-one-out (fit on the no-replication point, predict this one) is a genuine out-of-sample test. Same scope and config-sensitivity caveats as the no-replication entry — this validates the write CEILING, not the queue-backlog behaviour, and does not flip the act-as-a-queue family.",
+  "sources": [
+    { "url": "https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines", "note": "Jay Kreps, 'Benchmarking Apache Kafka: 2 Million Writes Per Second (On Three Cheap Machines)', LinkedIn Engineering, 2014-04-27. Single producer thread, 3x asynchronous replication: 786,980 records/sec (75.1 MB/sec). Same hardware / 100-byte records / six partitions as the no-replication run." }
+  ],
+  "workloadSweep": { "node": "prod", "key": "throughput", "points": [200000, 500000, 780000, 786980, 1000000] },
+  "tunables": [
+    {
+      "key": "throughput",
+      "selector": { "type": "stream.kafka" },
+      "unit": "msg/s",
+      "catalogDefault": 100000,
+      "fit": { "min": 50000, "max": 3000000 },
+      "note": "The SAME free variable as the no-replication entry (selector stream.kafka, key throughput) — one shared Kafka aggregate throughput. Sharing it across the two replication configs is what over-determines the fit and makes the leave-one-out a genuine out-of-sample test; the small residual is the async-replication overhead SDA does not separately model."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 786980,
+      "unit": "msg/s",
+      "probeLoadRps": 20000,
+      "sourceUrl": "https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines",
+      "note": "Single producer thread, 3x async replication: 786,980 records/sec (Kreps 2014). Marginally below the no-replication 821,557 (async replication is cheap); SDA models both with ONE aggregate throughput, so the ~4% gap is the irreducible residual a single capacity value cannot capture."
+    }
+  ]
+}

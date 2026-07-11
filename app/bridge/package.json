@@ -1,0 +1,30 @@
+{
+  "name": "@sda/bridge",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Local AI bridge: exposes the SDA design tools over MCP-on-HTTP (a URL any AI client points at) and relays every call over WebSocket to the open web canvas, which runs it against the live Studio. A pure relay — zero domain knowledge. Local process, no egress.",
+  "exports": {
+    ".": "./src/bridge.ts"
+  },
+  "bin": {
+    "sda-bridge": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@sda/content": "workspace:*",
+    "@sda/core": "workspace:*",
+    "@sda/mcp": "workspace:*",
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.6.3"
+  }
+}

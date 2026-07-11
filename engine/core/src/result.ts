@@ -1,0 +1,10 @@
+/**
+ * A total result: either a success value or an error. The engine returns these instead of throwing
+ * for ordinary outcomes (engine quality charter, doc-4 §1). Throwing is reserved for programmer errors.
+ */
+export type Result<T, E> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: E };
+
+export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
+export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });

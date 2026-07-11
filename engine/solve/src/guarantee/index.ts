@@ -1,0 +1,15 @@
+export {
+  propagateDimension,
+  propagatePath,
+  propagateFlow,
+  enumerateFlowPaths,
+  propagateFlowEdges,
+  contributionsAlong,
+  judgeGuarantee,
+  type Contribution,
+  type DimensionResult,
+  type FlowGuarantees,
+  type GuaranteeRequirement,
+  type EdgeMeet,
+  type PathEdgeMeets,
+} from './propagate';

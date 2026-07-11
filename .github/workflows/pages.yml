@@ -1,0 +1,58 @@
+name: Deploy web app to GitHub Pages
+
+# Builds the client-side web app (@sda/web) and publishes app/web/dist to GitHub Pages on every push to main.
+# The web build consumes PREBUILT WASM solvers from app/web/public — no MiniZinc/native toolchain needed here (unlike
+# the test CI), so this stays a plain pnpm build. Cross-origin isolation for the cold-path solvers is provided at
+# runtime by the vendored coi-serviceworker (Pages cannot send COOP/COEP headers itself).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The tokens GitHub Pages deployment needs, least-privilege.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One live deployment at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the web app
+        run: pnpm --filter @sda/web build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

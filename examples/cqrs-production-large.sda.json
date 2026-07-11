@@ -1,0 +1,868 @@
+{
+  "schema": 7,
+  "id": "p1",
+  "name": "CQRS production (large)",
+  "instances": [
+    {
+      "id": "cli_cmd",
+      "type": "client.web",
+      "config": {
+        "throughput": 500
+      },
+      "ranges": {
+        "throughput": {
+          "lo": 300,
+          "hi": 700
+        }
+      }
+    },
+    {
+      "id": "cli_qry",
+      "type": "client.web",
+      "config": {
+        "throughput": 10000
+      },
+      "ranges": {
+        "throughput": {
+          "lo": 6000,
+          "hi": 14000
+        }
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 80
+          }
+        }
+      ]
+    },
+    {
+      "id": "waf",
+      "type": "security.waf",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 250
+          }
+        }
+      ]
+    },
+    {
+      "id": "alb_w",
+      "type": "lb.alb",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "apigw",
+      "type": "apigw.rest",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "cmd",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 2
+      },
+      "transforms": {
+        "out": {
+          "kind": "ratio",
+          "value": 3
+        }
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "rds",
+      "type": "proxy.rds"
+    },
+    {
+      "id": "aurora",
+      "type": "db.aurora"
+    },
+    {
+      "id": "kafka",
+      "type": "stream.kafka",
+      "config": {
+        "drainRate": 3000
+      }
+    },
+    {
+      "id": "saga",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 3
+      },
+      "transforms": {
+        "db": {
+          "kind": "prob",
+          "value": 0.3
+        }
+      }
+    },
+    {
+      "id": "proj_read",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 20,
+        "latency": 20,
+        "maxUnits": 3
+      },
+      "ranges": {
+        "perRequestDuration": {
+          "lo": 10,
+          "mode": 20,
+          "hi": 40
+        }
+      }
+    },
+    {
+      "id": "proj_srch",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 3
+      }
+    },
+    {
+      "id": "proj_hot",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 10,
+        "latency": 10,
+        "maxUnits": 2
+      }
+    },
+    {
+      "id": "rstore",
+      "type": "db.postgres",
+      "bands": [
+        {
+          "key": "cost",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 30000
+          }
+        }
+      ],
+      "config": {
+        "latency": 15,
+        "perRequestDuration": 15
+      },
+      "ranges": {
+        "perRequestDuration": {
+          "lo": 10,
+          "mode": 15,
+          "hi": 30
+        }
+      }
+    },
+    {
+      "id": "es",
+      "type": "search.opensearch"
+    },
+    {
+      "id": "redis",
+      "type": "cache.redis",
+      "config": {
+        "availability": 0.9999
+      }
+    },
+    {
+      "id": "dlq",
+      "type": "queue.sqs"
+    },
+    {
+      "id": "notifier",
+      "type": "compute.lambda"
+    },
+    {
+      "id": "analytics",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 3
+      },
+      "transforms": {
+        "out": {
+          "kind": "window",
+          "value": 1000
+        }
+      }
+    },
+    {
+      "id": "s3_an",
+      "type": "storage.object"
+    },
+    {
+      "id": "cdn",
+      "type": "cdn.cloudfront",
+      "config": {
+        "throughput": 150000
+      },
+      "transforms": {
+        "out": {
+          "kind": "ratio",
+          "value": 0.7
+        }
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 120
+          }
+        },
+        {
+          "key": "tailLatency",
+          "band": {
+            "shape": "percentiles",
+            "targets": {
+              "__map": [
+                [
+                  "p99",
+                  300
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "key": "availability",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 0.999
+          }
+        }
+      ]
+    },
+    {
+      "id": "alb_r",
+      "type": "lb.alb"
+    },
+    {
+      "id": "query",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 10,
+        "latency": 10,
+        "maxUnits": 6,
+        "availability": 0.9997
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "cli_cmd",
+        "out"
+      ],
+      "to": [
+        "waf",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "waf",
+        "out"
+      ],
+      "to": [
+        "alb_w",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "alb_w",
+        "out"
+      ],
+      "to": [
+        "apigw",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "apigw",
+        "out"
+      ],
+      "to": [
+        "cmd",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cmd",
+        "db"
+      ],
+      "to": [
+        "rds",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "rds",
+        "out"
+      ],
+      "to": [
+        "aurora",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cmd",
+        "out"
+      ],
+      "to": [
+        "kafka",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "saga",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "proj_read",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "proj_srch",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "proj_hot",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "notifier",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "analytics",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "saga",
+        "db"
+      ],
+      "to": [
+        "rds",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "proj_read",
+        "db"
+      ],
+      "to": [
+        "rstore",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "proj_srch",
+        "out"
+      ],
+      "to": [
+        "es",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "proj_srch",
+        "out"
+      ],
+      "to": [
+        "dlq",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.01
+      }
+    },
+    {
+      "from": [
+        "proj_hot",
+        "out"
+      ],
+      "to": [
+        "redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "analytics",
+        "out"
+      ],
+      "to": [
+        "s3_an",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cli_qry",
+        "out"
+      ],
+      "to": [
+        "cdn",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cdn",
+        "out"
+      ],
+      "to": [
+        "alb_r",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "alb_r",
+        "out"
+      ],
+      "to": [
+        "query",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "query",
+        "out"
+      ],
+      "to": [
+        "redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "query",
+        "db"
+      ],
+      "to": [
+        "rstore",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.2
+      }
+    }
+  ],
+  "layout": {
+    "cli_cmd": {
+      "x": 60,
+      "y": 58
+    },
+    "waf": {
+      "x": 380,
+      "y": 58
+    },
+    "alb_w": {
+      "x": 700,
+      "y": 58
+    },
+    "apigw": {
+      "x": 1020,
+      "y": 58
+    },
+    "cmd": {
+      "x": 1340,
+      "y": 58
+    },
+    "rds": {
+      "x": 2300,
+      "y": -138
+    },
+    "aurora": {
+      "x": 2620,
+      "y": -138
+    },
+    "kafka": {
+      "x": 1660,
+      "y": 242
+    },
+    "saga": {
+      "x": 1980,
+      "y": 242
+    },
+    "proj_read": {
+      "x": 1980,
+      "y": 1502
+    },
+    "proj_srch": {
+      "x": 1980,
+      "y": 734
+    },
+    "proj_hot": {
+      "x": 1980,
+      "y": 998
+    },
+    "rstore": {
+      "x": 2300,
+      "y": 1686
+    },
+    "es": {
+      "x": 2300,
+      "y": 822
+    },
+    "redis": {
+      "x": 2300,
+      "y": 998
+    },
+    "dlq": {
+      "x": 2300,
+      "y": 646
+    },
+    "notifier": {
+      "x": 1980,
+      "y": 426
+    },
+    "analytics": {
+      "x": 1980,
+      "y": 1326
+    },
+    "s3_an": {
+      "x": 2300,
+      "y": 1326
+    },
+    "cli_qry": {
+      "x": 60,
+      "y": 1686
+    },
+    "cdn": {
+      "x": 380,
+      "y": 1686
+    },
+    "alb_r": {
+      "x": 700,
+      "y": 1686
+    },
+    "query": {
+      "x": 1020,
+      "y": 1686
+    }
+  },
+  "labels": {
+    "cli_cmd": "Command clients",
+    "cli_qry": "Query clients",
+    "waf": "WAF",
+    "alb_w": "ALB (write)",
+    "apigw": "API Gateway",
+    "cmd": "Command service",
+    "rds": "RDS Proxy",
+    "aurora": "Write DB (Aurora)",
+    "kafka": "Event log (Kafka)",
+    "saga": "Saga / process mgr",
+    "proj_read": "Read-model projector",
+    "proj_srch": "Search projector",
+    "proj_hot": "Hot projector",
+    "rstore": "Read store (RDS PG)",
+    "es": "Search (OpenSearch)",
+    "redis": "Hot cache (Redis)",
+    "dlq": "DLQ",
+    "notifier": "Notification worker",
+    "analytics": "Analytics consumer",
+    "s3_an": "Analytics store (S3)",
+    "cdn": "CDN (read)",
+    "alb_r": "ALB (read)",
+    "query": "Query service"
+  },
+  "descriptions": {
+    "cli_cmd": "Web/mobile issuing writes (POST commands)",
+    "cli_qry": "Web/mobile issuing reads (GET queries)",
+    "waf": "AWS WAF (managed) at the edge of the write API",
+    "alb_w": "AWS Application Load Balancer (managed), command path",
+    "apigw": "Amazon API Gateway REST (managed): auth + throttling",
+    "cmd": "ECS on Fargate service, 2 tasks (maxUnits — one per AZ): validates + dedups, writes the source of truth, emits 3 events per command",
+    "rds": "Amazon RDS Proxy (managed) — connection pooling for the write DB",
+    "aurora": "Amazon Aurora PostgreSQL (managed, Multi-AZ writer) — source of truth, strongly consistent",
+    "kafka": "Apache Kafka, self-managed on EC2 (the catalog's stream.kafka pricing identity; Amazon MSK would be the managed alternative). Ordered per-key event backbone, fan-out to projectors",
+    "saga": "ECS on Fargate service, 3 tasks: consumes events, issues follow-up commands (acyclic: writes to source of truth)",
+    "proj_read": "ECS on Fargate service, 3 tasks: builds the relational read model from events",
+    "proj_srch": "ECS on Fargate service, 3 tasks: builds the search index from events",
+    "proj_hot": "ECS on Fargate service, 2 tasks: maintains the hot cache projection from events",
+    "rstore": "Amazon RDS for PostgreSQL (managed, Multi-AZ) — relational read model for queries",
+    "es": "Amazon OpenSearch Service (managed, 3-AZ domain, sourced pricing) — search projection",
+    "redis": "Redis OSS, self-managed on EC2 (the catalog's cache.redis pricing identity; ElastiCache would be the managed alternative). Hot read projection / query cache",
+    "dlq": "Amazon SQS (managed) — dead-letter queue for failed search projection",
+    "notifier": "AWS Lambda (managed serverless, pay-per-use, sourced pricing) — sends user notifications from events",
+    "analytics": "ECS on Fargate service, 3 tasks: windowed aggregation of events",
+    "s3_an": "Amazon S3 (managed object store) — aggregated analytics output",
+    "cdn": "Amazon CloudFront (managed CDN) — edge cache/TLS for the query API",
+    "alb_r": "AWS Application Load Balancer (managed), query path",
+    "query": "ECS on Fargate service, 6 tasks: serves reads — cache first, read store on the 20% miss"
+  },
+  "groups": [
+    {
+      "id": "g_write",
+      "label": "Write side (commands)",
+      "rect": {
+        "x": 34,
+        "y": -164,
+        "w": 2772,
+        "h": 368
+      },
+      "members": [
+        "cli_cmd",
+        "waf",
+        "alb_w",
+        "apigw",
+        "cmd",
+        "rds",
+        "aurora"
+      ]
+    },
+    {
+      "id": "g_events",
+      "label": "Event backbone",
+      "rect": {
+        "x": 1634,
+        "y": 216,
+        "w": 532,
+        "h": 172
+      },
+      "members": [
+        "kafka",
+        "saga"
+      ]
+    },
+    {
+      "id": "g_proj",
+      "label": "Projectors & read stores",
+      "rect": {
+        "x": 1954,
+        "y": 400,
+        "w": 532,
+        "h": 1432
+      },
+      "members": [
+        "proj_read",
+        "proj_srch",
+        "proj_hot",
+        "rstore",
+        "es",
+        "redis",
+        "dlq",
+        "notifier",
+        "analytics",
+        "s3_an"
+      ]
+    },
+    {
+      "id": "g_read",
+      "label": "Read side (queries)",
+      "rect": {
+        "x": 34,
+        "y": 1660,
+        "w": 1172,
+        "h": 172
+      },
+      "members": [
+        "cli_qry",
+        "cdn",
+        "alb_r",
+        "query"
+      ]
+    }
+  ],
+  "components": [],
+  "guaranteeSlos": [
+    {
+      "source": "cli_cmd",
+      "terminal": "proj_read",
+      "dimension": "ordering",
+      "atLeast": "per-key"
+    }
+  ],
+  "lagSlos": [
+    {
+      "source": "cmd",
+      "terminal": "rstore",
+      "maxMs": 2000
+    }
+  ],
+  "requestClasses": [],
+  "scenarios": [
+    {
+      "id": "real",
+      "name": "Real (stated demand)",
+      "overrides": [
+        {
+          "node": "cli_cmd",
+          "key": "throughput",
+          "value": 500
+        },
+        {
+          "node": "cli_qry",
+          "key": "throughput",
+          "value": 10000
+        }
+      ]
+    },
+    {
+      "id": "pessimistic",
+      "name": "Pessimistic (+40% peak)",
+      "overrides": [
+        {
+          "node": "cli_cmd",
+          "key": "throughput",
+          "value": 700
+        },
+        {
+          "node": "cli_qry",
+          "key": "throughput",
+          "value": 14000
+        },
+        {
+          "node": "proj_read",
+          "key": "perRequestDuration",
+          "value": 40
+        },
+        {
+          "node": "rstore",
+          "key": "perRequestDuration",
+          "value": 30
+        }
+      ]
+    },
+    {
+      "id": "optimistic",
+      "name": "Optimistic (-40%)",
+      "overrides": [
+        {
+          "node": "cli_cmd",
+          "key": "throughput",
+          "value": 300
+        },
+        {
+          "node": "cli_qry",
+          "key": "throughput",
+          "value": 6000
+        },
+        {
+          "node": "rstore",
+          "key": "perRequestDuration",
+          "value": 12
+        }
+      ]
+    }
+  ]
+}

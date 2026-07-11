@@ -1,0 +1,68 @@
+{
+  "schema": 11,
+  "id": "techempower-single-query",
+  "name": "TechEmpower — Single Database Query (calibration #2)",
+  "instances": [
+    {
+      "id": "client",
+      "type": "client.web",
+      "config": {
+        "throughput": 104000
+      }
+    },
+    {
+      "id": "svc",
+      "type": "compute.service",
+      "config": {
+        "concurrency": 512,
+        "perRequestDuration": 0.2,
+        "latency": 0.2,
+        "cpuCores": 28,
+        "cpuTimePerRequestMs": 0.2692
+      }
+    },
+    {
+      "id": "db",
+      "type": "db.postgres",
+      "config": {
+        "concurrency": 28,
+        "perRequestDuration": 0.2373,
+        "latency": 0.2373
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["client", "out"],
+      "to": ["svc", "in"],
+      "semantics": "sync"
+    },
+    {
+      "from": ["svc", "db"],
+      "to": ["db", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "client": { "x": 60, "y": 80 },
+    "svc": { "x": 420, "y": 80 },
+    "db": { "x": 780, "y": 80 }
+  },
+  "labels": {
+    "client": "wrk load (512 conns)",
+    "svc": "web framework tier",
+    "db": "PostgreSQL (World table)"
+  },
+  "descriptions": {
+    "client": "TechEmpower load generator, swept toward saturation (measured single-query operating point = 104,000 req/s).",
+    "svc": "The web framework under test. Its concurrency pool is generous (512 / 0.2 ms => ~2.56M req/s), but it now also carries a CPU station: cpuCores 28 (the Citrine app box's hardware threads) x 1000 / cpuTimePerRequestMs 0.2692 ms => ~104,000 req/s. At one query per request the framework CPU (104k) binds BELOW the DB (118k), so the single-query ceiling is CPU-bound — the resource SDA previously could not express.",
+    "db": "One PostgreSQL server. concurrency (28) = the DB box's parallel-query slots; perRequestDuration (0.2373 ms) chosen so capacity = 28 / 0.2373 ms = 118,000 queries/s (fit from the measured 20-query point, 5,900 x 20). Single query => 1 query per request."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

@@ -1,0 +1,49 @@
+{
+  "schema": 11,
+  "id": "redis-single-node",
+  "name": "Redis — single node (calibration #4, redis-benchmark)",
+  "instances": [
+    {
+      "id": "bench",
+      "type": "client.web",
+      "config": {
+        "throughput": 180000
+      }
+    },
+    {
+      "id": "redis",
+      "type": "cache.redis",
+      "config": {
+        "connectionPool": 1,
+        "connectionHeldMs": 0.0054,
+        "latency": 0.14
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["bench", "out"],
+      "to": ["redis", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "bench": { "x": 60, "y": 80 },
+    "redis": { "x": 480, "y": 80 }
+  },
+  "labels": {
+    "bench": "redis-benchmark (50 conns)",
+    "redis": "Redis single node (M/M/1)"
+  },
+  "descriptions": {
+    "bench": "redis-benchmark driving one Redis instance directly, swept toward saturation. Default config: 50 parallel clients, 3-byte payload, no pipelining. (The client speaks HTTP in the catalog; here it stands for the RESP-speaking benchmark client — the numeric capacity path is protocol-agnostic.)",
+    "redis": "One single-threaded Redis instance modeled as an M/M/1 station: 1 connection slot, service time = connectionHeldMs (the per-command time on the single-threaded command loop), so capacity = 1000 / connectionHeldMs op/s (graph-read.ts finite-pool station). connectionHeldMs is the fitted tunable, shared across the SET and LPUSH entries; its catalog default (0.01 ms) is an ESTIMATED 100,000 op/s ceiling."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

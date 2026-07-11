@@ -1,0 +1,42 @@
+{
+  "name": "DeathStarBench — Social Network",
+  "modelPath": "deathstarbench-social.sda.json",
+  "notes": "The standard open-source microservices benchmark (Gan et al., ASPLOS 2019): a broadcast Twitter clone of ~11 Thrift services over MongoDB/Redis/Memcached, 29 nodes / 35 wires, all catalog defaults. The primary paper reports RELATIVE shares and ratios, not an absolute p99-vs-QPS curve, so most absolutes are honestly UNKNOWN. The one clean, independently-measured, engine-computable numeric anchor is MongoDB's share of end-to-end latency (~8.5% at low load), fitted via the Mongo per-op service time. The mixed-workload throughput ceiling is PREDICTED and reported but NOT scored — the mixed absolute req/s is unpublished (only ComposePost-only 15k/90k exists, a different workload). Structural estimates (cache-miss fraction 0.3, posts-per-page 10, followers-per-compose 50) are wire transforms baked into the model, NOT fitted here.",
+  "sources": [
+    { "url": "https://github.com/delimitrou/DeathStarBench", "note": "Source of truth: the Thrift IDL, docker-compose.yml, C++ handlers, and wrk2/scripts/social-network (60/30/10 mixed workload, sweep from 1000 RPS in +500 steps)" },
+    { "url": "https://ar5iv.org/abs/1905.11055", "note": "ASPLOS 2019 paper: MongoDB share of end-to-end latency ~8.5% at low load; RPC processing = 18% of tail; bottleneck shifts front-end nginx (low load) -> back-end databases (high load); reposting (compose-post) incurs the longest latency" },
+    { "url": "https://arxiv.org/abs/2112.06254", "note": "Sinan: p99 SLA = 2000 ms; operating load sweep; ML root-cause = social-graph Redis background-persistence fork stalls" },
+    { "url": "https://arxiv.org/abs/2209.13265", "note": "Eyerman 2022: ComposePost peak throughput 15,000 RPS (thread-per-RPC) -> 90,000 RPS (fibers) — a DIFFERENT (compose-only) workload, so not comparable to the mixed ceiling" }
+  ],
+  "workloadSweep": { "node": "client", "key": "throughput", "points": [1000, 2000, 3000, 3500, 4000, 8000, 15000] },
+  "tunables": [
+    {
+      "key": "connectionHeldMs",
+      "selector": { "type": "db.mongodb" },
+      "unit": "ms",
+      "catalogDefault": 5,
+      "fit": { "min": 0.5, "max": 20 },
+      "note": "MongoDB per-operation service time (the M/M/c connection hold time the analytic twin and DES both read). It IS the numerator of the latency-share metric — at low load a Mongo hop's sojourn ~= this held time. Fitting it slides the predicted share toward the measured 8.5%."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "latencySharePct",
+      "measured": 8.5,
+      "unit": "%",
+      "probeLoadRps": 1000,
+      "numeratorNode": "ps_mongo",
+      "denominatorNode": "hometimeline_read",
+      "sourceUrl": "https://ar5iv.org/abs/1905.11055",
+      "note": "MongoDB's share of end-to-end latency at low load (paper, ~8.5%). Computed as the post-storage Mongo hop's own sojourn divided by the read-home-timeline operation's end-to-end response latency (the report's '~5 ms of ~46 ms'). SDA predicts ~11% out of the box (CLOSE, ~1.3x); one tunable brings it to the measured value, so this scalar has no irreducible residual — DSB's structural gaps live in the UNSCORED metrics below."
+    },
+    {
+      "metric": "capacityCeilingRps",
+      "measured": null,
+      "unit": "req/s",
+      "probeLoadRps": 1000,
+      "sourceUrl": "https://arxiv.org/abs/2209.13265",
+      "note": "UNKNOWN — the mixed-workload absolute req/s ceiling is not published in any primary source (the paper gives relative shares only; ComposePost-only 15k/90k is a different workload). PREDICTED and reported for context (SDA saturates the post-storage MongoDB tier at ~3,571 RPS given the estimated miss/fan-out) but NOT scored. Marking it null is the honest choice — the tool must not invent a number to grade against."
+    }
+  ]
+}
