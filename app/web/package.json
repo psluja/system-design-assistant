@@ -23,11 +23,11 @@
     "@sda/presenter": "workspace:*",
     "@sda/solver-contract": "workspace:*",
     "@xyflow/react": "^12.3.5",
-    "react": "^18.3.1",
+    "react": "^19.2.7",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/react": "^18.3.12",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "typescript": "^5.6.3",
