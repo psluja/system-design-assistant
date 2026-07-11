@@ -35,7 +35,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "clingo-wasm": "^0.3.2",
-    "fast-check": "^3.23.1",
+    "fast-check": "^4.9.0",
     "typescript": "^5.6.3"
   }
 }
