@@ -23,7 +23,7 @@
     "@sda/content": "workspace:*",
     "@sda/core": "workspace:*",
     "@sda/mcp": "workspace:*",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.1",
     "@types/ws": "^8.5.13",
     "typescript": "^5.6.3"
   }

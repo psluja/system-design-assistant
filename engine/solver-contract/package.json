@@ -21,7 +21,7 @@
     "@sda/engine-solve": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.1",
     "clingo-wasm": "^0.3.2",
     "typescript": "^5.6.3"
   }
