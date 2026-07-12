@@ -1,7 +1,7 @@
 {
   "_comment": "RECOMMENDATION ONLY. These are the component-default values that best fit the calibration corpus. They are NOT applied — changing a shipped content default changes every design's numbers, which is a separate owner-reviewed step. Regenerate with `pnpm calibrate`.",
   "generatedBy": "pnpm calibrate",
-  "aggregateErrorPct": 2.9664,
+  "aggregateErrorPct": 2.9641,
   "tunables": [
     {
       "selector": "cache.redis",
@@ -32,7 +32,7 @@
       "key": "connectionHeldMs",
       "unit": "ms",
       "catalogDefault": 5,
-      "recommended": 3.73626,
+      "recommended": 4.60181,
       "note": "MongoDB per-operation service time (the M/M/c connection hold time the analytic twin and DES both read). It IS the numerator of the latency-share metric — at low load a Mongo hop's sojourn ~= this held time. Fitting it slides the predicted share toward the measured 8.5%."
     },
     {

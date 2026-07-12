@@ -18,7 +18,7 @@ This harness predicts each corpus system with SDA's engine (instantiate → eval
 | `cache.redis`.throughput | 1.000e+5 | **1.844e+5** | op/s |
 | `compute.service`.cpuTimePerRequestMs | 1.000 | **0.2678** | ms |
 | `db.cassandra`.throughput | 1.280e+4 | **7.121e+4** | op/s |
-| `db.mongodb`.connectionHeldMs | 5.000 | **3.736** | ms |
+| `db.mongodb`.connectionHeldMs | 5.000 | **4.602** | ms |
 | `db.postgres`.perRequestDuration | 50.00 | **0.2390** | ms |
 | `queue.rabbitmq`.throughput | 2.000e+4 | **9.319e+4** | msg/s |
 | `stream.kafka`.throughput | 1.000e+5 | **7.986e+5** | msg/s |
@@ -39,11 +39,11 @@ _DES tail corroboration @ 60,526 req/s (DES seed 7, 2k warmup / 8k measured, at 
 
 | Metric | Measured | Out-of-box (defaults) | Error | Fitted | Residual |
 |---|--:|--:|--:|--:|--:|
-| latencySharePct | 8.50 % | 11.10 | +30.6% | 8.54 | **+0.4%** |
+| latencySharePct | 8.50 % | 9.06 | +6.5% | 8.52 | **+0.2%** |
 
-_Residual (RMS of fitted errors): 0.4%._
+_Residual (RMS of fitted errors): 0.2%._
 
-_DES tail corroboration @ 2,550 req/s (DES seed 7, 2k warmup / 8k measured, at ~0.85x the fitted ceiling): p50 39.89 ms · p95 120.14 ms · p99 166.15 ms._
+_DES tail corroboration @ 2,550 req/s (DES seed 7, 2k warmup / 8k measured, at ~0.85x the fitted ceiling): p50 41.60 ms · p95 120.55 ms · p99 162.98 ms._
 
 ### Kafka — producer write, 3x async replication (Kreps 2014)
 
@@ -136,7 +136,7 @@ _DES tail corroboration @ 88,857 req/s (DES seed 7, 2k warmup / 8k measured, at 
 Fit on the rest of the corpus, then predict the held-out entry. With few, disjoint entries this is the honest generalization test — where a held-out entry's tunables are not constrained by the fold-in set, it is predicted at catalog defaults, and that is stated.
 
 - **Held out: Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017)** — capacityCeilingRps: predicted 12,800 vs measured 70,771 (-81.9%). _held-out tunables db.cassandra:throughput are DISJOINT from the fold-in set, so they fall back to catalog defaults — the honest un-calibrated generalization (not a true out-of-sample test)._
-- **Held out: DeathStarBench — Social Network** — latencySharePct: predicted 11.10 vs measured 8.50 (+30.6%). _held-out tunables db.mongodb:connectionHeldMs are DISJOINT from the fold-in set, so they fall back to catalog defaults — the honest un-calibrated generalization (not a true out-of-sample test)._
+- **Held out: DeathStarBench — Social Network** — latencySharePct: predicted 9.06 vs measured 8.50 (+6.5%). _held-out tunables db.mongodb:connectionHeldMs are DISJOINT from the fold-in set, so they fall back to catalog defaults — the honest un-calibrated generalization (not a true out-of-sample test)._
 - **Held out: Kafka — producer write, 3x async replication (Kreps 2014)** — capacityCeilingRps: predicted 819,970 vs measured 786,980 (+4.2%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: Kafka — producer write, no replication (Kreps 2014)** — capacityCeilingRps: predicted 787,849 vs measured 821,557 (-4.1%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: RabbitMQ — classic queue (single node, AMQP 1.0)** — capacityCeilingRps: predicted 88,753 vs measured 99,413 (-10.7%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
