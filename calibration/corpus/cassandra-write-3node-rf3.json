@@ -1,0 +1,29 @@
+{
+  "name": "Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017)",
+  "modelPath": "cassandra-cluster.sda.json",
+  "notes": "ScyllaDB's own published head-to-head benchmark, the section that tests Apache Cassandra 3.0.9 (NOT ScyllaDB) on a 3-node cluster of AWS i2.8xlarge instances, replication factor 3, consistency QUORUM, driven by cassandra-stress at 500 threads over a 1.3 TB dataset. SDA models the CLUSTER as ONE aggregate SDA node whose write capacity is the `throughput` cell (op/s) — the same aggregate-cluster modeling choice the Kafka entry uses for its 3-broker cluster; nodeQueues reads it directly for rho, so the calibrated tunable is db.cassandra:throughput. ONLY the WRITE ceiling (70,771 op/s) is scored as this entry's ground truth: the SAME benchmark run also reports two READ-workload ceilings on the SAME cluster — read-mostly-disk (uncached) 19,091 op/s and read-mostly-cache 107,598 op/s — a ~5.6x spread across the three workloads that one fixed-throughput tunable cannot reproduce (unlike the Redis SET/LPUSH ~4.5% command spread or the RabbitMQ AMQP 0.9.1/1.0 ~12% protocol spread, which the corpus DOES score as a shared, over-determined tunable — those tolerate 2-6%, this would inject a ~460% average spread). Sharing all three workloads on one capacity value would poison, not validate, the aggregate fidelity number, so only the write point is scored; the two read ceilings are recorded here and in the ground-truth note as honest context for why they are not. HONEST SCOPE / AGE: this is the write-path CEILING of one specific, DATED configuration — Apache Cassandra 3.0.9, benchmarked in 2017 (the test scripts embed February 2017 dates), on the now-superseded i2.8xlarge instance family (AWS's previous-generation storage-optimized line, since succeeded by i3/i3en/i4i) — precise for what it measured, but a decade-old data point that should be superseded the moment a fresher, independently verifiable Cassandra capacity benchmark is found. HONEST SCOPE / MODEL: db.cassandra's manifest sources its connectionPool/connectionHeldMs (64 slots / 5 ms) from a SINGLE node's cassandra.yaml defaults (concurrent_reads + concurrent_writes = 32 + 32); this entry keeps that pool width (a real per-node structural constant) and adjusts ONLY connectionHeldMs so pool/held reproduces the CLUSTER's measured write ceiling — an honest simplification (the 3-node RF=3 coordinator/replica fan-out is not separately decomposed), consistent with the calibration rule that a fixed-throughput store's DES tail must stay arithmetically consistent with its fitted scalar capacity. This is a single-point entry (no shared over-determined tunable yet), so its leave-one-out fold reports the honest disjoint-fallback case until a second Cassandra-family point joins the corpus.",
+  "sources": [
+    { "url": "https://www.scylladb.com/product/benchmarks/aws-i2-8xlarge-benchmark/", "note": "ScyllaDB's own head-to-head benchmark ('ScyllaDB vs Cassandra'), the section testing Apache Cassandra 3.0.9 (DataStax Community release, based on Apache Cassandra 3.0.9) on a 3-node cluster of AWS i2.8xlarge instances, replication factor 3, consistency QUORUM, cassandra-stress 500 threads, 1.3 TB dataset. Reports for Cassandra: WRITE 70,771 ops/s (99.9th percentile latency 1,384 ms); read-mostly-disk (large spread, uncached) 19,091 ops/s; read-mostly-cache (small spread) 107,598 ops/s. The page carries no explicit publish date, but the embedded cassandra-stress command examples are dated February 2017." }
+  ],
+  "workloadSweep": { "node": "stress", "key": "throughput", "points": [20000, 45000, 65000, 70771, 90000] },
+  "tunables": [
+    {
+      "key": "throughput",
+      "selector": { "type": "db.cassandra" },
+      "unit": "op/s",
+      "catalogDefault": 12800,
+      "fit": { "min": 5000, "max": 300000 },
+      "note": "Cassandra's per-node mixed-workload estimate (12,800 op/s — an order-of-magnitude estimate, no vendor figure) treated as the free variable the fitter raises to the measured 3-node RF=3 CLUSTER write ceiling (70,771 op/s, ~5.5x higher) — the same aggregate-cluster reframing the Kafka entry uses for its 3-broker cluster. This entry declares only the WRITE ground truth, so the fit is NOT over-determined the way the Redis/Kafka/RabbitMQ pairs are; a fresher, independently verifiable read-workload point (once found) would be the natural second entry to share this tunable and give it a genuine leave-one-out fold."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 70771,
+      "unit": "op/s",
+      "probeLoadRps": 5000,
+      "sourceUrl": "https://www.scylladb.com/product/benchmarks/aws-i2-8xlarge-benchmark/",
+      "note": "ScyllaDB's own benchmark of Apache Cassandra 3.0.9 on a 3-node i2.8xlarge cluster, RF=3, consistency QUORUM, cassandra-stress 500 threads: WRITE 70,771 ops/s (99.9th percentile 1,384 ms). SDA's out-of-box estimate (12,800 op/s, a single-node order-of-magnitude guess) UNDER-predicts the measured CLUSTER ceiling by ~82%; the fit corrects the aggregate capacity to the measured write ceiling. The SAME run also reports read-mostly-disk 19,091 ops/s and read-mostly-cache 107,598 ops/s — NOT scored (a ~5.6x spread across the three workloads on one fixed-throughput tunable would poison, not validate, the aggregate fidelity number); recorded here as honest context only. Source is DATED (2017, Cassandra 3.0.9, the now-superseded i2.8xlarge instance family) — precise for what it measured, due for replacement by a fresher verifiable pair."
+    }
+  ]
+}

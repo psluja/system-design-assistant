@@ -7,7 +7,7 @@ import { availabilityByDeployment, connectionPool, costPer, payloadLimit, payPer
 // Informational: fires only if the architect sets `payloadBytes` (the real message size); 0 by default.
 const SQS_MESSAGE_LIMIT = payloadLimit(262_144, 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html');
 import { cacheOut, channelIn, clientOut, dbOut, triggerIn } from '../vocabulary/port-roles';
-import { cacheReadGuarantees, kafkaOut, natsOut, rabbitmqOut, replicaGuarantees, searchGuarantees, sqsFifoOut, sqsStandardOut, writerGuarantees } from '../vocabulary/guarantees';
+import { cacheReadGuarantees, cassandraReadGuarantees, kafkaOut, natsOut, rabbitmqOut, replicaGuarantees, searchGuarantees, sqsFifoOut, sqsStandardOut, writerGuarantees } from '../vocabulary/guarantees';
 
 // SOURCED availability by deployment mode (default Multi-AZ; deploymentMode 0 = single-AZ, 2 = multi-Region):
 //  - RDS (Postgres/MySQL): single-AZ 99.5%, Multi-AZ 99.95% (https://aws.amazon.com/rds/sla/)
@@ -34,9 +34,13 @@ const EC2_AVAILABILITY = availabilityByDeployment(0.995, 0.9999, 0.9999, EC2_SLA
 //   • Redis   — single-threaded command loop ⇒ M/M/1; a THREAD is held only for the ~0.01 ms per-command CPU, NOT
 //               the 0.5 ms `latency` (that is client round-trip, thread-free): 1 / (0.01 ms/1000) = 100,000 op/s.
 //   • Memcached — 4 worker threads by default (-t 4) ⇒ M/M/4; thread held ~0.02 ms per-op CPU: 4 / (0.02 ms/1000) = 200,000.
+//   • Cassandra — each op executes on one of the node's read/write STAGE thread pools, held for the mixed op's
+//               ~5 ms service time (the node's `latency`); c = concurrent_reads + concurrent_writes = 32 + 32 = 64
+//               (cassandra.yaml defaults) ⇒ M/M/64; 64 / (5 ms/1000) = 12,800 op/s (the declared throughput ceiling).
 const MONGO_POOL_SOURCE = 'https://www.mongodb.com/docs/manual/reference/connection-string-options/'; // maxPoolSize default = 100 (the ceiling the c=50 in-flight sits within)
 const REDIS_POOL_SOURCE = 'https://redis.io/docs/latest/develop/get-started/faq/'; // "Redis is, mostly, a single-threaded server"
 const MEMCACHED_POOL_SOURCE = 'https://github.com/memcached/memcached/wiki/ConfiguringServer'; // -t (threads) default = 4
+const CASSANDRA_POOL_SOURCE = 'https://cassandra.apache.org/doc/latest/cassandra/managing/configuration/cass_yaml_file.html'; // concurrent_reads default = 32, concurrent_writes default = 32 (32+32 = the c=64 this models)
 
 // "Act as queue" behaviour, as DATA any component can carry (the engine stays domain-agnostic). The
 // limits (retention, max backlog, durability) are what distinguish SQS vs Redis vs SQL as a queue.
@@ -486,6 +490,37 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     ],
     relations: [provisionedCost],
   },
+  // ---- wide-column (Cassandra family) ----
+  // Apache Cassandra: a partitioned, replicated wide-column store with TUNABLE per-query consistency (ANY / ONE /
+  // TWO / THREE / QUORUM / ALL / LOCAL_QUORUM / …) — there is no single fixed "the" consistency the way a
+  // relational primary has (https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html documents
+  // the levels; it does not state a server-wide default). The REFERENCE client (cqlsh) documents its OWN default
+  // as CL ONE for both reads and writes ("The default CQL shell level is ONE" —
+  // https://docs.datastax.com/en/cql-oss/3.3/cql/cql_reference/cqlshConsistency.html). At CL ONE, R + W ≤ RF (no
+  // guaranteed replica overlap), so the DEFAULT behaviour is an EVENTUAL read — the same "eventual by default,
+  // strong is an opt-in per-request parameter" shape as DynamoDB (guarantees.ts), NOT the single-primary
+  // `writerGuarantees` (strong) — Cassandra has no single primary. Modelled with its OWN sourced contribution
+  // (`cassandraContribution` in guarantees.ts) rather than reusing `dynamodbGuarantees`: the claim must cite a
+  // source that actually describes Cassandra, never borrow another vendor's citation.
+  'db.cassandra': {
+    type: 'db.cassandra',
+    ports: [{ name: 'in', dir: 'in', accepts: ['cql'], guarantees: cassandraReadGuarantees }],
+    config: [
+      // Single-node mixed-workload ceiling: no AWS/Apache-published TPS figure exists (hardware/schema/RF/
+      // compaction-strategy-dependent) — 12,800 op/s is a credible order-of-magnitude estimate (commonly cited
+      // 10k-15k mixed ops/s per node on modern SSD-backed hardware), not a vendor fact.
+      { key: k.throughput, value: 12800, unit: 'op/s', est: true },
+      { key: k.latency, value: 5, unit: 'ms', est: true }, // typical local SSD-backed mixed read/write service time (est.)
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed OSS: no vendor SLA
+      // Every write is fsync'd to a commit log before ack, then replicated across RF nodes — a replicated,
+      // durable commit-log store the same order as Kafka's replicated append-only log (est.; no vendor figure).
+      { key: k.durability, value: 0.99999, unit: 'ratio', est: true },
+      unitCostConfig(0.02, 'USD/(op/s)·month'), // self-managed Cassandra on a VM cluster (est., list): $256/mo for a small 3-node RF=3 cluster at the default 12,800 op/s ceiling
+      ...connectionPool(64, 5, CASSANDRA_POOL_SOURCE).config, // DES M/M/64 (concurrent_reads + concurrent_writes = 32+32, cassandra.yaml defaults); 64 / (5 ms) = 12,800 op/s == throughput
+    ],
+    relations: [provisionedCost],
+  },
+
   // SELF-MANAGED Elasticsearch on your OWN EC2 fleet — NOT the AWS OpenSearch managed service (that is the separate
   // `search.opensearch` block below; the owner must be able to tell the two apart from the cost alone). PRICING
   // IDENTITY: self-managed, so the modelled cost is the raw EC2 COMPUTE bill you run the cluster on, at LIST/on-demand

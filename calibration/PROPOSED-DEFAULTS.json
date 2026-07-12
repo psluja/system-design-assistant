@@ -1,7 +1,7 @@
 {
   "_comment": "RECOMMENDATION ONLY. These are the component-default values that best fit the calibration corpus. They are NOT applied — changing a shipped content default changes every design's numbers, which is a separate owner-reviewed step. Regenerate with `pnpm calibrate`.",
   "generatedBy": "pnpm calibrate",
-  "aggregateErrorPct": 3.1201,
+  "aggregateErrorPct": 2.9664,
   "tunables": [
     {
       "selector": "cache.redis",
@@ -18,6 +18,14 @@
       "catalogDefault": 1,
       "recommended": 0.267846,
       "note": "The framework's per-request CPU time (parse + route + query issue + JSON serialize). A fittable ESTIMATE (no published per-request CPU figure). Catalog default 1 ms is a generous, uncalibrated placeholder (framework does not bind out of the box); the fit drives it so cores/cpuTime = the measured 104,000 req/s single-query ceiling. SHARED with the 20-query entry but INERT there (the DB, at ceiling/20 = 5,900, binds far below the framework's CPU), so it is constrained only by this single-query point — the framework-CPU degree of freedom the DB-only model lacked."
+    },
+    {
+      "selector": "db.cassandra",
+      "key": "throughput",
+      "unit": "op/s",
+      "catalogDefault": 12800,
+      "recommended": 71207,
+      "note": "Cassandra's per-node mixed-workload estimate (12,800 op/s — an order-of-magnitude estimate, no vendor figure) treated as the free variable the fitter raises to the measured 3-node RF=3 CLUSTER write ceiling (70,771 op/s, ~5.5x higher) — the same aggregate-cluster reframing the Kafka entry uses for its 3-broker cluster. This entry declares only the WRITE ground truth, so the fit is NOT over-determined the way the Redis/Kafka/RabbitMQ pairs are; a fresher, independently verifiable read-workload point (once found) would be the natural second entry to share this tunable and give it a genuine leave-one-out fold."
     },
     {
       "selector": "db.mongodb",

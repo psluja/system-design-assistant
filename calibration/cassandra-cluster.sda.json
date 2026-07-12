@@ -1,0 +1,48 @@
+{
+  "schema": 11,
+  "id": "cassandra-cluster",
+  "name": "Apache Cassandra — 3-node cluster (calibration #7, ScyllaDB bake-off benchmark)",
+  "instances": [
+    {
+      "id": "stress",
+      "type": "client.web",
+      "config": {
+        "throughput": 65000
+      }
+    },
+    {
+      "id": "cassandra",
+      "type": "db.cassandra",
+      "config": {
+        "connectionPool": 64,
+        "connectionHeldMs": 0.9043
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["stress", "out"],
+      "to": ["cassandra", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "stress": { "x": 60, "y": 80 },
+    "cassandra": { "x": 480, "y": 80 }
+  },
+  "labels": {
+    "stress": "cassandra-stress (500 threads)",
+    "cassandra": "Cassandra 3-node cluster (RF=3, QUORUM)"
+  },
+  "descriptions": {
+    "stress": "cassandra-stress driving the 3-node cluster directly, swept toward the write ceiling. ScyllaDB's own bake-off benchmark: 500 threads, 1.3 TB dataset, replication factor 3, consistency QUORUM. (client.web speaks HTTP in the catalog; here it stands for the CQL-native cassandra-stress client — the numeric capacity path is protocol-agnostic, the same convention the Redis/Kafka/RabbitMQ calibration models use.)",
+    "cassandra": "One Cassandra 3-node cluster (RF=3) modeled as a single SDA node whose aggregate write capacity is the `throughput` cell (op/s); nodeQueues reads it directly for rho, so the calibrated tunable is db.cassandra:throughput — SDA's ESTIMATED single-node 12,800 op/s default, corrected here to the measured 3-node CLUSTER write ceiling (ScyllaDB's bake-off benchmark of Apache Cassandra 3.0.9: 70,771 op/s). connectionPool/connectionHeldMs (64 slots from cassandra.yaml's per-node concurrent_reads + concurrent_writes, held time solved so pool/held reproduces the fitted cluster ceiling) keep the DES queueing tail arithmetically consistent with the scored ceiling — the same consistency rule the Redis entry follows (graph-read.ts finite-pool station); the 3-node coordinator/replica fan-out is not separately decomposed, the same aggregate-cluster simplification the Kafka entry uses for its 3-broker cluster."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

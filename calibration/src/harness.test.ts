@@ -30,17 +30,21 @@ describe('calibration harness — fidelity guard', () => {
     expect(report.fit.objective * 100).toBeLessThanOrEqual(BASELINE.aggregatePct + TOLERANCE_PCT);
   });
 
-  it('the corpus has the nine ground-truth points and the fitted tunables it should', () => {
+  it('the corpus has the ten ground-truth points and the fitted tunables it should', () => {
     const scored = entries.flatMap((e) => e.entry.groundTruth.filter((g) => g.measured !== null));
-    expect(scored.length).toBe(9); // TE single + 20-query, DSB latency share, Redis SET + LPUSH, Kafka no-repl + 3x-async, RabbitMQ AMQP 0.9.1 + 1.0
+    expect(scored.length).toBe(10); // TE single + 20-query, DSB latency share, Redis SET + LPUSH, Kafka no-repl + 3x-async, RabbitMQ AMQP 0.9.1 + 1.0, Cassandra write
     // The framework CPU station (compute.service.cpuTimePerRequestMs) is a fitted tunable alongside the DB service
     // time and the Mongo hold time. V&V corpus Wave A adds three shared throughput tunables: cache.redis.throughput
     // (Redis SET + LPUSH), stream.kafka.throughput (Kafka no-replication + 3x-async), and queue.rabbitmq.throughput
     // (RabbitMQ classic queue over AMQP 0.9.1 + AMQP 1.0) — each a same-architecture pair sharing one over-determined
-    // capacity. All three are capacity-ceiling validations, not modeling-family flips.
+    // capacity; all three are capacity-ceiling validations, not modeling-family flips. Cassandra adds a FOURTH
+    // fixed-throughput tunable (db.cassandra.throughput) but as a single scored point, not an over-determined pair —
+    // its 3-node RF=3 write ceiling (ScyllaDB's own Cassandra 3.0.9 bake-off) is the sixth distinct architecture and
+    // the only-scored point of its own three-workload benchmark (the two read ceilings are honest unscored context).
     expect(report.recommendations.map((r) => `${r.selector}.${r.key}`).sort()).toEqual([
       'cache.redis.throughput',
       'compute.service.cpuTimePerRequestMs',
+      'db.cassandra.throughput',
       'db.mongodb.connectionHeldMs',
       'db.postgres.perRequestDuration',
       'queue.rabbitmq.throughput',
@@ -54,9 +58,10 @@ describe('calibration harness — fidelity guard', () => {
     // station the single-query ceiling binds on the CPU (~104.5k) and the 20-query on the DB (5,858), INDEPENDENTLY,
     // so both residuals collapse to <2% and the TechEmpower pair's own aggregate from ~5.2% to <1%. This is the
     // measurement the primitive was built to make; pinning it here prevents a regression that would silently re-open
-    // the gap. (The whole-corpus aggregate is now ~3.1% because the V&V Wave A ceiling pairs add genuine residuals —
-    // Redis command-spread ~±2%, Kafka replication ~±2%, and RabbitMQ's larger AMQP-protocol spread ~±6% — none of
-    // which re-open the TechEmpower gap, which the two per-entry checks below pin.)
+    // the gap. (The whole-corpus aggregate is ~3.0% because the V&V Wave A ceiling pairs add genuine residuals —
+    // Redis command-spread ~±2%, Kafka replication ~±2%, and RabbitMQ's larger AMQP-protocol spread ~±6% — plus
+    // Cassandra's single well-fit write point (~0.6%, no shared tunable to leave a spread) — none of which re-open
+    // the TechEmpower gap, which the two per-entry checks below pin.)
     const single = report.fit.residuals.find((r) => r.name.includes('Single'));
     const multi = report.fit.residuals.find((r) => r.name.includes('Multiple'));
     expect(single?.rmsFittedPct, 'single-query residual should be closed (<2%)').toBeLessThan(2);

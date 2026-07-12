@@ -55,6 +55,7 @@ export {
   natsOut,
   kafkaOut,
   dynamodbGuarantees,
+  cassandraReadGuarantees,
   searchGuarantees,
   cacheReadGuarantees,
   catalogGuaranteeContributions,

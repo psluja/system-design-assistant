@@ -119,6 +119,9 @@ const SRC = {
   natsCore: 'https://docs.nats.io/nats-concepts/core-nats',
   // Amazon DynamoDB: eventually-consistent reads by default (strong is an opt-in per-request parameter):
   dynamodb: 'https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html',
+  // Apache Cassandra: per-query TUNABLE consistency, but the reference cqlsh client documents its OWN default as
+  // CL ONE for both reads and writes ("The default CQL shell level is ONE"):
+  cassandra: 'https://docs.datastax.com/en/cql-oss/3.3/cql/cql_reference/cqlshConsistency.html',
   // Amazon OpenSearch/Elasticsearch: near-real-time — a document is searchable only after the next refresh:
   elasticsearch: 'https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html',
   // Amazon S3: strong read-after-write for new objects (documented since Dec 2020):
@@ -195,6 +198,15 @@ export const dynamodbContribution = contribution('DynamoDB · in port', [
   { dimension: dims.consistency, token: consistency.eventual, source: SRC.dynamodb },
 ]);
 export const dynamodbGuarantees: Guarantees = dynamodbContribution.guarantees;
+/** Cassandra IN port: consistency is a per-query TUNABLE (ONE/QUORUM/ALL/LOCAL_QUORUM/…), but the reference CQL
+ *  shell (cqlsh) documents its OWN default as CL ONE for both reads and writes. At CL ONE, R + W ≤ RF (no
+ *  guaranteed replica overlap), so the DEFAULT behaviour is an eventual read — strong is an opt-in per-query CL,
+ *  the same shape as DynamoDB's opt-in strong read (dynamodbContribution above), NOT a single-primary writer.
+ *  Sourced to cqlsh's OWN documented default — never borrows DynamoDB's citation for a different vendor's fact. */
+export const cassandraContribution = contribution('Cassandra · in port', [
+  { dimension: dims.consistency, token: consistency.eventual, source: SRC.cassandra },
+]);
+export const cassandraReadGuarantees: Guarantees = cassandraContribution.guarantees;
 /** Elasticsearch/OpenSearch IN port: NEAR-REAL-TIME — an indexed document is searchable only after the next
  *  refresh (default 1 s), so a read is eventual by design — sourced. */
 export const searchContribution = contribution('search index · in port', [
@@ -230,6 +242,7 @@ export const catalogGuaranteeContributions: readonly GuaranteeContribution[] = [
   cacheReadContribution,
   searchContribution,
   dynamodbContribution,
+  cassandraContribution,
   sqsStandardContribution,
   sqsFifoContribution,
   fanoutContribution,
