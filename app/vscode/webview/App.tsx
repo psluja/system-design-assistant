@@ -414,7 +414,11 @@ export default function App({ studio, bridge }: { studio: Studio; bridge: HostBr
       // covers it — a node calm at the mean but over capacity at its worst window never reads green (one truth).
       const flag = st === 'violation' || sat !== undefined;
       const base: Node = { id: inst.id, type: 'sda', position, selected: inst.id === sel, data: { name: labelOf(inst.id, inst.type), desc: descOf(inst.id), id: inst.id, ty: inst.type, kind, chips, flag, ports, onPortAdd, ...(offs !== undefined ? { portOffsets: offs } : {}), ...(load ? { load } : {}), ...(latBar ? { lat: latBar } : {}) } };
-      return g ? { ...base, parentId: g.id, extent: 'parent' as const } : base;
+      // parentId makes the child position group-relative; NO `extent: 'parent'` — RF's clampPositionToParent (which
+      // that triggers) reads the parent group's measured size and CRASHES when the group isn't measured yet (fresh
+      // after Tidy), which aborts this child's handle re-measure and leaves its edges anchored off the port. Group
+      // membership is owned by onNodeDragStop (assignGroup / detach), not RF's hard extent clamp.
+      return g ? { ...base, parentId: g.id } : base;
     });
 
     // R2 — the SAME shared presenter drives the rate + transform PILLS as the web shell (anti-drift). A pill click
