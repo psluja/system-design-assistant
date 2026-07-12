@@ -181,7 +181,7 @@ export {
   type ReliabilityAdvice,
 } from './reliability';
 export { generateDesignDoc, renderDesignDocHtml, type DesignDocInput } from './design-doc';
-export { simResultForDoc, mergeMeasuredVerdicts, type DocSimResult } from './doc-sim';
+export { simResultForDoc, mergeMeasuredVerdicts, TAIL_SIM_OPTIONS, type DocSimResult } from './doc-sim';
 export {
   buildDocModel,
   pathAvailabilityFor,

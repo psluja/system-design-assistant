@@ -9,8 +9,9 @@ import type { NodeResponsePercentiles } from './doc-model';
 
 // DES-FOR-THE-DOC — run the discrete-event simulation ONCE and shape its result into exactly the
 // fields the design-doc input wants: the busiest-flow tail, every node's response percentiles, the retry outcome,
-// and a measured lag provider. This is the SAME run the MCP `simulate` tool does (seed 7, warmup 10k, measure 50k)
-// — so a doc's percentiles agree with what `simulate` reports — but packaged for the deliverable so `generate_doc`
+// and a measured lag provider. This is the SAME run the MCP `simulate` tool does — both spread the shared
+// `TAIL_SIM_OPTIONS` (one seed/warm-up/window), so a doc's percentiles agree with what `simulate` reports BY
+// CONSTRUCTION — but packaged for the deliverable so `generate_doc`
 // (MCP) and the VS Code host can EMBED measured tails/lag/goodput instead of leaving them at the honest but
 // unhelpful "unknown / run the simulation". Shells with an AMBIENT sim (web, VS Code webview) already pass their
 // worker's result directly and do not need this; the surfaces that had no sim result now get one cheaply.
@@ -18,6 +19,15 @@ import type { NodeResponsePercentiles } from './doc-model';
 // The DES clock is in SECONDS; every value here is scaled to ms so the doc renderers (which round to whole ms) read
 // the same units as the scalar `responseLatency` twin. A node/pair with no recorded response reads `NaN` here and
 // renders as "no data" (never a fabricated number) — the honesty the whole tool rests on.
+
+/**
+ * The ONE discrete-event run configuration the deliverable AND the interactive `simulate` tool share, so the
+ * design-doc's embedded tail can never DRIFT from the number `simulate` reports for the same design (single-truth).
+ * A deterministic seed (a re-run reproduces the percentiles exactly); 10k warm-up completions discarded so the
+ * measured 50k are steady-state. Both surfaces spread this and add only their own optional `lagPairs` — the seed,
+ * warm-up and measurement window are defined HERE, once, and nowhere else.
+ */
+export const TAIL_SIM_OPTIONS = { seed: 7, warmupCompletions: 10_000, measureCompletions: 50_000 } as const;
 
 /** The DES result reshaped for the design-doc input (all times in ms). Feed each field into `DesignDocInput`. */
 export interface DocSimResult {
@@ -46,7 +56,7 @@ export interface DocSimResult {
  */
 export function simResultForDoc(graph: Graph, registry: Registry, lagPairs: readonly { readonly source: string; readonly terminal: string }[] = []): DocSimResult {
   const pairs = lagPairs.map((p) => ({ source: StationId(p.source), terminal: StationId(p.terminal) }));
-  const sim = simulate(toQueueingNetwork(graph), { seed: 7, warmupCompletions: 10000, measureCompletions: 50000, ...(pairs.length > 0 ? { lagPairs: pairs } : {}) });
+  const sim = simulate(toQueueingNetwork(graph), { ...TAIL_SIM_OPTIONS, ...(pairs.length > 0 ? { lagPairs: pairs } : {}) });
   const ms = (s: number): number => s * 1000; // DES clock is seconds → ms
 
   const responsePercentilesByNode: Record<string, NodeResponsePercentiles> = {};

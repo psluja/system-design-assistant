@@ -6,6 +6,7 @@ import {
   checkGoodputBands,
   lagVerdicts,
   twoTierEvaluation,
+  TAIL_SIM_OPTIONS,
   type EvaluateGraph,
   type LagProvider,
 } from '@sda/content';
@@ -47,10 +48,12 @@ export function buildSimTools(studio: Studio, registry: Registry): ToolDef[] {
         // undeclared design passes none and the run is bit-for-bit the pre-lag simulation.
         const proj = studio.project();
         const lagPairs = proj.lagSlos.map((s) => ({ source: StationId(s.source), terminal: StationId(s.terminal) }));
-        // The DES seed is surfaced in the result (below) so the measured latency reads as "measured with seed N" —
-        // the run is deterministic for a fixed seed, and this is the SINGLE latency truth the tool reports.
-        const seed = 7;
-        const sim = simulate(toQueueingNetwork(g.value), { seed, warmupCompletions: 10000, measureCompletions: 50000, ...(lagPairs.length > 0 ? { lagPairs } : {}) });
+        // The DES run config is the SHARED `TAIL_SIM_OPTIONS` (content/doc-sim) — the SAME seed/warm-up/window the
+        // design-doc's embedded tail uses, so this tool and the deliverable can never report a different p99 for the
+        // same design (single-truth). The seed is surfaced in the result (below) so the measured latency reads as
+        // "measured with seed N"; the run is deterministic for a fixed seed.
+        const { seed } = TAIL_SIM_OPTIONS;
+        const sim = simulate(toQueueingNetwork(g.value), { ...TAIL_SIM_OPTIONS, ...(lagPairs.length > 0 ? { lagPairs } : {}) });
         const ms = (q: number): number => sim.sojournPercentile(q) * 1000; // s → ms
         // v2 (doc §4): a p99 (tail) SLO on keys.tailLatency is judged against the node's OWN response tail, from
         // the SAME run — `responsePercentile(node,q)` is the DES twin of the scalar `responseLatency`. The DES
