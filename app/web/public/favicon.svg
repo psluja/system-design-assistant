@@ -1,0 +1,56 @@
+<!-- mirror of app/vscode/icon.svg — keep in sync -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="System Design Assistant">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#5b74f0"/>
+      <stop offset="0.5" stop-color="#6a5cf2"/>
+      <stop offset="1" stop-color="#8b53e6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.28" cy="0.22" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.6" stop-color="#0a1240" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0a1240" stop-opacity="0.20"/>
+    </linearGradient>
+    <filter id="sh" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="2.2" stdDeviation="2.4" flood-color="#0a1030" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+
+  <!-- brand tile -->
+  <rect x="0" y="0" width="128" height="128" rx="30" fill="url(#bg)"/>
+  <rect x="0" y="0" width="128" height="128" rx="30" fill="url(#glow)"/>
+  <rect x="0" y="0" width="128" height="128" rx="30" fill="url(#vin)"/>
+
+  <!-- connectors: source -> hub -> sink -->
+  <g fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" opacity="0.82">
+    <path d="M50 52 C60 52, 60 74, 66 74"/>
+    <path d="M83 74 C92 74, 92 52, 98 52"/>
+  </g>
+
+  <!-- flow dot (live simulation) -->
+  <circle cx="61.5" cy="61" r="2.7" fill="#bff0ff"/>
+
+  <!-- ports -->
+  <g fill="#dfe6ff">
+    <circle cx="50" cy="52" r="2.6"/><circle cx="66" cy="74" r="2.6"/>
+    <circle cx="83" cy="74" r="2.6"/><circle cx="98" cy="52" r="2.6"/>
+  </g>
+
+  <!-- nodes (floating white cards) -->
+  <g filter="url(#sh)">
+    <rect x="21" y="41" width="29" height="22" rx="6.5" fill="#ffffff"/>
+    <rect x="49" y="63" width="34" height="24" rx="6.5" fill="#ffffff"/>
+    <rect x="98" y="41" width="22" height="22" rx="6.5" fill="#ffffff"/>
+  </g>
+
+  <!-- mini bar-chart in the hub (the computed capacity) -->
+  <g fill="#6a5cf2">
+    <rect x="55" y="76" width="3.6" height="6" rx="1.4"/>
+    <rect x="61" y="72.5" width="3.6" height="9.5" rx="1.4"/>
+    <rect x="67" y="74.5" width="3.6" height="7.5" rx="1.4"/>
+    <rect x="73" y="70.5" width="3.6" height="11.5" rx="1.4"/>
+  </g>
+</svg>
