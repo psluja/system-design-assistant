@@ -58,8 +58,10 @@ describe('REAL case: VoiceStack conversation-turn pipeline', () => {
     expect(r.value.value(sink, keys.throughput)).toBeCloseTo(10 / 2.3, 3);
     // latency = 10 + 20 + 300 + 1500 + 500 + 10 = 2340 ms (the LLM is 1500 of it)
     expect(r.value.value(sink, keys.latency)).toBe(2340);
-    // availability compounds across 6 hops
-    expect(r.value.value(sink, keys.availability)).toBeCloseTo(0.9963, 3);
+    // availability compounds across 6 hops: cdn 0.999 (: corrected CloudFront SLA) · lambda-voice 0.9995
+    // · transcribe 0.999 · bedrock 0.999 · polly 0.999 · dynamodb 0.9999 ≈ 0.99541 (was 0.9963 with the old,
+    // uncorrected cdn 0.9999 factor).
+    expect(r.value.value(sink, keys.availability)).toBeCloseTo(0.9954, 3);
   });
 
   it('blames the Lambda for the throughput miss and the LLM for the latency miss', () => {

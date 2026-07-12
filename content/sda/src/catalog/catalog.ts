@@ -118,7 +118,13 @@ export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOr
     config: [
       { key: k.throughput, value: 2000, unit: 'req/s', est: true },
       { key: k.latency, value: 8, unit: 'ms', est: true },
-      { key: k.availability, value: 0.9999, unit: 'ratio', source: 'https://aws.amazon.com/rds/sla/' },
+      // this cited https://aws.amazon.com/rds/sla/ but carried 0.9999 — the SOURCED-BUT-WRONG case; the
+      // page itself publishes Multi-AZ 99.95% (verified live 2026-07-12), matching db.postgres's Multi-AZ tier
+      // (see RDS_AVAILABILITY in common.ts: availabilityByDeployment(0.995, 0.9995, 0.9995, ...)). Corrected to
+      // agree with its own citation. (Tempting follow-up, OUT OF SCOPE here: mirror db.postgres's
+      // availabilityByDeployment(single-AZ/Multi-AZ) pattern instead of one flat figure — a restructuring, not a
+      // value fix.)
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: 'https://aws.amazon.com/rds/sla/' },
       unitCostConfig(0.1, 'USD/(req/s)·month'), // managed relational DB, RDS-class (est.): $200/mo at the default 2000 rps ceiling
       ...connectionPool(16, 8, SQL_POOL_SOURCE).config, // DES M/M/16 (in-flight = 2,000 req/s × 8 ms query); 16 / (8 ms) = 2,000 req/s == throughput
     ],
@@ -127,7 +133,7 @@ export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOr
 
   // A cheaper datastore alternative — genuinely "cheaper but more LIMITED", never a free win: it
   // must NOT strictly dominate db.sql/db.postgres. It buys the lower price by being single-AZ — clearly lower
-  // availability (0.99 vs db.sql's 0.9999) AND lower durability (0.999, no PITR/replica, vs db.postgres' ~5
+  // availability (0.99 vs db.sql's 0.9995) AND lower durability (0.999, no PITR/replica, vs db.postgres' ~5
   // nines) — and by a lower throughput ceiling (1000 vs db.sql's 2000). Faster latency alone is not a free
   // lunch: you trade resilience and headroom for cost. Availability/durability here are illustrative
   // single-AZ figures, not a sourced SLA.
@@ -139,7 +145,7 @@ export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOr
     config: [
       { key: k.throughput, value: 1000, unit: 'req/s', est: true },
       { key: k.latency, value: 12, unit: 'ms', est: true },
-      { key: k.availability, value: 0.99, unit: 'ratio', est: true }, // single-AZ (illustrative) — a real step below db.sql's 0.9999
+      { key: k.availability, value: 0.99, unit: 'ratio', est: true }, // single-AZ (illustrative) — a real step below db.sql's 0.9995
       { key: k.durability, value: 0.999, unit: 'ratio', est: true }, // no PITR/replica (illustrative) — below db.postgres' ~5 nines
       unitCostConfig(0.09, 'USD/(req/s)·month'), // managed single-AZ DB (est./illustrative): $90/mo at the default 1000 rps ceiling — cheaper per rps than db.sql ($0.10)
       ...connectionPool(12, 12, SQL_POOL_SOURCE).config, // DES M/M/12 (in-flight = 1,000 req/s × 12 ms query); 12 / (12 ms) = 1,000 req/s == throughput

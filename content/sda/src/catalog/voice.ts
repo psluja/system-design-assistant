@@ -75,10 +75,9 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
     config: [
       { key: k.throughput, value: 10000, unit: 'req/s', est: true },
       { key: k.latency, value: 10, unit: 'ms', est: true }, // est. edge overhead
-      // the published CloudFront SLA is 99.9% (https://aws.amazon.com/cloudfront/sla/) — this modelled
-      // 99.99% does not match it, so it stays an ILLUSTRATIVE estimate, never sourced to that page (a source must
-      // back the exact value). Flagged for a follow-up value correction; out of scope for a metadata-only pass.
-      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
+      // corrected to the published CloudFront SLA — 99.9% Monthly Uptime Percentage (verified live
+      // 2026-07-12) — https://aws.amazon.com/cloudfront/sla/.
+      { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/cloudfront/sla/' },
       unitCostConfig(2, 'USD/(req/s)·month'), // managed AWS CloudFront (est., list): HTTPS request fee ≈ $2.59/(req/s)·mo above the 10M/mo free tier; egress billed separately
     ],
     relations: [payPerUseCost],

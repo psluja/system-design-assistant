@@ -155,7 +155,8 @@ describe('DocModel — structure & scope (owner ruling §6)', () => {
     const ev = evaluate(g.value, registry);
     if (!ev.ok) throw new Error(ev.error.join('; '));
     const value = (id: string, k: Key): number | undefined => ev.value.value(NodeId(id), k);
-    // A floor the serial chain (client · gw 0.9995 · faas 0.9995 · db 0.9999 ≈ 0.9989) cannot reach ⇒ violation.
+    // A floor the serial chain (client · gw 0.9995 · faas 0.9995 · db 0.9995 ≈ 0.9985, : db.sql corrected
+    // to the RDS Multi-AZ SLA figure) cannot reach ⇒ violation.
     const dbWithAvail = instances.map((i) => (i.id === 'db' ? { ...i, bands: [{ key: keys.availability, band: { shape: 'minTargetMax' as const, min: 0.9995 } }] } : i));
     const g2 = instantiate(manifests, dbWithAvail, wires);
     if (!g2.ok) throw new Error('build failed');

@@ -23,7 +23,7 @@ _Non-goals: author required._
 | Node | Metric | Promise | Computed | Status |
 |---|---|---|---|---|
 | db | Throughput | target 1000 | 600 req/s | ⚠ warning |
-| db | Availability | ≥ 99.9900% | 99.890% | ✗ violation |
+| db | Availability | ≥ 99.9900% | 99.850% | ✗ violation |
 
 ## 4. Capacity & estimation
 
@@ -31,7 +31,7 @@ End-to-end per request flow — **Latency is measured** (discrete-event simulati
 
 | Flow | Throughput | Latency | Availability | Branch cost |
 |---|---|---|---|---|
-| client → db | 600 req/s | 40 ms | 99.890% | $295/mo |
+| client → db | 600 req/s | 40 ms | 99.850% | $295/mo |
 
 **Tail latency (simulated, busiest flow):** p50 40 ms · p95 120 ms · **p99 260 ms** — the number a reviewer judges by, not the mean.
 
@@ -77,7 +77,7 @@ _Egress @ ~$0.09/GB internet data-transfer (set each tier's payload). Committed 
 
 ## 7. Reliability
 
-**client → db: 99.890%** — meets the 99.000% tier (max 3 days 15 hours/yr; Batch processing, data extraction, transfer, and load jobs).
+**client → db: 99.850%** — meets the 99.000% tier (max 3 days 15 hours/yr; Batch processing, data extraction, transfer, and load jobs).
 
 > Achieves 99.00% (max 3 days 15 hours/yr — Batch processing, data extraction, transfer, and load jobs) but the target 99.99% (max 52 minutes/yr — Video delivery, broadcast workloads) is not met. The weakest hard dependency is "gw" (99.95%). AWS remedy: availability is raised by INDEPENDENT redundancy — add a second independent component in another Availability Zone (effective availability = 100% − product of failure rates; two independent three-nines components → six nines). For Region-loss resilience choose a DR tier by RTO/RPO (Backup & Restore → Pilot Light → Warm Standby → Multi-site Active/Active), the cheapest whose RTO and RPO both meet the requirement.
 
@@ -91,7 +91,7 @@ _Source: AWS Well-Architected Reliability Pillar — Availability (https://docs.
 - **⚠ warning: Throughput at db (600 req/s).**
   - Cause: computed 600 req/s is the binding minimum (origin) (at compute).
   - Fix: Increase throughput at compute (currently 600 req/s) — the binding bottleneck.
-- **✗ violation: Availability at db (99.890%).**
+- **✗ violation: Availability at db (99.850%).**
   - Cause: configured 0.9995 ratio is the binding factor (origin) (at compute).
   - Fix: Increase availability at compute (currently 0.9995 ratio) — the weakest factor.
 

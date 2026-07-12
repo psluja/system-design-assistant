@@ -59,7 +59,8 @@ describe('design-doc generator (from the verified model)', () => {
   it('fills the promises table with the COMPUTED numbers and verified status', () => {
     // throughput SLO target 1000, computed 600 (bottlenecked compute), so a soft-target warning.
     expect(doc).toMatch(/db \| Throughput \| target 1000.*\| 600 req\/s \| ⚠ warning/);
-    // availability SLO ≥ 99.99%, computed 99.89% (0.9995·0.9995·0.9999 series product), below the floor.
+    // availability SLO ≥ 99.99%, computed 99.85% (0.9995·0.9995·0.9995 series product — db.sql is 0.9995, the
+    // corrected RDS Multi-AZ SLA figure), below the floor.
     expect(doc).toContain('| db | Availability | ≥ 99.99');
   });
 

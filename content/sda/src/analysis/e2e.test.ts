@@ -36,7 +36,9 @@ describe('content pack ⇄ engine (end-to-end)', () => {
     const db = NodeId('db');
     expect(r.value.value(db, keys.throughput)).toBe(600); // bottlenecked by the 600 req/s compute tier
     expect(r.value.value(db, keys.latency)).toBe(63); // 0 + 5 + 50 + 8
-    expect(r.value.value(db, keys.availability)).toBeCloseTo(0.9989, 3); // 0.9995·0.9995·0.9999 (gw · Lambda SLA · db)
+    // 0.9995 (gw) · 0.9995 (compute.faas, Lambda SLA) · 0.9995 (db.sql, : corrected to the RDS Multi-AZ
+    // SLA figure) = 0.998500749875 ≈ 0.9985 — was 0.9989 with the old, sourced-but-wrong db.sql 0.9999.
+    expect(r.value.value(db, keys.availability)).toBeCloseTo(0.9985, 3);
     expect(r.value.value(db, keys.cost)).toBe(295); // 50 + 30·1.5 + 200
   });
 

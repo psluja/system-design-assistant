@@ -29,10 +29,9 @@ export const fargateManifests: Readonly<Record<string, Manifest>> = withOverflow
     config: [
       { key: k.throughput, value: 100000, unit: 'req/s', est: true },
       { key: k.latency, value: 2, unit: 'ms', est: true }, // est. rule evaluation overhead
-      // the published AWS WAF SLA is 99.95% (https://aws.amazon.com/waf/sla/) — this modelled 99.99% does
-      // not match it, so it stays an ILLUSTRATIVE estimate, never sourced to that page. Flagged for a follow-up
-      // value correction; out of scope for a metadata-only pass.
-      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
+      // corrected to the published AWS WAF SLA — 99.95% Monthly Uptime Percentage (verified live
+      // 2026-07-12) — https://aws.amazon.com/waf/sla/.
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: 'https://aws.amazon.com/waf/sla/' },
       unitCostConfig(0.0001, 'USD/(req/s)·month'), // managed AWS WAF (est.): ~$10/mo at the default 100k rps ceiling
     ],
     relations: [provisionedCost],

@@ -594,10 +594,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       // published quota — hence `est`, not `source`.
       { key: k.throughput, value: 3000, unit: 'msg/s', est: true }, // per API action without batching (typical; higher batched)
       { key: k.latency, value: 10, unit: 'ms', est: true },
-      // the published Amazon Messaging (SQS/SNS) SLA is 99.9% (https://aws.amazon.com/messaging/sla/) — this
-      // modelled 99.99% does not match it, so it stays an ILLUSTRATIVE estimate, never sourced to that page (a source
-      // must back the exact value). Flagged for a follow-up value correction; out of scope for a metadata-only pass.
-      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
+      // corrected to the published Amazon Messaging (SQS/SNS) SLA — 99.9% Monthly Uptime Percentage
+      // (verified live 2026-07-12) — https://aws.amazon.com/messaging/sla/.
+      { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/messaging/sla/' },
       { key: k.durability, value: 0.999999999, unit: 'ratio', est: true }, // illustrative "9 nines" (AWS does not publish a specific SQS durability figure, unlike S3's documented 11 nines)
       unitCostConfig(1, 'USD/(msg/s)·month'), // managed AWS SQS (est., pay-per-use): per sustained msg/s
       ...queueCfg(
@@ -626,20 +625,21 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       // ("By default, FIFO queues support 300 transactions per second, per API action").
       { key: k.throughput, value: 300, unit: 'msg/s', source: 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/troubleshooting-fifo-throttling-issues.html' },
       { key: k.latency, value: 10, unit: 'ms', est: true },
-      // Same illustrative-vs-published-SLA gap as standard SQS (real Amazon Messaging SLA = 99.9%) — est, not sourced.
-      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
+      // same published SLA as standard SQS — Amazon Messaging (SQS/SNS) SLA is 99.9% Monthly Uptime
+      // Percentage (verified live 2026-07-12) — https://aws.amazon.com/messaging/sla/.
+      { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/messaging/sla/' },
       { key: k.durability, value: 0.999999999, unit: 'ratio', est: true }, // illustrative "9 nines" (not an AWS-published SQS figure)
       unitCostConfig(1.5, 'USD/(msg/s)·month'), // managed AWS SQS FIFO (est., pay-per-use): per sustained msg/s (dearer than standard)
       ...queueCfg(
         1,
         345600,
-        20000,
+        120000,
         'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html', // documented: "a message is retained for 4 days" by default (both queue types)
-        // NOTE: AWS's CURRENT docs (as of the Nov-2024 quota increase) state FIFO in-flight is now
-        // 120,000, matching standard — https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-fifo.html.
-        // This modelled 20,000 predates that increase; it stays `est` (not sourced to a now-different number) —
-        // flagged as a stale VALUE for a follow-up correction, out of scope for a metadata-only pass.
-      ), // 4-day default retention; ~20k in-flight (FIFO is lower than standard — STALE, see note above)
+        // AWS's CURRENT docs (post the Nov-2024 quota increase) state FIFO in-flight is now 120,000,
+        // matching standard (verified live 2026-07-12) — same in-flight-message-count semantic as standard SQS's
+        // maxBacklog above.
+        'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-fifo.html', // documented: "FIFO queues support a maximum of 120,000 in-flight messages"
+      ), // 4-day default retention; ~120k in-flight (FIFO now matches standard, post the Nov-2024 quota increase)
       ...SQS_MESSAGE_LIMIT.config, // 256 KB documented max message size (same as standard; informational unless payloadBytes is set)
     ],
     relations: [QUEUE_REL, payPerUseCost, SQS_MESSAGE_LIMIT.relation],
