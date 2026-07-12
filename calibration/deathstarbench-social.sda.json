@@ -1,0 +1,718 @@
+{
+  "schema": 11,
+  "id": "deathstarbench-social",
+  "name": "DeathStarBench Social Network (calibration)",
+  "instances": [
+    {
+      "id": "client",
+      "type": "client.web",
+      "config": {
+        "throughput": 1000
+      }
+    },
+    {
+      "id": "nginx",
+      "type": "proxy.nginx",
+      "config": {
+        "cpuCores": 3,
+        "cpuTimePerRequestMs": 1
+      }
+    },
+    {
+      "id": "hometimeline_read",
+      "type": "compute.service"
+    },
+    {
+      "id": "usertimeline_read",
+      "type": "compute.service"
+    },
+    {
+      "id": "poststorage_read",
+      "type": "compute.service"
+    },
+    {
+      "id": "composepost",
+      "type": "compute.service",
+      "config": {
+        "latencyComposition": 1
+      }
+    },
+    {
+      "id": "uniqueid",
+      "type": "compute.service"
+    },
+    {
+      "id": "userservice",
+      "type": "compute.service"
+    },
+    {
+      "id": "textservice",
+      "type": "compute.service",
+      "config": {
+        "latencyComposition": 1
+      }
+    },
+    {
+      "id": "urlshorten",
+      "type": "compute.service"
+    },
+    {
+      "id": "usermention",
+      "type": "compute.service"
+    },
+    {
+      "id": "mediaservice",
+      "type": "compute.service"
+    },
+    {
+      "id": "poststorage_write",
+      "type": "compute.service"
+    },
+    {
+      "id": "usertimeline_write",
+      "type": "compute.service"
+    },
+    {
+      "id": "writehome",
+      "type": "compute.service"
+    },
+    {
+      "id": "socialgraph",
+      "type": "compute.service"
+    },
+    {
+      "id": "ht_redis",
+      "type": "cache.redis"
+    },
+    {
+      "id": "ps_memcached",
+      "type": "cache.memcached"
+    },
+    {
+      "id": "ps_mongo",
+      "type": "db.mongodb"
+    },
+    {
+      "id": "ut_redis",
+      "type": "cache.redis"
+    },
+    {
+      "id": "ut_mongo",
+      "type": "db.mongodb"
+    },
+    {
+      "id": "user_memcached",
+      "type": "cache.memcached"
+    },
+    {
+      "id": "user_mongo",
+      "type": "db.mongodb"
+    },
+    {
+      "id": "us_memcached",
+      "type": "cache.memcached"
+    },
+    {
+      "id": "us_mongo",
+      "type": "db.mongodb"
+    },
+    {
+      "id": "media_memcached",
+      "type": "cache.memcached"
+    },
+    {
+      "id": "media_mongo",
+      "type": "db.mongodb"
+    },
+    {
+      "id": "sg_redis",
+      "type": "cache.redis"
+    },
+    {
+      "id": "sg_mongo",
+      "type": "db.mongodb"
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "client",
+        "out"
+      ],
+      "to": [
+        "nginx",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "nginx",
+        "out"
+      ],
+      "to": [
+        "hometimeline_read",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.6
+      }
+    },
+    {
+      "from": [
+        "nginx",
+        "out"
+      ],
+      "to": [
+        "usertimeline_read",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.3
+      }
+    },
+    {
+      "from": [
+        "nginx",
+        "out"
+      ],
+      "to": [
+        "composepost",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.1
+      }
+    },
+    {
+      "from": [
+        "hometimeline_read",
+        "cache"
+      ],
+      "to": [
+        "ht_redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "hometimeline_read",
+        "out"
+      ],
+      "to": [
+        "poststorage_read",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "usertimeline_read",
+        "cache"
+      ],
+      "to": [
+        "ut_redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "usertimeline_read",
+        "out"
+      ],
+      "to": [
+        "ut_mongo",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.3
+      }
+    },
+    {
+      "from": [
+        "usertimeline_read",
+        "out"
+      ],
+      "to": [
+        "poststorage_read",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "poststorage_read",
+        "cache"
+      ],
+      "to": [
+        "ps_memcached",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "ratio",
+        "value": 10
+      }
+    },
+    {
+      "from": [
+        "poststorage_read",
+        "out"
+      ],
+      "to": [
+        "ps_mongo",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "ratio",
+        "value": 3
+      }
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "uniqueid",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "userservice",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "mediaservice",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "textservice",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "textservice",
+        "out"
+      ],
+      "to": [
+        "urlshorten",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "textservice",
+        "out"
+      ],
+      "to": [
+        "usermention",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "urlshorten",
+        "cache"
+      ],
+      "to": [
+        "us_memcached",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "urlshorten",
+        "out"
+      ],
+      "to": [
+        "us_mongo",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "usermention",
+        "out"
+      ],
+      "to": [
+        "userservice",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "mediaservice",
+        "cache"
+      ],
+      "to": [
+        "media_memcached",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "mediaservice",
+        "out"
+      ],
+      "to": [
+        "media_mongo",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "userservice",
+        "cache"
+      ],
+      "to": [
+        "user_memcached",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "userservice",
+        "out"
+      ],
+      "to": [
+        "user_mongo",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.3
+      }
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "poststorage_write",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "poststorage_write",
+        "out"
+      ],
+      "to": [
+        "ps_mongo",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "poststorage_write",
+        "cache"
+      ],
+      "to": [
+        "ps_memcached",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "usertimeline_write",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "usertimeline_write",
+        "cache"
+      ],
+      "to": [
+        "ut_redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "usertimeline_write",
+        "out"
+      ],
+      "to": [
+        "ut_mongo",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "composepost",
+        "out"
+      ],
+      "to": [
+        "writehome",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "writehome",
+        "out"
+      ],
+      "to": [
+        "socialgraph",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "socialgraph",
+        "cache"
+      ],
+      "to": [
+        "sg_redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "socialgraph",
+        "out"
+      ],
+      "to": [
+        "sg_mongo",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.3
+      }
+    },
+    {
+      "from": [
+        "writehome",
+        "cache"
+      ],
+      "to": [
+        "ht_redis",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "ratio",
+        "value": 50
+      }
+    }
+  ],
+  "layout": {
+    "client": {
+      "x": 60,
+      "y": 40
+    },
+    "nginx": {
+      "x": 400,
+      "y": 40
+    },
+    "hometimeline_read": {
+      "x": 740,
+      "y": 40
+    },
+    "usertimeline_read": {
+      "x": 740,
+      "y": 190
+    },
+    "poststorage_read": {
+      "x": 1080,
+      "y": 40
+    },
+    "composepost": {
+      "x": 740,
+      "y": 340
+    },
+    "uniqueid": {
+      "x": 1080,
+      "y": 190
+    },
+    "userservice": {
+      "x": 1420,
+      "y": 40
+    },
+    "textservice": {
+      "x": 1080,
+      "y": 340
+    },
+    "urlshorten": {
+      "x": 1420,
+      "y": 190
+    },
+    "usermention": {
+      "x": 1420,
+      "y": 340
+    },
+    "mediaservice": {
+      "x": 1080,
+      "y": 490
+    },
+    "poststorage_write": {
+      "x": 1080,
+      "y": 640
+    },
+    "usertimeline_write": {
+      "x": 1080,
+      "y": 790
+    },
+    "writehome": {
+      "x": 1080,
+      "y": 940
+    },
+    "socialgraph": {
+      "x": 1420,
+      "y": 490
+    },
+    "ht_redis": {
+      "x": 1420,
+      "y": 640
+    },
+    "ps_memcached": {
+      "x": 1760,
+      "y": 40
+    },
+    "ps_mongo": {
+      "x": 1760,
+      "y": 190
+    },
+    "ut_redis": {
+      "x": 1420,
+      "y": 790
+    },
+    "ut_mongo": {
+      "x": 1760,
+      "y": 340
+    },
+    "user_memcached": {
+      "x": 1760,
+      "y": 490
+    },
+    "user_mongo": {
+      "x": 1760,
+      "y": 640
+    },
+    "us_memcached": {
+      "x": 1760,
+      "y": 790
+    },
+    "us_mongo": {
+      "x": 1760,
+      "y": 940
+    },
+    "media_memcached": {
+      "x": 1760,
+      "y": 1090
+    },
+    "media_mongo": {
+      "x": 1760,
+      "y": 1240
+    },
+    "sg_redis": {
+      "x": 1760,
+      "y": 1390
+    },
+    "sg_mongo": {
+      "x": 1760,
+      "y": 1540
+    }
+  },
+  "labels": {
+    "client": "wrk2 load (mixed 60/30/10)",
+    "nginx": "nginx-thrift (front-end)",
+    "hometimeline_read": "HomeTimeline.Read",
+    "usertimeline_read": "UserTimeline.Read",
+    "poststorage_read": "PostStorage.ReadPosts",
+    "composepost": "ComposePost",
+    "uniqueid": "UniqueId",
+    "userservice": "UserService",
+    "textservice": "TextService",
+    "urlshorten": "UrlShorten",
+    "usermention": "UserMention",
+    "mediaservice": "MediaService",
+    "poststorage_write": "PostStorage.StorePost",
+    "usertimeline_write": "UserTimeline.Write",
+    "writehome": "HomeTimeline.Write",
+    "socialgraph": "SocialGraph",
+    "ht_redis": "home-timeline Redis",
+    "ps_memcached": "post-storage Memcached",
+    "ps_mongo": "post-storage MongoDB",
+    "ut_redis": "user-timeline Redis",
+    "ut_mongo": "user-timeline MongoDB",
+    "user_memcached": "user Memcached",
+    "user_mongo": "user MongoDB",
+    "us_memcached": "url-shorten Memcached",
+    "us_mongo": "url-shorten MongoDB",
+    "media_memcached": "media Memcached",
+    "media_mongo": "media MongoDB",
+    "sg_redis": "social-graph Redis",
+    "sg_mongo": "social-graph MongoDB"
+  },
+  "descriptions": {
+    "nginx": "nginx-thrift front-end. Given a CPU station (cpuCores 3 x 1000 / cpuTimePerRequestMs 1 ms => ~3,000 req/s) so the CPU-bound front-end becomes the LOW-load bottleneck the DeathStarBench paper reports (ASPLOS 2019: 'bottleneck shifts front-end nginx at low load -> back-end databases at high load'). The CPU time equals its 1 ms proxy latency, so the low-load per-hop sojourn (hence MongoDB's measured latency share) is unchanged; only the ceiling moves. The core count is an ESTIMATE (no absolute front-end req/s is published) chosen to sit just below the post-storage MongoDB tier's ceiling."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

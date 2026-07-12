@@ -1,0 +1,209 @@
+{
+  "name": "sda-vscode",
+  "displayName": "System Design Assistant",
+  "description": "Design and live-simulate system architectures on a canvas â€” verified designs, not dumb diagrams. Custom editor for .sda.json.",
+  "version": "0.0.53",
+  "private": true,
+  "publisher": "sda",
+  "license": "MIT",
+  "engines": { "vscode": "^1.101.0" },
+  "categories": ["Visualization", "Other"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      { "id": "sda.mcpServers", "label": "System Design Assistant" }
+    ],
+    "customEditors": [
+      {
+        "viewType": "sda.designEditor",
+        "displayName": "SDA Design Canvas",
+        "selector": [{ "filenamePattern": "*.sda.json" }],
+        "priority": "default"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "sda", "title": "System Design", "icon": "$(circuit-board)" }
+      ]
+    },
+    "views": {
+      "sda": [
+        { "id": "sda.components", "name": "Components", "icon": "$(extensions)" },
+        { "id": "sda.inspector", "name": "Selected Node", "icon": "$(settings-gear)" },
+        { "id": "sda.system", "name": "System", "icon": "$(dashboard)" }
+      ]
+    },
+    "commands": [
+      { "command": "sda.newDesign", "title": "SDA: New Design" },
+      { "command": "sda.tidy", "title": "SDA: Tidy â€” Auto-layout the Diagram", "icon": "$(list-tree)" },
+      { "command": "sda.idealLayout", "title": "SDA: Tidy - Polish Layout (semantic placement)", "icon": "$(list-tree)" },
+      { "command": "sda.fitView", "title": "SDA: Fit Diagram to View" },
+      { "command": "sda.addGroup", "title": "SDA: Add Group (tier / VPC / zone)" },
+      { "command": "sda.improve", "title": "SDA: Improve â€” Solve Backwards (fix / cheapest / fastest)", "icon": "$(wand)" },
+      { "command": "sda.compareOptions", "title": "SDA: Compare Options for the Selected Node (Alternatives)", "icon": "$(git-compare)" },
+      { "command": "sda.suggest", "title": "SDA: Suggest What Fits the Selected Node" },
+      { "command": "sda.generateDesignDoc", "title": "SDA: Generate Design Doc (HTML report or Markdown)" },
+      { "command": "sda.addComponent", "title": "SDA: Add Component to Design", "icon": "$(add)" },
+      { "command": "sda.editKnob", "title": "SDA: Edit Value", "icon": "$(edit)" },
+      { "command": "sda.clearScenarioOverride", "title": "SDA: Clear World Override (return to base / derived)", "icon": "$(discard)" },
+      { "command": "sda.resetScenario", "title": "SDA: Reset a World (wipe overrides)", "icon": "$(clear-all)" },
+      { "command": "sda.setSlo", "title": "SDA: Set Promise (SLO) on a Node", "icon": "$(edit)" },
+      { "command": "sda.setSystemRequirement", "title": "SDA: Add Promise", "icon": "$(add)" },
+      { "command": "sda.removeSlo", "title": "SDA: Remove Promise (SLO) from a Node", "icon": "$(trash)" },
+      { "command": "sda.setGuaranteeSlo", "title": "SDA: Set Guarantee Promise (consistency / ordering / delivery) on a Flow", "icon": "$(shield)" },
+      { "command": "sda.clearGuaranteeSlo", "title": "SDA: Remove Guarantee Promise from a Flow", "icon": "$(trash)" },
+      { "command": "sda.setPortTransform", "title": "SDA: Set Port Transform (ratio / batch / cap / window / prob)", "icon": "$(edit)" },
+      { "command": "sda.clearPortTransform", "title": "SDA: Clear Port Transform Override", "icon": "$(discard)" },
+      { "command": "sda.setWireTransform", "title": "SDA: Set Wire Transform (routing split on one edge)", "icon": "$(edit)" },
+      { "command": "sda.setRange", "title": "SDA: Set Uncertainty Range (± lo–hi) on a Config Value", "icon": "$(arrow-both)" },
+      { "command": "sda.clearRange", "title": "SDA: Clear Uncertainty Range", "icon": "$(discard)" },
+      { "command": "sda.revealNode", "title": "SDA: Reveal on Canvas", "icon": "$(target)" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "sda.tidy", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.idealLayout", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.fitView", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.addGroup", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.improve", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.compareOptions", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.suggest", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.setSlo", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.setSystemRequirement", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.removeSlo", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.setGuaranteeSlo", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.clearGuaranteeSlo", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.setPortTransform", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.clearPortTransform", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.setWireTransform", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.setRange", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.clearRange", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.generateDesignDoc", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.resetScenario", "when": "activeCustomEditorId == sda.designEditor" },
+        { "command": "sda.addComponent", "when": "false" },
+        { "command": "sda.editKnob", "when": "false" },
+        { "command": "sda.clearScenarioOverride", "when": "false" },
+        { "command": "sda.revealNode", "when": "false" }
+      ],
+      "file/newFile": [
+        { "command": "sda.newDesign", "group": "file" }
+      ],
+      "explorer/context": [
+        { "command": "sda.newDesign", "when": "explorerResourceIsFolder || !explorerResourceIsRoot", "group": "navigation@10" }
+      ],
+      "editor/title": [
+        { "command": "sda.improve", "when": "activeCustomEditorId == sda.designEditor", "group": "navigation" },
+        { "command": "sda.tidy", "when": "activeCustomEditorId == sda.designEditor", "group": "navigation" },
+        { "command": "sda.compareOptions", "when": "activeCustomEditorId == sda.designEditor", "group": "navigation" }
+      ],
+      "view/title": [
+        { "command": "sda.improve", "when": "view == sda.system", "group": "navigation" },
+        { "command": "sda.setSystemRequirement", "when": "view == sda.system", "group": "navigation" },
+        { "command": "sda.tidy", "when": "view == sda.system", "group": "navigation" }
+      ],
+      "view/item/context": [
+        { "command": "sda.editKnob", "when": "view == sda.inspector && viewItem =~ /^sda\\.knob(Ranged)?(\\.world)?$/", "group": "inline@1" },
+        { "command": "sda.setRange", "when": "view == sda.inspector && viewItem =~ /^sda\\.knob(Ranged)?(\\.world)?$/", "group": "inline@2" },
+        { "command": "sda.clearRange", "when": "view == sda.inspector && viewItem =~ /^sda\\.knobRanged(\\.world)?$/", "group": "inline@3" },
+        { "command": "sda.clearScenarioOverride", "when": "view == sda.inspector && viewItem =~ /\\.world$/", "group": "inline@4" },
+        { "command": "sda.setSlo", "when": "view == sda.inspector && viewItem == sda.slo", "group": "inline@1" },
+        { "command": "sda.removeSlo", "when": "view == sda.inspector && viewItem == sda.slo", "group": "inline@2" },
+        { "command": "sda.setPortTransform", "when": "view == sda.inspector && viewItem == sda.port", "group": "inline" },
+        { "command": "sda.setPortTransform", "when": "view == sda.inspector && viewItem == sda.portOverride", "group": "inline@1" },
+        { "command": "sda.clearPortTransform", "when": "view == sda.inspector && viewItem == sda.portOverride", "group": "inline@2" },
+        { "command": "sda.revealNode", "when": "view == sda.inspector && viewItem == sda.inspectorNode", "group": "inline" },
+        { "command": "sda.suggest", "when": "view == sda.inspector && viewItem == sda.suggestion", "group": "inline" },
+        { "command": "sda.addComponent", "when": "view == sda.components && viewItem == sda.component", "group": "inline" }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "sda.components",
+        "contents": "The component palette lists every block you can place on a design.\n\nOpen or create a design to start dropping components onto the canvas.\n[New Design](command:sda.newDesign)"
+      },
+      {
+        "view": "sda.inspector",
+        "contents": "Select a node on the canvas to inspect it.\n\nIts configuration knobs, verdicts and open ports appear here."
+      },
+      {
+        "view": "sda.system",
+        "contents": "Open a `.sda.json` design to see live metrics â€” throughput, latency, load and cost â€” computed as you edit.\n[New Design](command:sda.newDesign)"
+      }
+    ],
+    "keybindings": [
+      { "command": "sda.tidy", "key": "ctrl+alt+t", "mac": "cmd+alt+t", "when": "activeCustomEditorId == sda.designEditor" },
+      { "command": "sda.idealLayout", "key": "ctrl+alt+i", "mac": "cmd+alt+i", "when": "activeCustomEditorId == sda.designEditor" },
+      { "command": "sda.fitView", "key": "ctrl+alt+f", "mac": "cmd+alt+f", "when": "activeCustomEditorId == sda.designEditor" }
+    ],
+    "walkthroughs": [
+      {
+        "id": "sda.gettingStarted",
+        "title": "Get started with System Design Assistant",
+        "description": "Design and live-simulate a system architecture â€” a verified design, not a dumb diagram.",
+        "steps": [
+          {
+            "id": "sda.walkthrough.newDesign",
+            "title": "Create your first design",
+            "description": "A design is a real `.sda.json` file on disk â€” git-diffable, with native undo and save.\n[Create a new design](command:sda.newDesign)",
+            "media": { "markdown": "media/walkthrough/01-new-design.md" },
+            "completionEvents": ["onCommand:sda.newDesign"]
+          },
+          {
+            "id": "sda.walkthrough.canvas",
+            "title": "The canvas",
+            "description": "Drag components from the Components view, connect their ports, and use right-click for context actions.",
+            "media": { "markdown": "media/walkthrough/02-canvas.md" }
+          },
+          {
+            "id": "sda.walkthrough.nativeViews",
+            "title": "Native views",
+            "description": "The activity-bar container, the Problems panel, and the status bar show the engine's live verdicts.",
+            "media": { "markdown": "media/walkthrough/03-native-views.md" }
+          },
+          {
+            "id": "sda.walkthrough.improve",
+            "title": "Improve â€” solve backwards",
+            "description": "Run the design backwards to fix a violation or find the cheapest / fastest sizing.\n[Run Improve](command:sda.improve)",
+            "media": { "markdown": "media/walkthrough/04-improve.md" }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs && vite build",
+    "build:host": "node esbuild.mjs",
+    "build:webview": "vite build",
+    "dev:webview": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p webview/tsconfig.json",
+    "test": "vitest run",
+    "package": "pnpm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@sda/content": "workspace:*",
+    "@sda/core": "workspace:*",
+    "@sda/engine-core": "workspace:*",
+    "@sda/engine-sim": "workspace:*",
+    "@sda/engine-solve": "workspace:*",
+    "@sda/mcp": "workspace:*",
+    "@sda/presenter": "workspace:*",
+    "@sda/solver-contract": "workspace:*",
+    "@xyflow/react": "^12.3.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.101.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

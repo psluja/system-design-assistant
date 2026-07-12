@@ -1,0 +1,37 @@
+{
+  "name": "@sda/web",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "SDA web app: React + React Flow canvas over the command core. Drag, verify live, see the spec.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "predev": "node scripts/vendor-solvers.mjs",
+    "prebuild": "node scripts/vendor-solvers.mjs"
+  },
+  "dependencies": {
+    "@sda/content": "workspace:*",
+    "@sda/core": "workspace:*",
+    "@sda/engine-core": "workspace:*",
+    "@sda/engine-sim": "workspace:*",
+    "@sda/engine-solve": "workspace:*",
+    "@sda/mcp": "workspace:*",
+    "@sda/presenter": "workspace:*",
+    "@sda/solver-contract": "workspace:*",
+    "@xyflow/react": "^12.3.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "clingo-wasm": "^0.3.2"
+  }
+}

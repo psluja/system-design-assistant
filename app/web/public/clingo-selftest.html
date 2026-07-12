@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf8" />
+<title>clingo self-test</title>
+<body>
+  <pre id="out">loading…</pre>
+  <script src="/clingo/clingo.web.js"></script>
+  <script>
+    // Classic-script load sets webpack publicPath to /clingo/, so the worker + wasm resolve as siblings.
+    const out = document.getElementById('out');
+    const clingo = window.clingo && (window.clingo.run ? window.clingo : window.clingo.default);
+    if (!clingo || !clingo.run || !clingo.init) {
+      out.textContent = 'FAIL: window.clingo.{run,init} missing (keys: ' + Object.keys(window.clingo || {}).join(',') + ')';
+    } else {
+      // init() points the blob worker at the SIBLING wasm explicitly (webpack publicPath does not resolve it
+      // inside the worker; without this the wasm fetch returns the SPA fallback HTML and fails to instantiate).
+      // The url MUST be ABSOLUTE — a blob worker cannot parse a root-relative path.
+      clingo
+        .init(new URL('/clingo/clingo.wasm', location.href).href)
+        .then(() => clingo.run('{a;b;c}.', 0))
+        .then((r) => {
+          const witnesses = (r.Call || []).flatMap((c) => c.Witnesses || []).length;
+          out.textContent = 'RESULT ' + r.Result + ' models=' + witnesses;
+        })
+        .catch((e) => (out.textContent = 'ERR ' + (e && e.message ? e.message : String(e))));
+    }
+  </script>
+</body>

@@ -1,0 +1,135 @@
+import { describe, it, expect } from 'vitest';
+import { Studio, serialize, deserialize } from '@sda/core';
+import { registry, allManifests, keys } from '@sda/content';
+import { setScenarioOverrideText, clearScenarioOverrideText, setConfigValue } from './document-edits';
+import { worldOverridesFor, knobOverridable } from './scenario-lens';
+import { activeLensFeedSection, readActiveLensFeed, stripActiveLensFeed, ACTIVE_LENS_FEED_TITLE } from './lens-feed';
+import { newDesignName } from './pure';
+import type { SummarySection } from './protocol';
+
+// THE CONSISTENCY RELIGION — the VS Code pin (owner: "spójność to religia — to co widzę jest tym, co jest faktycznie").
+// The native Inspector must ROUTE a fact-assumption edit INTO the world the canvas is showing (the active lens), NOT
+// the shared base — one form with the web shell. These cover the pure seams the host command composes: the lens
+// side-channel (lens-feed), the world-aware document edit (setScenarioOverrideText, via the exact @sda/core reducer),
+// the overridability gate + the world-value read the Inspector shows, and the un-freeze/remove clear.
+
+const TP = String(keys.throughput);
+
+/** A minimal real design: a SOURCE client (its throughput IS overridable demand) → service → db, with a `real` world
+ *  that overrides the client's throughput (provenance `derived` — the live-tracking auto-value). */
+function fixtureText(): string {
+  const s = new Studio(registry, allManifests);
+  s.dispatch({ kind: 'addComponent', id: 'client', type: 'client.web' });
+  s.dispatch({ kind: 'addComponent', id: 'svc', type: 'compute.service' });
+  s.dispatch({ kind: 'addComponent', id: 'db', type: 'db.postgres' });
+  s.dispatch({ kind: 'connect', from: ['client', 'out'], to: ['svc', 'in'] });
+  s.dispatch({ kind: 'connect', from: ['svc', 'db'], to: ['db', 'in'] });
+  s.dispatch({ kind: 'setConfig', node: 'client', key: TP, value: 1000 }); // a base demand to prove it stays untouched
+  s.dispatch({ kind: 'declareScenario', decl: { id: 'real', name: 'Real', overrides: [{ node: 'client', key: TP, value: 3000, provenance: 'derived' }] } });
+  return serialize(s.project());
+}
+
+describe('the lens side-channel (lens-feed) — the frozen-protocol transport of the active world', () => {
+  it('round-trips the active world id through the summary feed, and strips it from what renders', () => {
+    const rows: SummarySection[] = [{ title: 'Design', rows: [{ label: 'nodes', value: '3' }] }, activeLensFeedSection('real')];
+    expect(readActiveLensFeed(rows)).toBe('real');
+    const rendered = stripActiveLensFeed(rows);
+    expect(rendered.some((s) => s.title === ACTIVE_LENS_FEED_TITLE)).toBe(false);
+    expect(rendered).toHaveLength(1); // the reserved control section never reaches the System tree
+  });
+
+  it('reads undefined (the base lens) when no reserved section rides the feed', () => {
+    expect(readActiveLensFeed([{ title: 'Design', rows: [] }])).toBeUndefined();
+    expect(stripActiveLensFeed([{ title: 'Design', rows: [] }])).toHaveLength(1); // nothing to strip
+  });
+});
+
+describe('the religion pin — a fact-assumption edit lands in the ACTIVE WORLD, base untouched', () => {
+  it('setScenarioOverrideText writes the value into THAT world only; the base config is unchanged', () => {
+    const text = fixtureText();
+    const edit = setScenarioOverrideText(text, 'real', 'client', TP, 4200);
+    expect(edit.ok).toBe(true);
+    if (!edit.ok) return;
+    const doc = deserialize(edit.text);
+    expect(doc.ok).toBe(true);
+    if (!doc.ok) return;
+    const world = doc.value.scenarios.find((s) => s.id === 'real')!;
+    expect(world.overrides.find((o) => o.node === 'client' && o.key === TP)?.value).toBe(4200); // landed in the world
+    expect(doc.value.instances.find((i) => i.id === 'client')?.config?.[TP]).toBe(1000); // BASE untouched — the religion
+  });
+
+  it('a manual edit over a live-derived value FREEZES it (derived → architect) — parity with the command core', () => {
+    const edit = setScenarioOverrideText(fixtureText(), 'real', 'client', TP, 4200);
+    expect(edit.ok).toBe(true);
+    if (!edit.ok) return;
+    const world = deserialize(edit.text as string);
+    if (!world.ok) return;
+    const ov = world.value.scenarios.find((s) => s.id === 'real')!.overrides.find((o) => o.node === 'client' && o.key === TP);
+    expect(ov?.provenance).toBe('architect');
+  });
+
+  it('refuses a NON-overridable key (a resource limit / computed) with the guided role message', () => {
+    // A service's throughput is a COMPUTED capacity, not overridable demand — the reducer refuses it, host-side too.
+    const edit = setScenarioOverrideText(fixtureText(), 'real', 'svc', TP, 9000);
+    expect(edit.ok).toBe(false);
+  });
+});
+
+describe('the overridability gate + the world-value read the Inspector shows', () => {
+  it('knobOverridable is true for a source client throughput, false for a computed/limit knob', () => {
+    const text = fixtureText();
+    expect(knobOverridable(text, 'client', TP)).toBe(true); // a source client's demand — a world belief
+    expect(knobOverridable(text, 'svc', TP)).toBe(false); // a computed capacity — never a world coordinate
+  });
+
+  it('worldOverridesFor reads the active world’s override for the node (its value + provenance)', () => {
+    const overrides = worldOverridesFor(fixtureText(), 'real', 'client');
+    expect(overrides.get(TP)?.value).toBe(3000);
+    expect(overrides.get(TP)?.provenance).toBe('derived');
+    expect(worldOverridesFor(fixtureText(), 'real', 'svc').size).toBe(0); // no override on svc
+  });
+});
+
+describe('the clear — un-freeze vs remove (assumption-model §5.3)', () => {
+  it('clearing a DERIVED override REMOVES it (falls back to base)', () => {
+    const edit = clearScenarioOverrideText(fixtureText(), 'real', 'client', TP);
+    expect(edit.ok).toBe(true);
+    if (!edit.ok) return;
+    const doc = deserialize(edit.text);
+    if (!doc.ok) return;
+    expect(doc.value.scenarios.find((s) => s.id === 'real')!.overrides).toHaveLength(0);
+  });
+
+  it('clearing a FROZEN (architect) override UN-FREEZES it back to derived tracking (kept, provenance derived)', () => {
+    const frozen = setScenarioOverrideText(fixtureText(), 'real', 'client', TP, 4200); // derived → architect
+    expect(frozen.ok).toBe(true);
+    if (!frozen.ok) return;
+    const cleared = clearScenarioOverrideText(frozen.text, 'real', 'client', TP);
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    const doc = deserialize(cleared.text);
+    if (!doc.ok) return;
+    const ov = doc.value.scenarios.find((s) => s.id === 'real')!.overrides.find((o) => o.node === 'client' && o.key === TP);
+    expect(ov?.provenance).toBe('derived'); // un-frozen — re-tracks the envelope
+  });
+});
+
+describe('the base edit still exists (a limit knob edits the shared base, unchanged behaviour)', () => {
+  it('setConfigValue writes the shared base config', () => {
+    const edit = setConfigValue(fixtureText(), 'client', TP, 2222);
+    expect(edit.ok).toBe(true);
+    if (!edit.ok) return;
+    const doc = deserialize(edit.text);
+    if (!doc.ok) return;
+    expect(doc.value.instances.find((i) => i.id === 'client')?.config?.[TP]).toBe(2222);
+  });
+});
+
+describe('newDesignName — the New-Design flow names the project from its file', () => {
+  it('strips the .sda.json / .json suffix and the path, on both separators', () => {
+    expect(newDesignName('C:/work/checkout-path.sda.json')).toBe('checkout-path');
+    expect(newDesignName('C:\\work\\my-design.sda.json')).toBe('my-design');
+    expect(newDesignName('/tmp/plain.json')).toBe('plain');
+    expect(newDesignName('.sda.json')).toBe('design'); // degenerate → a safe fallback
+  });
+});

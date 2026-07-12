@@ -1,0 +1,30 @@
+{
+  "name": "Redis — LPUSH (single node, non-pipelined)",
+  "modelPath": "redis-single-node.sda.json",
+  "notes": "redis-benchmark LPUSH against one single-node Redis at the tool's default configuration (50 parallel clients, 3-byte payload, no pipelining), from the SAME `redis-benchmark -t set,lpush -n 100000 -q` run as the SET entry. Modeled identically — SDA's cache.redis does not distinguish commands, so both are the same single-node architecture under a different command workload (the exact analogue of TechEmpower single-query vs 20-query: one architecture, two workloads, one shared tunable). The shared tunable cache.redis:throughput makes the fit over-determined; the leave-one-out (fit on SET, predict LPUSH) is a genuine out-of-sample test. Same config-sensitivity caveat as the SET entry — the ceiling is validated, not the tail.",
+  "sources": [
+    { "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/benchmarks/", "note": "Official redis-benchmark documentation. `redis-benchmark -t set,lpush -n 100000 -q` reports `LPUSH: 188323.91 requests per second, p50=0.135 msec`. Default config: 50 parallel clients, 3-byte payload, no pipelining, single instance." },
+    { "url": "https://redis.io/docs/latest/develop/get-started/faq/", "note": "Redis FAQ: 'Redis is, mostly, a single-threaded server from the POV of command execution' — the sourced basis for the single-node M/M/1 model." }
+  ],
+  "workloadSweep": { "node": "bench", "key": "throughput", "points": [30000, 90000, 150000, 190000, 220000] },
+  "tunables": [
+    {
+      "key": "throughput",
+      "selector": { "type": "cache.redis" },
+      "unit": "op/s",
+      "catalogDefault": 100000,
+      "fit": { "min": 50000, "max": 500000 },
+      "note": "The SAME free variable as the SET entry (selector cache.redis, key throughput) — one shared Redis single-node capacity. Sharing it across the two commands is what over-determines the fit and makes the leave-one-out a genuine out-of-sample test of the single-node model."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 188323.91,
+      "unit": "op/s",
+      "probeLoadRps": 5000,
+      "sourceUrl": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/benchmarks/",
+      "note": "`redis-benchmark -t set,lpush -n 100000 -q` -> `LPUSH: 188323.91 requests per second, p50=0.135 msec` (default non-pipelined config). LPUSH is marginally faster than SET on the single-threaded loop; SDA models both with ONE capacity, so the ~4.5% SET/LPUSH spread is the irreducible residual a single capacity value cannot capture."
+    }
+  ]
+}

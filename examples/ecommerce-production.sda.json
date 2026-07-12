@@ -1,0 +1,540 @@
+{
+  "schema": 4,
+  "id": "ecommerce-prod",
+  "name": "E-commerce Production Platform",
+  "instances": [
+    {
+      "id": "users",
+      "type": "client.source",
+      "config": {
+        "throughput": 2000,
+        "timeoutMs": 400,
+        "retryCount": 2,
+        "retryBackoffMs": 100
+      }
+    },
+    {
+      "id": "cdn",
+      "type": "cdn.cloudfront"
+    },
+    {
+      "id": "alb",
+      "type": "lb.alb"
+    },
+    {
+      "id": "web",
+      "type": "compute.service",
+      "config": {
+        "availability": 0.9999
+      },
+      "bands": [
+        {
+          "key": "throughput",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "compute.service",
+      "config": {
+        "availability": 0.9999
+      },
+      "bands": [
+        {
+          "key": "throughput",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 140
+          }
+        }
+      ]
+    },
+    {
+      "id": "checkout",
+      "type": "compute.service",
+      "config": {
+        "availability": 0.9999
+      },
+      "bands": [
+        {
+          "key": "throughput",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 60
+          }
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "cache.redis"
+    },
+    {
+      "id": "catalogdb",
+      "type": "db.postgres",
+      "config": {
+        "deploymentMode": 1
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 250
+          }
+        },
+        {
+          "key": "availability",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 0.999
+          }
+        },
+        {
+          "key": "tailLatency",
+          "band": {
+            "shape": "percentiles",
+            "targets": {
+              "__map": [
+                [
+                  "p99",
+                  500
+                ]
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "rds",
+      "type": "proxy.rds",
+      "config": {
+        "availability": 0.9999
+      }
+    },
+    {
+      "id": "aurora",
+      "type": "db.aurora",
+      "config": {
+        "deploymentMode": 1
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 250
+          }
+        },
+        {
+          "key": "availability",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 0.999
+          }
+        },
+        {
+          "key": "tailLatency",
+          "band": {
+            "shape": "percentiles",
+            "targets": {
+              "__map": [
+                [
+                  "p99",
+                  500
+                ]
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "sqs",
+      "type": "queue.sqs.fifo"
+    },
+    {
+      "id": "worker",
+      "type": "compute.faas"
+    },
+    {
+      "id": "kafka",
+      "type": "stream.kafka",
+      "config": {
+        "drainRate": 15000
+      }
+    },
+    {
+      "id": "logproc",
+      "type": "compute.service",
+      "config": {
+        "availability": 0.9999
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "users",
+        "out"
+      ],
+      "to": [
+        "cdn",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "cdn",
+        "out"
+      ],
+      "to": [
+        "alb",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "alb",
+        "out"
+      ],
+      "to": [
+        "web",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "web",
+        "out"
+      ],
+      "to": [
+        "catalog",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.7
+      }
+    },
+    {
+      "from": [
+        "web",
+        "out"
+      ],
+      "to": [
+        "checkout",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.3
+      }
+    },
+    {
+      "from": [
+        "web",
+        "out"
+      ],
+      "to": [
+        "kafka",
+        "in"
+      ],
+      "semantics": "async",
+      "transform": {
+        "kind": "ratio",
+        "value": 50
+      }
+    },
+    {
+      "from": [
+        "catalog",
+        "cache"
+      ],
+      "to": [
+        "redis",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "catalog",
+        "db"
+      ],
+      "to": [
+        "catalogdb",
+        "in"
+      ],
+      "semantics": "sync",
+      "transform": {
+        "kind": "prob",
+        "value": 0.25
+      }
+    },
+    {
+      "from": [
+        "checkout",
+        "db"
+      ],
+      "to": [
+        "rds",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "rds",
+        "out"
+      ],
+      "to": [
+        "aurora",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "checkout",
+        "out"
+      ],
+      "to": [
+        "sqs",
+        "in"
+      ],
+      "semantics": "async"
+    },
+    {
+      "from": [
+        "sqs",
+        "out"
+      ],
+      "to": [
+        "worker",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "kafka",
+        "out"
+      ],
+      "to": [
+        "logproc",
+        "in"
+      ],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "users": {
+      "x": 80,
+      "y": 80
+    },
+    "cdn": {
+      "x": 320,
+      "y": 80
+    },
+    "alb": {
+      "x": 560,
+      "y": 80
+    },
+    "web": {
+      "x": 800,
+      "y": 80
+    },
+    "catalog": {
+      "x": 80,
+      "y": 230
+    },
+    "checkout": {
+      "x": 320,
+      "y": 230
+    },
+    "redis": {
+      "x": 560,
+      "y": 230
+    },
+    "catalogdb": {
+      "x": 800,
+      "y": 230
+    },
+    "rds": {
+      "x": 80,
+      "y": 380
+    },
+    "aurora": {
+      "x": 320,
+      "y": 380
+    },
+    "sqs": {
+      "x": 560,
+      "y": 380
+    },
+    "worker": {
+      "x": 800,
+      "y": 380
+    },
+    "kafka": {
+      "x": 80,
+      "y": 530
+    },
+    "logproc": {
+      "x": 320,
+      "y": 530
+    }
+  },
+  "labels": {
+    "users": "Users (browser)",
+    "cdn": "CloudFront CDN",
+    "alb": "Application Load Balancer",
+    "web": "Web tier",
+    "catalog": "Catalog service",
+    "checkout": "Checkout service",
+    "redis": "Redis cache",
+    "catalogdb": "Catalog Postgres",
+    "rds": "RDS Proxy",
+    "aurora": "Aurora (orders)",
+    "sqs": "Order queue (FIFO)",
+    "worker": "Fulfilment worker",
+    "kafka": "Log/event stream",
+    "logproc": "Log consumer"
+  },
+  "descriptions": {
+    "users": "Public shoppers over HTTPS",
+    "cdn": "Edge cache; ~90% hit, ~10% to origin",
+    "alb": "L7 routing into the web tier",
+    "web": "Front-end app; splits catalog vs checkout",
+    "catalog": "Product browse/read path",
+    "checkout": "Order placement path",
+    "redis": "Catalog read cache",
+    "catalogdb": "Catalog store (cache-miss reads)",
+    "rds": "Connection pool in front of Aurora",
+    "aurora": "Checkout order store, Multi-AZ",
+    "sqs": "Async fulfilment buffer; FIFO for per-order ordering + exactly-once",
+    "worker": "Processes queued orders",
+    "kafka": "Structured app logs & events",
+    "logproc": "Drains and ships the log stream"
+  },
+  "groups": [
+    {
+      "id": "edge",
+      "label": "Edge & routing",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "cdn",
+        "alb"
+      ]
+    },
+    {
+      "id": "app",
+      "label": "Application VPC",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "web",
+        "catalog",
+        "checkout",
+        "worker",
+        "logproc"
+      ]
+    },
+    {
+      "id": "data",
+      "label": "Data stores",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "redis",
+        "catalogdb",
+        "rds",
+        "aurora"
+      ]
+    },
+    {
+      "id": "async",
+      "label": "Async & observability",
+      "rect": {
+        "x": 40,
+        "y": 40,
+        "w": 360,
+        "h": 240
+      },
+      "members": [
+        "sqs",
+        "kafka"
+      ]
+    }
+  ],
+  "components": [],
+  "guaranteeSlos": [
+    {
+      "source": "checkout",
+      "terminal": "aurora",
+      "dimension": "consistency",
+      "atLeast": "strong"
+    },
+    {
+      "source": "users",
+      "terminal": "aurora",
+      "dimension": "consistency",
+      "atLeast": "strong"
+    },
+    {
+      "source": "catalog",
+      "terminal": "catalogdb",
+      "dimension": "consistency",
+      "atLeast": "strong"
+    },
+    {
+      "source": "checkout",
+      "terminal": "worker",
+      "dimension": "ordering",
+      "atLeast": "per-key"
+    },
+    {
+      "source": "checkout",
+      "terminal": "worker",
+      "dimension": "delivery",
+      "atLeast": "clean"
+    },
+    {
+      "source": "web",
+      "terminal": "logproc",
+      "dimension": "ordering",
+      "atLeast": "per-key"
+    }
+  ],
+  "lagSlos": [
+    {
+      "source": "checkout",
+      "terminal": "worker",
+      "maxMs": 3000
+    }
+  ]
+}

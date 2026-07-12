@@ -1,0 +1,54 @@
+{
+  "name": "TechEmpower — Multiple Queries (20 per request)",
+  "modelPath": "techempower-multi-query.sda.json",
+  "notes": "TFB multiple-queries test at 20 individual single-row reads per request (each fetched separately — 'not acceptable to execute multiple SELECTs within a single complex query'), 512 concurrency. IDENTICAL to the single-query model but for a ratio(20) transform on the svc->db wire, so the DB sees 20x the request rate and saturates at ceiling/20. This is the 20x structural law SDA must reproduce. The DB ceiling here is the FIT ANCHOR (5900 x 20 = 118,000 q/s); db.postgres.perRequestDuration is SHARED with the single-query entry. The framework's CPU station (cpuCores/cpuTimePerRequestMs) is declared too (shared with single-query) but is INERT here: at 20 queries per request the DB saturates at 5,900 req/s, far below the framework's CPU ceiling (~104,000), so this entry stays DB-bound and pins the DB service time cleanly while single-query pins the framework CPU.",
+  "sources": [
+    { "url": "https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview", "note": "TFB test-requirements wiki: multiple-queries = 20 individual single-row reads per request, run at 512 concurrency; the reported column is 20" },
+    { "url": "https://www.techempower.com/blog/2023/11/15/framework-benchmarks-round-22/", "note": "Round 22 hardware (Citrine): the 28-thread Xeon Gold 5120 DB box shared by every framework" }
+  ],
+  "workloadSweep": { "node": "client", "key": "throughput", "points": [1000, 3000, 5000, 5900, 6500, 8000] },
+  "tunables": [
+    {
+      "key": "perRequestDuration",
+      "selector": { "type": "db.postgres" },
+      "unit": "ms",
+      "catalogDefault": 50,
+      "fit": { "min": 0.05, "max": 5 },
+      "note": "SAME tunable id as the single-query entry (db.postgres:perRequestDuration) — one shared free variable. This 20-query point is the clean ANCHOR for it: the DB saturates at 5,900 req/s = 118,000 q/s / 20, fixing the service time at ~0.2373 ms. Single-query no longer fights it for the fit, because the framework CPU (a SEPARATE resource) now binds the single-query ceiling instead of the DB."
+    },
+    {
+      "key": "concurrency",
+      "selector": { "type": "db.postgres" },
+      "unit": "1",
+      "catalogDefault": 100,
+      "fit": { "pinned": 28 },
+      "note": "PINNED to the 28 hardware threads (as in the single-query entry) so the DB fit degree of freedom is exactly one shared service time."
+    },
+    {
+      "key": "cpuCores",
+      "selector": { "type": "compute.service" },
+      "unit": "1",
+      "catalogDefault": 28,
+      "fit": { "pinned": 28 },
+      "note": "The framework's CPU width, PINNED to 28 (Citrine app box hardware threads). Shared with the single-query entry; inert here (the DB binds first at 20 queries/request)."
+    },
+    {
+      "key": "cpuTimePerRequestMs",
+      "selector": { "type": "compute.service" },
+      "unit": "ms",
+      "catalogDefault": 1,
+      "fit": { "min": 0.05, "max": 5 },
+      "note": "The framework's per-request CPU time (shared free variable with the single-query entry). Constrained only by single-query — here the DB ceiling (5,900) sits far below the framework CPU (~104,000), so this entry does not bind on CPU and the shared value is free to serve single-query without disturbing the 20-query DB fit."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 5900,
+      "unit": "req/s",
+      "probeLoadRps": 100,
+      "sourceUrl": "https://www.techempower.com/blog/2023/11/15/framework-benchmarks-round-22/",
+      "note": "spring-mongo 20-query peak (Round 22). 5900 x 20 = 118,000 q/s at the DB — the same DB work as the 104k single-query run. This is the FIT ANCHOR for the DB rate; SDA's job is to reproduce the /20 structural relationship (5900 = ceiling/20), which it does exactly."
+    }
+  ]
+}

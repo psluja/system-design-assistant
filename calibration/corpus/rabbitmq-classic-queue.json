@@ -1,0 +1,30 @@
+{
+  "name": "RabbitMQ — classic queue (single node, AMQP 0.9.1)",
+  "modelPath": "rabbitmq-single-node.sda.json",
+  "notes": "The RabbitMQ team's own RabbitMQ 4.0 benchmark of a single CLASSIC queue on one node. Like Redis and Kafka, RabbitMQ is modeled as a fixed-throughput store: the capacity that sets rho is the `throughput` cell (msg/s); there is no concurrency/pool knob (a broker's per-queue write path is the ceiling), so nodeQueues reads the throughput cell directly (graph-read.ts fixed-throughput station). The scored metric is the throughput ceiling (publish msg/s at which the single classic queue reaches rho = 1); the calibrated tunable is queue.rabbitmq:throughput — SDA's ESTIMATED 20,000 msg/s default, corrected here to the measured 88,534 msg/s (an ~77% UNDER-prediction the fit removes, the same shape as Redis 100k→180k and Kafka 100k→821k). This is a genuine OUT-OF-SAMPLE point for the fixed-throughput queue primitive: a different broker technology than Kafka, validated against the vendor's own measured ceiling. HONEST CAVEAT: RabbitMQ throughput is strongly configuration-dependent — persistence, acknowledgement mode (this run used 192 in-flight publisher confirms), QoS prefetch (200 here), message size (12 bytes here), and classic-vs-quorum queue type each move it by a large factor; the AMQP 1.0 path on the SAME hardware reaches 99,413 msg/s (~12% higher). This entry calibrates the model to ONE documented config (AMQP 0.9.1, durable/persistent, classic queue); it validates the CEILING, not the tail — the broker's sub-millisecond internal latency is a structural factor SDA does not model (doc section 9).",
+  "sources": [
+    { "url": "https://www.rabbitmq.com/blog/2024/08/21/amqp-benchmarks", "note": "Official RabbitMQ 4.0 benchmark (RabbitMQ team). AMQP 0.9.1 against ONE classic queue: 'sending rate avg: 88534 msg/s'. Config: 12-byte messages, persistent flag set, mandatory flag set, 192 publisher confirms in flight, QoS prefetch of 200. Hardware: Intel NUC 11, 8 CPU cores, 32 GB RAM. The AMQP 1.0 path on the same setup reaches 'End-to-end rate 99,413 messages/s' (200 link credits) — the paired entry (rabbitmq-amqp10-queue) scores it against the SHARED capacity." },
+    { "url": "https://www.rabbitmq.com/docs/quorum-queues", "note": "RabbitMQ docs: a quorum queue trades latency for throughput and a node's write-ahead log 'can handle tens of thousands of messages per second' — the sourced basis for modeling a single queue as one fixed-throughput write path (no concurrency knob)." }
+  ],
+  "workloadSweep": { "node": "bench", "key": "throughput", "points": [20000, 50000, 80000, 88534, 120000] },
+  "tunables": [
+    {
+      "key": "throughput",
+      "selector": { "type": "queue.rabbitmq" },
+      "unit": "msg/s",
+      "catalogDefault": 20000,
+      "fit": { "min": 10000, "max": 300000 },
+      "note": "RabbitMQ single-node classic-queue write capacity (msg/s) — the value nodeQueues reads for rho. Catalog default 20,000 msg/s is an ESTIMATE ('self-managed RabbitMQ on a VM'); the measured classic-queue ceiling (88,534 msg/s, AMQP 0.9.1) is ~4.4x higher, so the fit corrects it to the vendor's own measured write ceiling. SHARED with the AMQP 1.0 entry: one capacity must reproduce BOTH the AMQP 0.9.1 (88,534) and AMQP 1.0 (99,413) ceilings on the same broker/queue, so the fit is over-determined and the residual is the honest protocol spread one capacity value cannot remove."
+    }
+  ],
+  "groundTruth": [
+    {
+      "metric": "capacityCeilingRps",
+      "measured": 88534,
+      "unit": "msg/s",
+      "probeLoadRps": 8000,
+      "sourceUrl": "https://www.rabbitmq.com/blog/2024/08/21/amqp-benchmarks",
+      "note": "RabbitMQ 4.0, single classic queue, AMQP 0.9.1, 12-byte messages, persistent + 192 publisher confirms, QoS prefetch 200, Intel NUC 11 (8 cores / 32 GB): 'sending rate avg: 88534 msg/s'. SDA's out-of-box estimate (20,000 msg/s) UNDER-predicts by ~77%; the fit corrects the single-node capacity to the measured ceiling. (The broker's sub-ms internal latency is not the queueing service time SDA scores — the ceiling is.)"
+    }
+  ]
+}

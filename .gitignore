@@ -1,0 +1,54 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.*
+
+# logs
+*.log
+npm-debug.log*
+
+# coverage / test
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+.vs/
+
+# Claude local settings (project skills under .claude/skills stay tracked)
+.claude/settings.local.json
+
+# Playwright MCP snapshot/console artifacts
+.playwright-mcp/
+
+# dev screenshots & scratch captures (not project assets)
+/scratchpad/
+/*.png
+app/web/*.png
+/current-nav-errors.txt
+/export-capture.json
+/export-current.json
+/snapshot-01.md
+
+# clingo is VENDOR-SCRIPTED from the lockfile-pinned npm package (app/web/scripts/vendor-solvers.mjs);
+# the MiniZinc+HiGHS bundle IS committed (no npm source exists — see tools/minizinc-wasm for the recipe)
+app/web/public/clingo/
+
+# VS Code extension shell artifacts
+app/vscode/dist/
+app/vscode/.vscode-test/
+app/vscode/*.vsix
+
+# VS Code test harness downloads (root + nested)
+.vscode-test/

@@ -1,0 +1,41 @@
+{
+  "name": "@sda/mcp",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Headless MCP server over the command core: exposes the design commands + queries as MCP tools so any MCP client/agent drives the whole flow. Local, no egress.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tools": "./src/tools.ts",
+    "./search": "./src/search.ts",
+    "./file-io": "./src/file-io.ts",
+    "./composition": "./src/composition.ts",
+    "./synthesize": "./src/synthesize.ts",
+    "./simulate": "./src/simulate.ts",
+    "./reliability": "./src/reliability.ts",
+    "./document": "./src/document.ts",
+    "./instructions": "./src/instructions.ts"
+  },
+  "bin": {
+    "sda-mcp": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@sda/content": "workspace:*",
+    "@sda/core": "workspace:*",
+    "@sda/engine-core": "workspace:*",
+    "@sda/engine-sim": "workspace:*",
+    "@sda/engine-solve": "workspace:*",
+    "@sda/solver-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "clingo-wasm": "^0.3.2",
+    "fast-check": "^3.23.1",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "schema": 3,
+  "id": "p1",
+  "name": "Untitled",
+  "instances": [
+    {
+      "id": "client1",
+      "type": "client.web",
+      "config": {
+        "throughput": 2000
+      }
+    },
+    {
+      "id": "apigw1",
+      "type": "apigw.rest",
+      "config": {
+        "throughput": 10000
+      }
+    },
+    {
+      "id": "compute1",
+      "type": "compute.fargate",
+      "config": {
+        "maxUnits": 2
+      }
+    },
+    {
+      "id": "db1",
+      "type": "db.aurora",
+      "config": {
+        "concurrency": 50
+      }
+    },
+    {
+      "id": "compute2",
+      "type": "compute.lambda",
+      "config": {
+        "perRequestDuration": 23,
+        "concurrency": 1,
+        "accountConcurrency": 1
+      }
+    },
+    {
+      "id": "client2",
+      "type": "client.browser",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        },
+        {
+          "key": "throughput",
+          "band": {
+            "shape": "minTargetMax",
+            "min": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "compute3",
+      "type": "compute.lambda"
+    },
+    {
+      "id": "client3",
+      "type": "client.browser"
+    }
+  ],
+  "wires": [
+    {
+      "from": [
+        "client1",
+        "out"
+      ],
+      "to": [
+        "apigw1",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "apigw1",
+        "out"
+      ],
+      "to": [
+        "compute1",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "compute1",
+        "db"
+      ],
+      "to": [
+        "db1",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "client2",
+        "out"
+      ],
+      "to": [
+        "compute2",
+        "in"
+      ],
+      "semantics": "sync"
+    },
+    {
+      "from": [
+        "client3",
+        "out"
+      ],
+      "to": [
+        "compute3",
+        "in"
+      ],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "client1": {
+      "x": 60,
+      "y": 394
+    },
+    "apigw1": {
+      "x": 400,
+      "y": 105.5
+    },
+    "compute1": {
+      "x": 740,
+      "y": 528
+    },
+    "db1": {
+      "x": 1080,
+      "y": 540
+    },
+    "compute2": {
+      "x": 439.36978683966635,
+      "y": 375.04124189063947
+    },
+    "client2": {
+      "x": 60,
+      "y": 551
+    },
+    "compute3": {
+      "x": 347.5069508804449,
+      "y": 695.1163113994439
+    },
+    "client3": {
+      "x": 60,
+      "y": 708
+    }
+  },
+  "labels": {},
+  "descriptions": {},
+  "groups": [
+    {
+      "id": "group1",
+      "label": "wfwfe",
+      "rect": {
+        "x": 374,
+        "y": 30,
+        "w": 212,
+        "h": 248
+      },
+      "members": [
+        "apigw1"
+      ]
+    }
+  ],
+  "components": []
+}

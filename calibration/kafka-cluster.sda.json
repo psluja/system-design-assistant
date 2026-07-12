@@ -1,0 +1,47 @@
+{
+  "schema": 11,
+  "id": "kafka-cluster",
+  "name": "Apache Kafka — 3-broker cluster (calibration #5, Kreps 2014 benchmark)",
+  "instances": [
+    {
+      "id": "prod",
+      "type": "client.web",
+      "config": {
+        "throughput": 800000
+      }
+    },
+    {
+      "id": "kafka",
+      "type": "stream.kafka",
+      "config": {
+        "latency": 5
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["prod", "out"],
+      "to": ["kafka", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "prod": { "x": 60, "y": 80 },
+    "kafka": { "x": 480, "y": 80 }
+  },
+  "labels": {
+    "prod": "producer (100-byte records)",
+    "kafka": "Kafka 3-broker cluster, 6 partitions"
+  },
+  "descriptions": {
+    "prod": "The producer(s) writing 100-byte records, swept toward the cluster's write ceiling. (client.web speaks HTTP in the catalog; here it stands for the Kafka producer — the numeric capacity path is protocol-agnostic.)",
+    "kafka": "One Kafka cluster modeled as a single SDA node whose aggregate write capacity is the `throughput` cell (msg/s); nodeQueues reads it for rho, so the calibrated tunable is stream.kafka:throughput — SDA's ESTIMATED 100,000 msg/s default, corrected here to Kreps' measured 3-broker / 6-partition write throughput. Ordering and throughput are PER-PARTITION; SDA models the aggregate."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

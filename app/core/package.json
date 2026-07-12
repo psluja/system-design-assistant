@@ -1,0 +1,16 @@
+{
+  "name": "@sda/core",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "The controllable command core: the project Document, typed commands with Results + history, serialization, and engine wiring. Headless; the single source of truth every client (MCP, UI, WebMCP) drives.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@sda/content": "workspace:*",
+    "@sda/engine-core": "workspace:*",
+    "@sda/engine-solve": "workspace:*"
+  },
+  "devDependencies": { "fast-check": "^3.23.1", "typescript": "^5.6.3" }
+}
