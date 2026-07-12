@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { type Key } from '@sda/engine-core';
 import { evaluate } from '@sda/engine-solve';
 import { allCatalogs, instantiate, keys, protocolIds, registry, type Manifest } from './index';
 
@@ -23,6 +24,11 @@ import { allCatalogs, instantiate, keys, protocolIds, registry, type Manifest } 
 //   4. CONFIG VALUES ARE PHYSICALLY SANE — ratios (availability, durability) ∈ [0,1]; magnitudes
 //      (latency, throughput, cost, perRequestDuration) ≥ 0; unit counts (replicas, concurrency, maxUnits)
 //      ≥ 1 wherever present. A negative latency or a "1.4 availability" is a lie the tool must never ship.
+//   5. POOLED-STORE CAPACITY IS COHERENT ACROSS ENGINES — a fixed-throughput store that declares a connection
+//      POOL forms a DES M/M/pool station whose drain rate pool / (held/1000) must EQUAL its INDEPENDENT
+//      `throughput` literal (the analytic/scalar ceiling). Three independent numbers; if the held time drifts (it
+//      is a listed calibration tunable) or a typo slips in, the DES and the analytic engine silently disagree
+//      about WHERE the store saturates — capacity is the "never lies" charter's #1 quantity.
 //
 // Each it() states one law in plain English and every failure names the offending component + key + value.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -93,6 +99,25 @@ describe('deep content integrity (every manifest, every catalog)', () => {
             expect(v >= 1, `${type}: unit count "${key}" = ${v} must be ≥ 1`).toBe(true);
           }
         }
+      });
+
+      it('a pooled store\'s DES capacity (pool / held) equals its declared throughput ceiling — the two engines cannot drift', () => {
+        // A fixed-throughput store (no `concurrency`) that declares a connection POOL forms a DES M/M/pool station
+        // with service = held (graph-read `baseStation`): its drain rate is pool / (held/1000). The analytic/scalar
+        // engine reads capacity from the INDEPENDENT `throughput` literal. This pins pool/(held/1000) == throughput
+        // for EVERY pooled store (present + future), the data-level twin of queueing.e2e's computed db.cheap check —
+        // so redis/memcached/mongodb/db.sql (and anything added later) can never drift the way only db.cheap and
+        // proxy.rds were previously guarded against.
+        const val = (k: Key): number | undefined => m.config?.find((c) => String(c.key) === String(k))?.value;
+        const pool = val(keys.connectionPool);
+        const held = val(keys.connectionHeldMs);
+        const concurrency = val(keys.concurrency);
+        const throughput = val(keys.throughput);
+        // Only the pooled-store mechanism applies: a connection pool, NOT a concurrency-bound station (which owns
+        // its own M/M/c queue), and a LITERAL `throughput` to compare against — a relation-derived ceiling is
+        // invisible to a config read (graph-read note) and no shipped pooled store uses one.
+        if (pool === undefined || held === undefined || concurrency !== undefined || throughput === undefined) return;
+        expect(pool / (held / 1000), `${type}: pool ${pool} / held ${held} ms = ${pool / (held / 1000)} ≠ throughput ${throughput}`).toBeCloseTo(throughput, 6);
       });
     });
   }
