@@ -141,7 +141,7 @@ const HUMAN_SHELL_SOURCES = [
 
 /** The generated-deliverable renderers emit ONLY through string literals — sweep those literals (the SectionKey id
  *  literal 'requirements' is an identifier by contract and is the single allowed exact literal). */
-const DOC_RENDERER_SOURCES = ['content/sda/src/design-doc.ts', 'content/sda/src/render-html.ts'];
+const DOC_RENDERER_SOURCES = ['content/sda/src/doc/design-doc.ts', 'content/sda/src/doc/render-html.ts'];
 
 /** Every string literal's text content, with `${…}` interpolations removed (an expression is code, not prose). */
 function stringLiterals(source: string): string[] {

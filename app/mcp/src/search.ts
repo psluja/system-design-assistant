@@ -5,9 +5,9 @@
 // @surfaces mcp (repair / optimize / explain_infeasible / apply_solution here), vscode (Improve,
 //   app/vscode/src/solver-host.ts), web (Improve in app/web/src/app.tsx)
 // @algorithms engine/solver-contract/src/native/search.ts, engine/solve/src/minizinc/search.ts,
-//   content/sda/src/robust.ts (worlds mode)
+//   content/sda/src/analysis/robust.ts (worlds mode)
 // @docs none
-// @e2e content/sda/src/optimize.e2e.test.ts, content/sda/src/sizing.e2e.test.ts,
+// @e2e content/sda/src/analysis/optimize.e2e.test.ts, content/sda/src/analysis/sizing.e2e.test.ts,
 //   app/mcp/src/cqrs-escalation.e2e.test.ts
 // @status shipped
 

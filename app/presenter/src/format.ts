@@ -18,7 +18,7 @@ export const fmt = (n: number | undefined): string =>
 // lie); this formatter stays context-free (it always renders the honest '<1').
 // Grouping is Intl-free (hand-grouped) so it is deterministic across environments and byte-identical to the content-side
 // mirror (content cannot import the presenter — a cross-package test pins them equal).
-// SPEC MIRROR: content/sda/src/format-ms.ts carries the identical implementation; keep the two in lock-step.
+// SPEC MIRROR: content/sda/src/doc/format-ms.ts carries the identical implementation; keep the two in lock-step.
 
 /** The whole-ms rounding as BARE digits (no unit) — for a context that renders the unit itself. `—` unknown / NaN,
  *  `∞`/`−∞` non-finite, `<1` a nonzero sub-½-ms value (never a false `0`), else a whole thousands-grouped integer. */

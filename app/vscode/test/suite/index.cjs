@@ -341,7 +341,7 @@ exports.run = async function run() {
   // 6b — LOAD STAGES (the ambient two-tier transient): the global `sda.stressProbe` command is DELETED (doc:
   // load-stages §2). The transient question is now answered by the AMBIENT two-tier read-out, composed in the
   // webview and surfaced as a plain System-tree summary section (no command to drive). Its pure computation +
-  // presenter mapping are pinned by content/sda/src/two-tier.e2e.test.ts, app/mcp/src/simulate-load-stages.test.ts
+  // presenter mapping are pinned by content/sda/src/analysis/two-tier.e2e.test.ts, app/mcp/src/simulate-load-stages.test.ts
   // and app/presenter/src/two-tier-view.test.ts; authoring cycles from the webview UI lands in a later round (R3).
   fs.rmSync(reloadFile, { force: true });
 

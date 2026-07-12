@@ -44,7 +44,7 @@ describe('catalog lints — every @algorithm header is complete and its links re
       'engine/solve/src/network/build.ts', //     processor-sharing split
       'engine/solver-contract/src/gpu/webgpu.ts', // solver GPU kernel
       'app/presenter/src/layout-gpu/webgpu.ts', //  layout GPU kernel
-      'content/sda/src/envelope.ts', //           envelope inversion
+      'content/sda/src/analysis/envelope.ts', //           envelope inversion
     ];
     for (const path of roster) {
       expect(tagged.has(path), `${path} must carry an @algorithm header (owner roster)`).toBe(true);

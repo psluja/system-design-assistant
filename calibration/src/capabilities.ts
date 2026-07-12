@@ -174,7 +174,7 @@ const FAMILIES: readonly Capability[] = [
     configKeys: ['throughput', 'concurrency', 'perRequestDuration', 'connectionPool', 'connectionHeldMs', 'maxQueueWaitMs'],
     anchors: [
       { oracle: 'analytic-closed-form', test: 'engine/sim/src/des.test.ts', proves: 'the DES reproduces M/M/1 and M/M/c (Erlang-C) ρ, L, W; c=1 reduces to M/M/1 to 10 digits' },
-      { oracle: 'differential', test: 'content/sda/src/queueing.e2e.test.ts', proves: 'the analytic twin the canvas renders agrees with the DES within tolerance for single/pool/datastore stations' },
+      { oracle: 'differential', test: 'content/sda/src/analysis/queueing.e2e.test.ts', proves: 'the analytic twin the canvas renders agrees with the DES within tolerance for single/pool/datastore stations' },
     ],
     validationKind: 'fitted',
     nature: 'measured-capacity',
@@ -187,7 +187,7 @@ const FAMILIES: readonly Capability[] = [
     summary: 'deploymentMode selects the published-SLA availability nines (single-AZ / Multi-AZ / multi-Region).',
     configKeys: ['deploymentMode'],
     anchors: [
-      { oracle: 'algebra', test: 'content/sda/src/reliability.test.ts', proves: 'availability is the series/parallel product of per-tier SLAs with the documented deployment-mode uplifts' },
+      { oracle: 'algebra', test: 'content/sda/src/analysis/reliability.test.ts', proves: 'availability is the series/parallel product of per-tier SLAs with the documented deployment-mode uplifts' },
     ],
     validationKind: 'sourced', // no residual to fit; correctness rests on the vendor SLA being current (doc §11.3)
     nature: 'sourced-algebra',
@@ -201,7 +201,7 @@ const FAMILIES: readonly Capability[] = [
     configKeys: ['queueMode', 'arrivalRate', 'drainRate', 'retention', 'maxBacklog'],
     anchors: [
       { oracle: 'analytic-closed-form', test: 'engine/sim/src/transient.test.ts', proves: 'the transient backlog grows/peaks/drains at the fluid-limit (λ−μ) rates under a step overload' },
-      { oracle: 'property', test: 'content/sda/src/queue.e2e.test.ts', proves: 'the scalar backlog (net accumulation) and drop-past-maxBacklog behave as declared' },
+      { oracle: 'property', test: 'content/sda/src/analysis/queue.e2e.test.ts', proves: 'the scalar backlog (net accumulation) and drop-past-maxBacklog behave as declared' },
     ],
     validationKind: 'fitted',
     nature: 'theory-dynamics',
@@ -214,8 +214,8 @@ const FAMILIES: readonly Capability[] = [
     summary: 'Real account/service limits fire as a violation the moment load/size crosses them (accountConcurrency, maxItemBytes).',
     configKeys: ['accountConcurrency', 'maxItemBytes'],
     anchors: [
-      { oracle: 'algebra', test: 'content/sda/src/limits.e2e.test.ts', proves: 'concurrency/payload overflow = max(0, demand − documented ceiling) fires at the sourced quota' },
-      { oracle: 'algebra', test: 'content/sda/src/overflow.e2e.test.ts', proves: 'the offered-load / capacity / overflow algebra past saturation' },
+      { oracle: 'algebra', test: 'content/sda/src/analysis/limits.e2e.test.ts', proves: 'concurrency/payload overflow = max(0, demand − documented ceiling) fires at the sourced quota' },
+      { oracle: 'algebra', test: 'content/sda/src/analysis/overflow.e2e.test.ts', proves: 'the offered-load / capacity / overflow algebra past saturation' },
     ],
     validationKind: 'sourced', // a documented ceiling is a CITED quota (AWS limit docs), not a fitted residual — sourced-nature (doc §11.3 generalized)
     nature: 'sourced-algebra',
@@ -241,7 +241,7 @@ const FAMILIES: readonly Capability[] = [
     summary: 'cost = driver × sourced unit price, plus the most-missed line, data egress (payloadBytes × egressUsdPerGb).',
     configKeys: ['unitCost', 'payloadBytes', 'egressUsdPerGb', 'vcpus'],
     anchors: [
-      { oracle: 'algebra', test: 'content/sda/src/egress.e2e.test.ts', proves: 'egress cost = payloadBytes × throughput × egressUsdPerGb and sums across the design as a separate line' },
+      { oracle: 'algebra', test: 'content/sda/src/analysis/egress.e2e.test.ts', proves: 'egress cost = payloadBytes × throughput × egressUsdPerGb and sums across the design as a separate line' },
     ],
     validationKind: 'sourced', // deterministic algebra; there is no residual to fit — only a unit price to keep current (doc §11.3)
     nature: 'sourced-algebra',
@@ -256,7 +256,7 @@ const FAMILIES: readonly Capability[] = [
     anchors: [
       { oracle: 'differential', test: 'engine/sim/src/response.test.ts', proves: 'per-node response mean tracks its M/M/c sojourn + synchronous downstream (Burke tandem decomposition)' },
       { oracle: 'differential', test: 'engine/sim/src/lag.test.ts', proves: 'flow-scoped lag tracks the forward-transit sum with async inclusion (Burke)' },
-      { oracle: 'property', test: 'content/sda/src/response-latency.e2e.test.ts', proves: 'the sequential/parallel/fastest fold composes the downstream responses as declared' },
+      { oracle: 'property', test: 'content/sda/src/analysis/response-latency.e2e.test.ts', proves: 'the sequential/parallel/fastest fold composes the downstream responses as declared' },
     ],
     validationKind: 'fitted',
     nature: 'theory-dynamics',
@@ -269,7 +269,7 @@ const FAMILIES: readonly Capability[] = [
     summary: 'A node’s real ceiling can be its CPU (cpuCores + cpuTimePerRequestMs → an M/M/cores station), binding before any database.',
     configKeys: ['cpuCores', 'cpuTimePerRequestMs'],
     anchors: [
-      { oracle: 'analytic-closed-form', test: 'content/sda/src/cpu-station.e2e.test.ts', proves: 'the CPU M/M/cores station binds as the min-capacity resource; a node with no CPU config is byte-identical to before (300-run property)' },
+      { oracle: 'analytic-closed-form', test: 'content/sda/src/analysis/cpu-station.e2e.test.ts', proves: 'the CPU M/M/cores station binds as the min-capacity resource; a node with no CPU config is byte-identical to before (300-run property)' },
     ],
     validationKind: 'fitted',
     nature: 'measured-capacity',
@@ -301,22 +301,22 @@ const A = (oracle: Oracle, test: string, proves: string): Anchor => ({ oracle, t
 export const GRID: readonly GridAnchorCell[] = [
   // throughput ceiling
   { metric: 'throughputCeiling', regime: 'below-knee', anchor: A('analytic-closed-form', 'engine/sim/src/des.test.ts', 'M/M/c ceiling below the knee') },
-  { metric: 'throughputCeiling', regime: 'at-knee', anchor: A('analytic-closed-form', 'content/sda/src/queueing.e2e.test.ts', 'ceiling at ρ→1 (corpus-validated by TechEmpower)') },
-  { metric: 'throughputCeiling', regime: 'past-saturation', anchor: A('algebra', 'content/sda/src/overflow.e2e.test.ts', 'overflow algebra past capacity') },
+  { metric: 'throughputCeiling', regime: 'at-knee', anchor: A('analytic-closed-form', 'content/sda/src/analysis/queueing.e2e.test.ts', 'ceiling at ρ→1 (corpus-validated by TechEmpower)') },
+  { metric: 'throughputCeiling', regime: 'past-saturation', anchor: A('algebra', 'content/sda/src/analysis/overflow.e2e.test.ts', 'overflow algebra past capacity') },
   // p50 / p99 tail
   { metric: 'tail', regime: 'below-knee', anchor: A('differential', 'engine/sim/src/des.test.ts', 'DES tail corroboration'), note: 'DES corroboration only — no scored p99-vs-QPS curve in the corpus yet' },
   { metric: 'tail', regime: 'at-knee', anchor: A('analytic-closed-form', 'engine/sim/src/response.test.ts', 'M/M/c + Burke tandem at the knee') },
   { metric: 'tail', regime: 'past-saturation', anchor: A('analytic-closed-form', 'engine/sim/src/des.test.ts', 'ρ≥1 ⇒ ∞, never a throw — the honest answer') },
   // bottleneck id / latency share
-  { metric: 'bottleneck', regime: 'below-knee', anchor: A('differential', 'content/sda/src/queueing.e2e.test.ts', 'per-hop sojourn share (corpus-validated by DeathStarBench)') },
+  { metric: 'bottleneck', regime: 'below-knee', anchor: A('differential', 'content/sda/src/analysis/queueing.e2e.test.ts', 'per-hop sojourn share (corpus-validated by DeathStarBench)') },
   { metric: 'bottleneck', regime: 'at-knee', anchor: A('differential', 'engine/sim/src/response.test.ts', 'binding-tier identification at the knee') },
-  { metric: 'bottleneck', regime: 'past-saturation', anchor: A('algebra', 'content/sda/src/overflow.e2e.test.ts', 'the bottleneck shifts to the binding tier') },
+  { metric: 'bottleneck', regime: 'past-saturation', anchor: A('algebra', 'content/sda/src/analysis/overflow.e2e.test.ts', 'the bottleneck shifts to the binding tier') },
   // cost / bill
-  { metric: 'cost', regime: 'below-knee', anchor: A('algebra', 'content/sda/src/egress.e2e.test.ts', 'cost = driver × sourced unit price'), sourced: true },
-  { metric: 'cost', regime: 'at-knee', anchor: A('algebra', 'content/sda/src/egress.e2e.test.ts', 'cost scales with the sized driver'), sourced: true },
+  { metric: 'cost', regime: 'below-knee', anchor: A('algebra', 'content/sda/src/analysis/egress.e2e.test.ts', 'cost = driver × sourced unit price'), sourced: true },
+  { metric: 'cost', regime: 'at-knee', anchor: A('algebra', 'content/sda/src/analysis/egress.e2e.test.ts', 'cost scales with the sized driver'), sourced: true },
   { metric: 'cost', regime: 'past-saturation', anchor: null, note: 'no real bill in the corpus — UNVALIDATED' },
   // availability / nines
-  { metric: 'availability', regime: 'below-knee', anchor: A('algebra', 'content/sda/src/reliability.test.ts', 'series/parallel product vs the published SLA'), sourced: true },
+  { metric: 'availability', regime: 'below-knee', anchor: A('algebra', 'content/sda/src/analysis/reliability.test.ts', 'series/parallel product vs the published SLA'), sourced: true },
   { metric: 'availability', regime: 'at-knee', anchor: null, note: 'availability is load-independent — no at-knee cell (n/a)' },
   { metric: 'availability', regime: 'past-saturation', anchor: null, note: 'no measured DR / end-to-end availability in the corpus — UNVALIDATED' },
   // transient / peak survival
@@ -343,7 +343,7 @@ export const VERIFICATION_GAPS: readonly VerificationGap[] = [
   { title: 'P–K verified only at SCV=0', what: 'The M/G/1 formula is differentially simulated only for deterministic service (M/D/1); no DES-vs-P–K test at an intermediate SCV, so general-variance service rests on the reduction identity alone.', evidence: 'engine/sim/src/des.test.ts (SCV=0 only)' },
   { title: 'No Kingman / G/G/c heavy-traffic form', what: 'Non-Markovian arrivals or general-variance multi-server waits have no closed-form oracle at all; where a design is genuinely G/G/c the DES stands alone with no analytic check.', evidence: 'absent (honest)' },
   { title: 'No named Jackson product-form oracle', what: 'Multi-station networks are verified by tandem decomposition (Burke) and end-to-end Little’s law, not against an open-Jackson-network product form — adequate for feed-forward DAGs, unproven for richer routing.', evidence: 'engine/sim/src/response.test.ts, engine/sim/src/lag.test.ts (Burke-based)' },
-  { title: 'realCumulativeLatency has no direct DES differential', what: 'The MAX-over-predecessors end-to-end latency the canvas shows is checked per-hop and via responseLatency composition, but the cumulative number itself is not cross-checked against a DES end-to-end measurement.', evidence: 'content/sda/src/response-latency.e2e.test.ts (per-hop / composition)' },
+  { title: 'realCumulativeLatency has no direct DES differential', what: 'The MAX-over-predecessors end-to-end latency the canvas shows is checked per-hop and via responseLatency composition, but the cumulative number itself is not cross-checked against a DES end-to-end measurement.', evidence: 'content/sda/src/analysis/response-latency.e2e.test.ts (per-hop / composition)' },
 ];
 
 // ── §9 permanent structural limits (what SDA deliberately does NOT model — never turns green) ─────────────────

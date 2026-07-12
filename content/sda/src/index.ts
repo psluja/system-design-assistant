@@ -1,6 +1,6 @@
 // @sda/content — the SDA content pack. All system-design meaning lives here as DATA; the engine stays
 // domain-agnostic. The seed property registry, the seed component catalog, and the content→Graph compiler.
-export { keys, registry, roles, roleOf, polarityOf, isFactAssumption, type Role, type Polarity, type KeyRole } from './registry';
+export { keys, registry, roles, roleOf, polarityOf, isFactAssumption, type Role, type Polarity, type KeyRole } from './vocabulary/registry';
 export {
   computeEnvelope,
   type EnvelopeInput,
@@ -10,7 +10,7 @@ export {
   type EnvelopeKnee,
   type EnvelopeBreak,
   type EnvelopeBasis,
-} from './envelope';
+} from './analysis/envelope';
 export {
   hasScenarios,
   scenarioProblems,
@@ -28,7 +28,7 @@ export {
   type WorldsResult,
   type WorldSummary,
   type WorldVerdict,
-} from './scenario';
+} from './analysis/scenario';
 export {
   deriveDefaultScenarios,
   refreshDerivedScenarios,
@@ -37,7 +37,7 @@ export {
   DERIVED_DEMAND_FRACTIONS,
   type DeriveInput,
   type DerivedTrioResult,
-} from './derived-scenarios';
+} from './analysis/derived-scenarios';
 export {
   categorical,
   guaranteeDimensions,
@@ -61,8 +61,8 @@ export {
   claimsFor,
   type GuaranteeClaim,
   type GuaranteeContribution,
-} from './guarantees';
-export { flowGuarantees, type FlowGuaranteeSummary } from './guarantee-flows';
+} from './vocabulary/guarantees';
+export { flowGuarantees, type FlowGuaranteeSummary } from './analysis/guarantee-flows';
 export {
   guaranteeVerdicts,
   guaranteeVerdictRow,
@@ -70,12 +70,12 @@ export {
   type GuaranteeSlo,
   type GuaranteeVerdict,
   type GuaranteeRemediation,
-} from './guarantee-slo';
-export { manifests } from './catalog';
-export { voiceManifests } from './voice';
-export { commonManifests } from './common';
-export { fargateManifests } from './fargate';
-export { allManifests } from './all-manifests';
+} from './analysis/guarantee-slo';
+export { manifests } from './catalog/catalog';
+export { voiceManifests } from './catalog/voice';
+export { commonManifests } from './catalog/common';
+export { fargateManifests } from './catalog/fargate';
+export { allManifests } from './catalog/all-manifests';
 export {
   protocols,
   protocolIds,
@@ -85,8 +85,8 @@ export {
   unknownProtocols,
   allCatalogs,
   type Protocol,
-} from './protocols';
-export { toQueueingNetwork, cyclesToProfile } from './sim';
+} from './vocabulary/protocols';
+export { toQueueingNetwork, cyclesToProfile } from './analysis/sim';
 export {
   LOAD_STAGES_DEFAULTS,
   LOAD_STAGES_SOURCES,
@@ -104,8 +104,8 @@ export {
   shortestFeatureStageS,
   shapeSeries,
   type LoadStagePreset,
-} from './load-stages';
-export { timeSweep, shapedOriginsOf, peakLoadByNode, type TimeSweep, type TimeSweepWindow, type TimeSweepInput, type ShapedOrigin, type NodePeak } from './time-sweep';
+} from './analysis/load-stages';
+export { timeSweep, shapedOriginsOf, peakLoadByNode, type TimeSweep, type TimeSweepWindow, type TimeSweepInput, type ShapedOrigin, type NodePeak } from './analysis/time-sweep';
 export {
   twoTierEvaluation,
   tier2Job,
@@ -120,8 +120,8 @@ export {
   type Tier2Budget,
   type Tier2Phases,
   type StressVerdict,
-} from './two-tier';
-export { nodeQueues, nodeCapacityRps, realCumulativeLatency, responseLatency, latencyBreakdown, lagLowerBoundMs, type NodeQueue, type LatencyParts } from './queueing';
+} from './analysis/two-tier';
+export { nodeQueues, nodeCapacityRps, realCumulativeLatency, responseLatency, latencyBreakdown, lagLowerBoundMs, type NodeQueue, type LatencyParts } from './analysis/queueing';
 export {
   lagVerdicts,
   lagVerdictRow,
@@ -130,8 +130,8 @@ export {
   type LagVerdict,
   type LagBasis,
   type LagProvider,
-} from './lag-slo';
-export { realAwareVerdicts, checkGoodputBands, type SimOutcome } from './verdict';
+} from './analysis/lag-slo';
+export { realAwareVerdicts, checkGoodputBands, type SimOutcome } from './analysis/verdict';
 export {
   SYSTEM_PROMISE_KEYS,
   isSystemPromiseKey,
@@ -142,7 +142,7 @@ export {
   type SystemPromise,
   type SystemPromiseVerdict,
   type SystemBandSpec,
-} from './system-promise';
+} from './analysis/system-promise';
 export {
   compileClasses,
   hasClasses,
@@ -152,10 +152,10 @@ export {
   type RequestClassDecl,
   type WireRef,
   type ClassOrigin,
-} from './request-class';
-export { provisioningTunables, quantizeKnob, DISCRETE_KNOBS } from './provision';
-export { robustRepair, robustOptimize, type RobustInput, type RobustChange, type RobustOutcome } from './robust';
-export { TARGET_UTILIZATION, egress } from './behaviors';
+} from './analysis/request-class';
+export { provisioningTunables, quantizeKnob, DISCRETE_KNOBS } from './analysis/provision';
+export { robustRepair, robustOptimize, type RobustInput, type RobustChange, type RobustOutcome } from './analysis/robust';
+export { TARGET_UTILIZATION, egress } from './catalog/behaviors';
 export {
   localContribution,
   localOwnAvailability,
@@ -168,7 +168,7 @@ export {
   type FlowMetrics,
   type SystemSummary,
   type CostBreakdown,
-} from './system';
+} from './analysis/system';
 export {
   RELIABILITY_SOURCES,
   AVAILABILITY_TIERS,
@@ -179,9 +179,9 @@ export {
   type AvailabilityTier,
   type DrTier,
   type ReliabilityAdvice,
-} from './reliability';
-export { generateDesignDoc, renderDesignDocHtml, type DesignDocInput } from './design-doc';
-export { simResultForDoc, mergeMeasuredVerdicts, TAIL_SIM_OPTIONS, type DocSimResult } from './doc-sim';
+} from './analysis/reliability';
+export { generateDesignDoc, renderDesignDocHtml, type DesignDocInput } from './doc/design-doc';
+export { simResultForDoc, mergeMeasuredVerdicts, TAIL_SIM_OPTIONS, type DocSimResult } from './doc/doc-sim';
 export {
   buildDocModel,
   pathAvailabilityFor,
@@ -219,12 +219,12 @@ export {
   type ScenariosSection,
   type ScenarioWorldRow,
   type ScenarioOverrideCell,
-} from './doc-model';
-export { renderHtml, esc } from './render-html';
-export { formatMs, formatMsDigits } from './format-ms';
-export { buildLoadSweep, originNodes, SWEEP_FACTORS, type LoadSweepInput, type OriginNode } from './sweep';
-export { synthesize, type SynthSpec, type SynthSlot, type SynthDeps, type RankedDesign } from './synthesize';
-export { familyOf, specForNode, specFromSlots, ARCHETYPES, type SlotReq, type SloReq } from './synth-spec';
+} from './doc/doc-model';
+export { renderHtml, esc } from './doc/render-html';
+export { formatMs, formatMsDigits } from './doc/format-ms';
+export { buildLoadSweep, originNodes, SWEEP_FACTORS, type LoadSweepInput, type OriginNode } from './analysis/sweep';
+export { synthesize, type SynthSpec, type SynthSlot, type SynthDeps, type RankedDesign } from './analysis/synthesize';
+export { familyOf, specForNode, specFromSlots, ARCHETYPES, type SlotReq, type SloReq } from './analysis/synth-spec';
 export {
   generatorLevelOf,
   generatorsOf,
@@ -244,7 +244,7 @@ export {
   type UniformRange,
   type TriangularRange,
   type Wire,
-} from './manifest';
+} from './vocabulary/manifest';
 export {
   runUncertainty,
   rangedInputsOf,
@@ -262,4 +262,4 @@ export {
   type TornadoRow,
   type RangedInput,
   type RangedInputSummary,
-} from './uncertainty';
+} from './analysis/uncertainty';

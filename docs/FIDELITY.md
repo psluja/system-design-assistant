@@ -120,7 +120,7 @@ Real, addressable verification holes — named plainly, not hidden. Later waves 
 - **P–K verified only at SCV=0** — The M/G/1 formula is differentially simulated only for deterministic service (M/D/1); no DES-vs-P–K test at an intermediate SCV, so general-variance service rests on the reduction identity alone. _(engine/sim/src/des.test.ts (SCV=0 only))_.
 - **No Kingman / G/G/c heavy-traffic form** — Non-Markovian arrivals or general-variance multi-server waits have no closed-form oracle at all; where a design is genuinely G/G/c the DES stands alone with no analytic check. _(absent (honest))_.
 - **No named Jackson product-form oracle** — Multi-station networks are verified by tandem decomposition (Burke) and end-to-end Little’s law, not against an open-Jackson-network product form — adequate for feed-forward DAGs, unproven for richer routing. _(engine/sim/src/response.test.ts, engine/sim/src/lag.test.ts (Burke-based))_.
-- **realCumulativeLatency has no direct DES differential** — The MAX-over-predecessors end-to-end latency the canvas shows is checked per-hop and via responseLatency composition, but the cumulative number itself is not cross-checked against a DES end-to-end measurement. _(content/sda/src/response-latency.e2e.test.ts (per-hop / composition))_.
+- **realCumulativeLatency has no direct DES differential** — The MAX-over-predecessors end-to-end latency the canvas shows is checked per-hop and via responseLatency composition, but the cumulative number itself is not cross-checked against a DES end-to-end measurement. _(content/sda/src/analysis/response-latency.e2e.test.ts (per-hop / composition))_.
 
 ## Structural limits — permanent (doc §9)
 

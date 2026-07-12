@@ -54,7 +54,7 @@ describe('formatMs / formatMsDigits — the canonical whole-ms token', () => {
   });
 });
 
-// CROSS-PACKAGE PIN — content cannot import the presenter (presenter → content), so content/sda/src/format-ms.ts is
+// CROSS-PACKAGE PIN — content cannot import the presenter (presenter → content), so content/sda/src/doc/format-ms.ts is
 // a byte-for-byte MIRROR. This asserts the two produce identical strings for a representative sample, so the doc
 // renderer and every shell can never drift on how a duration reads.
 describe('the content mirror is byte-identical to the presenter formatter', () => {

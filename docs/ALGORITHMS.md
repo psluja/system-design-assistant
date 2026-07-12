@@ -357,113 +357,113 @@ Every algorithmic module in the codebase, cataloged from its `@algorithm` header
 
 ### Envelope inversion (max demand s.t. SLOs) with exponential-search + bisection referee
 
-`content/sda/src/envelope.ts`
+`content/sda/src/analysis/envelope.ts`
 
 - **Problem:** With no declared demand the tool must still answer: how much sustained load can each origin carry with every SLO green, what breaks first as load grows, and where is the queueing knee?
 - **Approach:** Per-origin maxRps by solver INVERSION — free the origin's demand key (legal: it is a fact-assumption) and maximize it subject to the SLOs via the injected Optimize capability; the breaking order / joint edge / knee come from a generalized load sweep — exponential search for a bracketing factor, then bisection (40 halvings, ~1e-12) against forward evaluations; the sweep is also the honest fallback when the solver declines the inversion.
 - **Complexity:** O(origins) injected optimize calls + O(origins * (log2(FACTOR_CAP) + 40)) forward evaluations for the sweep arms.
 - **Citations:** Bisection / exponential search (folklore); the inversion is the no-cheating rule run
 - **Invariants:** Pure and deterministic aside from the injected solver (no clock, no randomness, fixed iteration counts); honest states — no origin => no envelope, broken at zero => maxRps 0, solver decline => sweep fallback, never a guess; native inversion and brute-force edge agree (differential-tested).
-- **Tested:** `content/sda/src/envelope.test.ts`, `content/sda/src/envelope-des.e2e.test.ts`
+- **Tested:** `content/sda/src/analysis/envelope.test.ts`, `content/sda/src/analysis/envelope-des.e2e.test.ts`
 
 ### Multi-cycle λ(t) generator rate (baseline-anchored piecewise product)
 
-`content/sda/src/load-stages.ts`
+`content/sda/src/analysis/load-stages.ts`
 
 - **Problem:** A generator's demand is not one ramp but SEVERAL periodic shapes at once (a diurnal rhythm times a quarterly-report window), and every surface — the DES arrival stream, the Tier-1 sweep, the editor preview and the derived mean/peak — must read the SAME instantaneous rate, or the DRAWN shape and the EVALUATED shape drift.
 - **Approach:** Model each cycle as a k6-style piecewise-linear MULTIPLIER anchored at ×1, and read the generator's instantaneous rate as the scalar product λ(t) = level · Π_cycles m_c(t mod periodS_c). Derive the mean (cost) and peak (verdicts) by sampling that product over one slowest period; lowering to the DES samples the same product to a fine piecewise-linear profile (the ×m̄ baseline compensation, §9), so drawn == evaluated.
 - **Complexity:** O(cycles) per instant; O(restPointsPerCycle) samples per slowest period for the mean/peak + profile.
 - **Citations:** k6 ramping-arrival-rate stages; Gatling injection profiles; superposition of periodic demand.
 - **Invariants:** A FLAT generator (no cycles / all ×1) is byte-identical to steady generate(level) — the sacred pin; the product of piecewise-linear cycles is piecewise-quadratic, so the scalar λ(t) is the exact reader (§5).
-- **Tested:** `content/sda/src/load-stages.test.ts`
+- **Tested:** `content/sda/src/analysis/load-stages.test.ts`
 
 ### Analytic queueing twin (M/M/c per node, critical-path folds, Dijkstra lag bound)
 
-`content/sda/src/queueing.ts`
+`content/sda/src/analysis/queueing.ts`
 
 - **Problem:** The canvas must show what users actually FEEL — queueing-aware latency, saturation, lag — live on every edit, where the forward pass's no-queue service sum stays finite even past saturation and a full DES is too slow.
 - **Approach:** Model every node as the SAME M/M/c station the DES builds (c = concurrency servers, mu = 1/service; Erlang-C sojourn via engine mmc), fold real end-to-end latency as a memoized cycle-guarded critical-path MAX over predecessors, fold caller-facing response over the sync subtree per latencyComposition, and lower-bound flow lag with Dijkstra over every edge (the simple O(V^2) selection — graphs are small).
 - **Complexity:** O(V + E) memoized folds; Dijkstra O(V^2); mmc O(c) per node.
 - **Citations:** Erlang C / M/M/c (via engine/sim/src/analytic.ts); Little's law; Dijkstra 1959.
 - **Invariants:** Agrees with the DES within tolerance (differential-tested); rho >= 1 answers Infinity honestly (unbounded queue), never a finite lie; the ideal (no-queue) figure is kept alongside, demoted not deleted.
-- **Tested:** `content/sda/src/queueing.e2e.test.ts` (analytic vs DES), `content/sda/src/response-latency.e2e.test.ts`, `content/sda/src/origin-latency.e2e.test.ts`, `content/sda/src/headroom.test.ts`
+- **Tested:** `content/sda/src/analysis/queueing.e2e.test.ts` (analytic vs DES), `content/sda/src/analysis/response-latency.e2e.test.ts`, `content/sda/src/analysis/origin-latency.e2e.test.ts`, `content/sda/src/analysis/headroom.test.ts`
 
 ### Robust sizing by per-world solve + knob-wise max
 
-`content/sda/src/robust.ts`
+`content/sda/src/analysis/robust.ts`
 
 - **Problem:** A design sized against ONE point of the assumption space is fragile; the search must find the cheapest configuration that holds every SLO across ALL selected worlds — with no new solver.
 - **Approach:** Run the same injected repair/optimize once per world (base world always included), then combine by taking each provisioning knob's MAXIMUM across the per-world solutions — sound because every provisioning knob is monotone capacity-increasing, so max(worlds) satisfies each world at once; the world supplying a knob's max is derived as its binding constraint; the combined graph is re-verified in every world and any residual violation DECLINES honestly.
 - **Complexity:** O(|worlds| + 1) injected solves + O(knobs * worlds) max reduction + O(|worlds|) verification evaluations.
 - **Citations:** Robust optimization framing (Ben-Tal & Nemirovski, scenario-based reduction); the monotone knob-wise-max argument is stated inline.
 - **Invariants:** Binding worlds are derived from actual per-world solves, never assumed; verification is mandatory — a combination that fails any world returns did-not-converge, not a guess; deterministic given the injected solver.
-- **Tested:** `content/sda/src/robust.test.ts`, `content/sda/src/robustness.property.test.ts`
+- **Tested:** `content/sda/src/analysis/robust.test.ts`, `content/sda/src/analysis/robustness.property.test.ts`
 
 ### DES network projection (graph to queueing network, transform means, Little's-law pools)
 
-`content/sda/src/sim.ts`
+`content/sda/src/analysis/sim.ts`
 
 - **Problem:** The typed-property graph must become the DES's queueing network — arrival sources, M/M/c stations, route edges — with flow transforms and retry policies translated into pure timing terms the simulator understands, staying consistent with the analytic twin.
 - **Approach:** Project each node through the SAME capacity/server reads the analytic model uses (graph-read.ts — one definition, differential-consistent); translate per-port/per-wire transforms to mean per-completion multiplicities (ratio k, prob p, batch 1/n; rate ceilings cap/window induce no memoryless route thinning — the forward pass owns them); size connection pools by Little's-law algebra; lower generator cycles to baseline-anchored rate profiles; attach caller retry policies as DES AttemptPolicy.
 - **Complexity:** O(V + E) single projection pass.
 - **Citations:** Little 1961 (pool sizing); the transform-mean argument is stated inline
 - **Invariants:** Analytic and DES read capacity through the one shared definition (they can never drift); timeoutMs = 0 means byte-identical pre-retry behavior; a flat generator (no cycles / all ×1 / disabled) reduces to plain exponential arrivals exactly.
-- **Tested:** `content/sda/src/sim.e2e.test.ts`, `content/sda/src/queueing.e2e.test.ts`, `content/sda/src/transform.e2e.test.ts`, `content/sda/src/generator.e2e.test.ts`
+- **Tested:** `content/sda/src/analysis/sim.e2e.test.ts`, `content/sda/src/analysis/queueing.e2e.test.ts`, `content/sda/src/vocabulary/transform.e2e.test.ts`, `content/sda/src/vocabulary/generator.e2e.test.ts`
 
 ### Load sweep (origin scaling to surface the queueing knee)
 
-`content/sda/src/sweep.ts`
+`content/sda/src/analysis/sweep.ts`
 
 - **Problem:** The doc and chart must show how end-to-end latency responds as traffic rises — the knee where latency stops being linear and runs away — using exactly the figures the capacity table reports.
 - **Approach:** Detect traffic origins (the ONE shared OriginNode definition envelope reuses), scale them by fixed factors (0.5..1.5), re-run the forward evaluation at each point, and read the busiest flow's real (M/M/c queueing-aware) end-to-end latency.
 - **Complexity:** O(|factors|) forward evaluations (default 5), each O(cells) via the engine solve.
-- **Citations:** None (a parameter sweep; the queueing math is content/sda/src/queueing.ts).
+- **Citations:** None (a parameter sweep; the queueing math is content/sda/src/analysis/queueing.ts).
 - **Invariants:** Pure and deterministic (no clock, no randomness); a design with no origin returns an EMPTY series honestly, never fake points; every surface reuses this one computation (no drift).
-- **Tested:** `content/sda/src/sweep.test.ts`
+- **Tested:** `content/sda/src/analysis/sweep.test.ts`
 
 ### System roll-up (union-find flow decomposition + cumulative-fold inversion)
 
-`content/sda/src/system.ts`
+`content/sda/src/analysis/system.ts`
 
 - **Problem:** The end-to-end picture — per-flow throughput, latency, availability, cost — must be recovered from a solved graph whose cells carry CUMULATIVE values, and each node's OWN contribution is not stored anywhere.
 - **Approach:** Decompose into request flows by union-find with path compression over wires plus directed BFS reachability per origin; recover own contributions by inverting the network's folds — own(n) = value(n) - sum of predecessors' values for sums, the quotient for the availability product; diagnose cyclic flows honestly instead of mis-summing them.
 - **Complexity:** Union-find near-linear (path compression); reachability O(V + E) per origin; contribution inversion O(V + E).
 - **Citations:** Union-find (Tarjan 1975); the inversions are exact algebraic inverses of the cell network's sum/product aggregations.
 - **Invariants:** Inversion round-trips the engine's folds exactly (anchored by the sensitivity-matrix test); one shared computation for every surface — the human and the AI read the same numbers.
-- **Tested:** `content/sda/src/system.e2e.test.ts`, `content/sda/src/sensitivity-matrix.test.ts`
+- **Tested:** `content/sda/src/analysis/system.e2e.test.ts`, `content/sda/src/analysis/sensitivity-matrix.test.ts`
 
 ### Tier-1 analytic time-sweep (quasi-static M/M/c response + per-node peak over the auto-derived span)
 
-`content/sda/src/time-sweep.ts`
+`content/sda/src/analysis/time-sweep.ts`
 
 - **Problem:** A multi-cycle span is far too long to simulate arrival-by-arrival (a 90-day quarter at ~1000 rps is ~1500× the 5M-event DES cap — doc: load-stages §10.1), so the ambient transient answer needs a CHEAP core.
 - **Approach:** Partition the auto-derived observation span (slowest period × spanRepeats) into windows sized to resolve the fastest cycle; at each window's instantaneous rate λ(t) = Σ_origins level·Π cycles(t), override each origin's reconciled assumedRps to that scalar and evaluate the STEADY-STATE response with the existing analytic M/M/c twin (queueing.ts nodeQueues) — one evaluation per window (the EvaluateBatch seam is declared but not yet activated, so this is the documented sequential loop; GPU batching is a later optimization). Each window also folds a SELF-ORIGIN ρ (an isolated generator serving its own λ(t)); peakLoadByNode then projects each node's worst window, so the per-node surfaces judge the declared PEAK, not just the steady baseline (R4).
 - **Complexity:** O(windows × evaluate) — a diurnal design at 96 pts/day over 2 days is ~192 windows, sub-second.
 - **Citations:** Quasi-static (adiabatic) approximation — a slowly-varying arrival rate ⇒ the instantaneous steady state; Erlang-C / M/M/c (via queueing.ts); Datadog rollup windowing (≤~300 intervals, load-stages §16.3 A).
 - **Invariants:** Basis is 'analytic (quasi-static)' — the STEADY response per window, honest that it does NOT chain backlog window-to-window (that is Tier-2's measured transient, R2). Silent (undefined) for a design with no shaped generator (the no-filler rule). Deterministic.
-- **Tested:** `content/sda/src/time-sweep.test.ts`
+- **Tested:** `content/sda/src/analysis/time-sweep.test.ts`
 
 ### Two-tier transient evaluation (propose cheap, prove exact — over time)
 
-`content/sda/src/two-tier.ts`
+`content/sda/src/analysis/two-tier.ts`
 
 - **Problem:** A multi-cycle season is far too long to simulate arrival-by-arrival, yet the mean-load steady answer hides the daily peak: the ambient transient question needs a cheap whole-season scan AND an exact proof at the one instant that matters — without a play button, and without blurring which basis produced which number.
 - **Approach:** TIER 1 — the analytic quasi-static sweep (time-sweep.ts) scans the ρ-envelope over the auto-derived span and returns the worst window (basis analytic). TIER 2 — a targeted transient DES (engine/sim/transient.ts) zooms ONLY that worst window over a cap-fit neighbourhood, playing each origin's real λ(t), and reads the survival verdict — does it drain, how fast, where the backlog piled, what the tail cost (basis measured).
 - **Complexity:** Tier 1 O(windows × evaluate); Tier 2 one bounded DES over the worst-window neighbourhood.
 - **Citations:** "propose/prove" (an analytic screen, then simulate the survivor); Welch's warm-up for the transient.
 - **Invariants:** The two labelled bases are never blurred; silent (undefined) with no shaped generator; the DES truncates LOUDLY under the event cap (a PARTIAL window, never scaled); deterministic for the seed.
-- **Tested:** `content/sda/src/two-tier.e2e.test.ts`
+- **Tested:** `content/sda/src/analysis/two-tier.e2e.test.ts`
 
 ### Monte Carlo over the assumption register (seeded sampling, type-7 quantiles, Pearson tornado)
 
-`content/sda/src/uncertainty.ts`
+`content/sda/src/analysis/uncertainty.ts`
 
 - **Problem:** Every soft input is a declared range, not a point; conclusions must become reproducible DISTRIBUTIONS — percentiles, histograms, per-SLO confidence, sensitivity — without inventing any distribution the user did not declare.
 - **Approach:** Seeded mulberry32 draws per scenario — uniform ranges by affine stretch, triangular by inverse-CDF; N scenarios evaluated through the injected EvaluateBatch capability; roll-ups use the type-7 (linear-interpolation) quantile estimator, fixed-bin histograms, SLO pass-fraction confidence, and a tornado from Pearson correlation on the SAME sample (no extra runs, noise floor ~1/sqrt(N)).
 - **Complexity:** O(N) draws + injected evaluations (~1 ms each on the native path); O(N log N) per quantile sort; O(N) per tornado column.
 - **Citations:** Metropolis & Ulam 1949 (Monte Carlo); Hyndman & Fan 1996 type 7 (NumPy default quantile); Pearson correlation; inverse-CDF sampling (Devroye 1986).
 - **Invariants:** Same (design, n, seed) => byte-identical output on any platform; inputs without a declared range stay FIXED across scenarios (refused, never guessed); silent when nothing is ranged — results are the point answer bit-for-bit.
-- **Tested:** `content/sda/src/uncertainty.test.ts` (quantiles vs closed form; tornado laws)
+- **Tested:** `content/sda/src/analysis/uncertainty.test.ts` (quantiles vs closed form; tornado laws)
 
 ## app/presenter
 
