@@ -29,6 +29,12 @@ import { allCatalogs, instantiate, keys, protocolIds, registry, type Manifest } 
 //      `throughput` literal (the analytic/scalar ceiling). Three independent numbers; if the held time drifts (it
 //      is a listed calibration tunable) or a typo slips in, the DES and the analytic engine silently disagree
 //      about WHERE the store saturates — capacity is the "never lies" charter's #1 quantity.
+//   6. PROVENANCE IS HONEST — (a) a config is never BOTH sourced and estimated: manifest.ts:73-77 states a value
+//      is `documented` (has `source`), an `estimate` (`est: true`), or a plain `default` — never both, and
+//      doc-model.ts's configProvenance checks `source` BEFORE `est`, so a config carrying both would silently
+//      badge `documented` and DROP the estimate flag, presenting an estimate as a documented fact. (b) a `source`
+//      is a real primary-doc URL (the same shape guarantee-slo.e2e checks for guarantee claims) — the assumptions
+//      register renders `documented` sources as live anchors, so a non-URL source would be fabricated authority.
 //
 // Each it() states one law in plain English and every failure names the offending component + key + value.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -118,6 +124,24 @@ describe('deep content integrity (every manifest, every catalog)', () => {
         // invisible to a config read (graph-read note) and no shipped pooled store uses one.
         if (pool === undefined || held === undefined || concurrency !== undefined || throughput === undefined) return;
         expect(pool / (held / 1000), `${type}: pool ${pool} / held ${held} ms = ${pool / (held / 1000)} ≠ throughput ${throughput}`).toBeCloseTo(throughput, 6);
+      });
+
+      it('a config is never both sourced and estimated (documented would silently win, dropping the estimate flag)', () => {
+        for (const c of m.config ?? []) {
+          const key = String(c.key);
+          expect(
+            !(c.source !== undefined && c.est === true),
+            `${type}: config "${key}" = ${c.value} carries BOTH source and est — configProvenance checks source first, so the estimate flag would silently vanish`,
+          ).toBe(true);
+        }
+      });
+
+      it('every documented source is a real primary-doc URL, not a placeholder', () => {
+        for (const c of m.config ?? []) {
+          if (c.source === undefined) continue;
+          const key = String(c.key);
+          expect(c.source, `${type}: config "${key}" source "${c.source}" is not a well-formed https URL`).toMatch(/^https:\/\/[^\s]+$/);
+        }
       });
     });
   }

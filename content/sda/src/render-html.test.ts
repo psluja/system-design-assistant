@@ -824,6 +824,60 @@ describe('renderHtml — flow-scoped lag block', () => {
   });
 });
 
+// ── trust lock: measured-or-nothing honesty at the render surface (the analytic estimate must never impersonate
+// a measurement, and an unrecorded/NaN sample must never leak the literal "NaN") ──
+
+describe('renderHtml — measured-or-nothing honesty at the latency surface (trust regression)', () => {
+  it('a flow with no measured latency renders "no data" — the analytic real latency (COMPUTED) never leaks onto the surface, even when distinctive', () => {
+    const instances: Instance[] = [
+      { id: 'client', type: 'client.source', config: { throughput: 100 } },
+      { id: 'svc', type: 'compute.service' },
+    ];
+    const wires: Wire[] = [{ from: ['client', 'out'], to: ['svc', 'in'] }];
+    const g = instantiate(allManifests, instances, wires);
+    if (!g.ok) throw new Error(JSON.stringify(g.error));
+    const ev = evaluate(g.value, registry);
+    if (!ev.ok) throw new Error(ev.error.join('; '));
+    const value = (id: string, k: Key): number | undefined => ev.value.value(NodeId(id), k);
+    // No responsePercentilesByNode and no tail supplied ⇒ the flow's MEASURED latency is absent by construction.
+    // realLatencyByNode carries a DISTINCTIVE analytic figure (7777) on the terminal — the number latencyCell()
+    // must NEVER surface (owner ruling: single-truth measured-or-nothing; render-html.ts:1309-1315).
+    const model = buildDocModel({
+      name: 'NoMeasured', instances, wires, catalog: allManifests, verdicts: ev.value.verdicts, value,
+      realLatencyByNode: { svc: 7777 },
+    });
+    expect(model.capacity.flows.length).toBe(1);
+    expect(model.capacity.flows[0]?.measuredLatencyMs).toBeUndefined();
+    expect(model.capacity.flows[0]?.realLatencyMs).toBe(7777); // COMPUTED, but rendered on no surface
+    const html = renderHtml(model);
+    expect(html).toContain('<span class="muted">no data</span>');
+    expect(html).not.toContain('7777'); // the analytic estimate must never leak into the rendered latency
+  });
+
+  it('a NaN response percentile renders "no data", never the literal "NaN"', () => {
+    const instances: Instance[] = [
+      { id: 'client', type: 'client.source', config: { throughput: 100 } },
+      { id: 'svc', type: 'compute.service', bands: [{ key: keys.latency, band: { shape: 'minTargetMax', max: 500 } }] },
+    ];
+    const wires: Wire[] = [{ from: ['client', 'out'], to: ['svc', 'in'] }];
+    const g = instantiate(allManifests, instances, wires);
+    if (!g.ok) throw new Error(JSON.stringify(g.error));
+    const ev = evaluate(g.value, registry);
+    if (!ev.ok) throw new Error(ev.error.join('; '));
+    const value = (id: string, k: Key): number | undefined => ev.value.value(NodeId(id), k);
+    // The DES run never timed `svc`'s response — NaN is the engine's honest "no recorded response" marker
+    // (doc-model.ts:114) — the percentile table must show "no data", never the raw "NaN" string (render-html.ts:1244).
+    const model = buildDocModel({
+      name: 'NaNResponse', instances, wires, catalog: allManifests, verdicts: ev.value.verdicts, value,
+      responsePercentilesByNode: { svc: { mean: NaN, p50: NaN, p95: NaN, p99: NaN, samples: 0 } },
+    });
+    expect(model.capacity.responsePercentiles?.length).toBe(1);
+    const html = renderHtml(model);
+    expect(html).toContain('Response-time percentiles');
+    expect(html).not.toContain('>NaN<');
+  });
+});
+
 describe('renderHtml — end-to-end availability is a NODE band on the terminal (flowPromises consolidated away)', () => {
   it('a terminal availability band renders a `node-scoped` requirements row judged against the terminal cumulative', () => {
     // The consolidation: an end-to-end availability promise IS a band on the terminal node (`db`), judged against
