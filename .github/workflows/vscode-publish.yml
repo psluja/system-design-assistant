@@ -1,0 +1,61 @@
+name: Publish VS Code extension
+
+# Publishes app/vscode to the Visual Studio Marketplace (and, if an OVSX_TOKEN secret is set, to Open VSX) when a
+# tag matching `vscode-v*` is pushed, or on a manual dispatch. The version published is whatever app/vscode/package.json
+# declares — bump it before tagging (e.g. set 0.0.54, commit, `git tag vscode-v0.0.54 && git push --tags`).
+#
+# Required repo secret:  VSCE_PAT  — an Azure DevOps Personal Access Token with scope Marketplace > Manage, for the
+#                                    `sda` publisher (create the publisher at https://marketplace.visualstudio.com/manage).
+# Optional repo secret:  OVSX_TOKEN — an Open VSX access token (https://open-vsx.org) to also publish there.
+
+on:
+  push:
+    tags: ['vscode-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # esbuild bundles the extension host + MCP server, vite builds the webview — everything ends up in
+      # app/vscode/dist, which is what vsce packages (so `--no-dependencies` is correct: nothing to bundle from
+      # node_modules, and pnpm's symlinked store would confuse vsce's default dependency walk).
+      - name: Build the extension
+        run: pnpm --filter sda-vscode run build
+
+      - name: Publish to the Visual Studio Marketplace
+        run: pnpm --filter sda-vscode exec vsce publish --no-dependencies -p "$VSCE_PAT"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      # Open VSX (VSCodium, Cursor, Gitpod, …) — only runs when the OVSX_TOKEN secret is present, otherwise skipped.
+      - name: Publish to Open VSX (optional)
+        run: |
+          if [ -n "$OVSX_TOKEN" ]; then
+            pnpm --filter sda-vscode exec vsce package --no-dependencies -o "$GITHUB_WORKSPACE/extension.vsix"
+            npx -y ovsx publish "$GITHUB_WORKSPACE/extension.vsix" -p "$OVSX_TOKEN"
+          else
+            echo "OVSX_TOKEN not set — skipping Open VSX."
+          fi
+        env:
+          OVSX_TOKEN: ${{ secrets.OVSX_TOKEN }}

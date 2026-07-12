@@ -1,11 +1,13 @@
 {
   "name": "sda-vscode",
   "displayName": "System Design Assistant",
-  "description": "Design and live-simulate system architectures on a canvas â€” verified designs, not dumb diagrams. Custom editor for .sda.json.",
+  "description": "Design and live-simulate system architectures on a canvas — verified designs, not dumb diagrams. Custom editor for .sda.json.",
   "version": "0.0.53",
   "private": true,
   "publisher": "sda",
   "license": "MIT",
+  "icon": "icon.png",
+  "repository": { "type": "git", "url": "https://github.com/psluja/system-design-assistant.git", "directory": "app/vscode" },
   "engines": { "vscode": "^1.101.0" },
   "categories": ["Visualization", "Other"],
   "activationEvents": [],
@@ -24,7 +26,7 @@
     ],
     "viewsContainers": {
       "activitybar": [
-        { "id": "sda", "title": "System Design", "icon": "$(circuit-board)" }
+        { "id": "sda", "title": "System Design", "icon": "media/sda-activity.svg" }
       ]
     },
     "views": {
@@ -36,11 +38,11 @@
     },
     "commands": [
       { "command": "sda.newDesign", "title": "SDA: New Design" },
-      { "command": "sda.tidy", "title": "SDA: Tidy â€” Auto-layout the Diagram", "icon": "$(list-tree)" },
+      { "command": "sda.tidy", "title": "SDA: Tidy — Auto-layout the Diagram", "icon": "$(list-tree)" },
       { "command": "sda.idealLayout", "title": "SDA: Tidy - Polish Layout (semantic placement)", "icon": "$(list-tree)" },
       { "command": "sda.fitView", "title": "SDA: Fit Diagram to View" },
       { "command": "sda.addGroup", "title": "SDA: Add Group (tier / VPC / zone)" },
-      { "command": "sda.improve", "title": "SDA: Improve â€” Solve Backwards (fix / cheapest / fastest)", "icon": "$(wand)" },
+      { "command": "sda.improve", "title": "SDA: Improve — Solve Backwards (fix / cheapest / fastest)", "icon": "$(wand)" },
       { "command": "sda.compareOptions", "title": "SDA: Compare Options for the Selected Node (Alternatives)", "icon": "$(git-compare)" },
       { "command": "sda.suggest", "title": "SDA: Suggest What Fits the Selected Node" },
       { "command": "sda.generateDesignDoc", "title": "SDA: Generate Design Doc (HTML report or Markdown)" },
@@ -128,7 +130,7 @@
       },
       {
         "view": "sda.system",
-        "contents": "Open a `.sda.json` design to see live metrics â€” throughput, latency, load and cost â€” computed as you edit.\n[New Design](command:sda.newDesign)"
+        "contents": "Open a `.sda.json` design to see live metrics — throughput, latency, load and cost — computed as you edit.\n[New Design](command:sda.newDesign)"
       }
     ],
     "keybindings": [
@@ -140,12 +142,12 @@
       {
         "id": "sda.gettingStarted",
         "title": "Get started with System Design Assistant",
-        "description": "Design and live-simulate a system architecture â€” a verified design, not a dumb diagram.",
+        "description": "Design and live-simulate a system architecture — a verified design, not a dumb diagram.",
         "steps": [
           {
             "id": "sda.walkthrough.newDesign",
             "title": "Create your first design",
-            "description": "A design is a real `.sda.json` file on disk â€” git-diffable, with native undo and save.\n[Create a new design](command:sda.newDesign)",
+            "description": "A design is a real `.sda.json` file on disk — git-diffable, with native undo and save.\n[Create a new design](command:sda.newDesign)",
             "media": { "markdown": "media/walkthrough/01-new-design.md" },
             "completionEvents": ["onCommand:sda.newDesign"]
           },
@@ -163,7 +165,7 @@
           },
           {
             "id": "sda.walkthrough.improve",
-            "title": "Improve â€” solve backwards",
+            "title": "Improve — solve backwards",
             "description": "Run the design backwards to fix a violation or find the cheapest / fastest sizing.\n[Run Improve](command:sda.improve)",
             "media": { "markdown": "media/walkthrough/04-improve.md" }
           }
