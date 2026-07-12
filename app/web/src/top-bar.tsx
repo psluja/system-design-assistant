@@ -76,7 +76,8 @@ export function TopBar({
   const toolCount = mcpTools.length;
   return (
     <div className="top">
-      <div className="logo"><div className="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}><path d="M5 13l4 4 10-11" /></svg></div> SDA</div>
+      {/* The ONE brand mark (public/favicon.svg, itself a mirror of app/vscode/icon.svg) — never a separate inline drawing. */}
+      <div className="logo"><img className="mk" src="./favicon.svg" alt="" width={24} height={24} /> SDA</div>
       <div className="crumb">
         <input className="projname" ref={projNameRef} key={docName} defaultValue={docName} title="Project name"
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}

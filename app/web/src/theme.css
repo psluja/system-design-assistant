@@ -40,8 +40,8 @@ body{font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:13.
    smaller than the app supports. */
 @media (min-width:1080px){ .top .btn,.top .pill,.top .verdict-pill,.top .crumb{white-space:nowrap} }
 .logo{display:flex;align-items:center;gap:9px;font-weight:700}
-.logo .mk{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#7c5cff);display:grid;place-items:center}
-.logo .mk svg{width:14px;height:14px;color:#fff}
+/* The mark is the brand SVG itself (favicon.svg — gradient tile baked in), so no CSS background/rounding here. */
+.logo .mk{width:24px;height:24px;display:block}
 /* min-width:0 lets the crumb be the header's shrink sink (its project name / path is the least load-bearing pixel);
    the truncating child (.projname) keeps it from clipping mid-word. */
 .crumb{color:var(--ink3);font-size:12.5px;display:flex;align-items:center;min-width:0}.crumb b{color:var(--ink2);font-weight:600}
