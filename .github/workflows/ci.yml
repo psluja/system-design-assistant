@@ -64,8 +64,8 @@ jobs:
       - name: Typecheck (all packages, strict)
         run: pnpm -r typecheck
 
-      # Run each package's test suite explicitly. `pnpm -r --if-present test` only covers the two
-      # packages that declare a `test` script, so we invoke Vitest per package to cover all ten. Every
+      # Run each package's test suite explicitly. `pnpm -r --if-present test` only covers the three
+      # packages that declare a `test` script, so we invoke Vitest per package to cover all twelve. Every
       # command below is proven to pass locally.
       #
       # NOTE: the VS Code end-to-end tests (@vscode/test-electron, in app/vscode/test/runTest.mjs) need
@@ -93,6 +93,11 @@ jobs:
         run: pnpm --filter @sda/web exec vitest run
       - name: Test sda-vscode (host tests)
         run: pnpm --filter sda-vscode exec vitest run
+      # Slowest suite (~3.5-4 min: a real corpus fit + DES corroboration) — placed last so faster
+      # suites fail fast first. Pure JS: the fast `evaluate` hot path (not MiniZinc) + the in-process
+      # TS DES; no native MiniZinc, no clingo, no browser, no network. See docs/FIDELITY.md.
+      - name: Test @sda/calibration
+        run: pnpm --filter @sda/calibration exec vitest run
 
       - name: Build web app
         run: pnpm --filter @sda/web build

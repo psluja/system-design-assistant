@@ -12,6 +12,7 @@
     "calibrate": "tsx src/run.ts",
     "calibrate:check": "tsx src/run.ts --check",
     "fidelity": "tsx src/fidelity.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
