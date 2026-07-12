@@ -6,7 +6,8 @@ import { dynamodbGuarantees } from '../vocabulary/guarantees';
 
 // DynamoDB SLA: 99.99% single-Region, 99.999% with global tables (https://aws.amazon.com/dynamodb/sla/).
 // DynamoDB is inherently Multi-AZ (no single-AZ mode), so modes 0/1 = single-Region; deploymentMode 2 = global.
-const DYNAMODB_AVAILABILITY = availabilityByDeployment(0.9999, 0.9999, 0.99999);
+const DYNAMODB_SLA_SOURCE = 'https://aws.amazon.com/dynamodb/sla/';
+const DYNAMODB_AVAILABILITY = availabilityByDeployment(0.9999, 0.9999, 0.99999, DYNAMODB_SLA_SOURCE);
 
 // DynamoDB DOCUMENTED item-size ceiling: 400 KB (409,600 bytes) max item — includes attribute names + values.
 // https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
@@ -37,9 +38,9 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
     type: 'client.browser',
     ports: [{ name: 'out', dir: 'out', speaks: ['https'] }],
     config: [
-      { key: k.throughput, value: 8, unit: 'req/s' }, // 8-agent office, ~1 turn/s each (their sizing note)
-      { key: k.latency, value: 0, unit: 'ms' },
-      { key: k.availability, value: 1, unit: 'ratio' },
+      { key: k.throughput, value: 8, unit: 'req/s', est: true }, // 8-agent office, ~1 turn/s each (their sizing note — a real workload assumption, not a public vendor figure)
+      { key: k.latency, value: 0, unit: 'ms' }, // neutral: a client adds no hop latency of its own
+      { key: k.availability, value: 1, unit: 'ratio' }, // neutral: an abstract client is always "up"
     ],
   },
 
@@ -72,9 +73,12 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
       { name: 'out', dir: 'out', speaks: ['https'], transform: { kind: 'ratio', value: 0.1 } },
     ],
     config: [
-      { key: k.throughput, value: 10000, unit: 'req/s' },
-      { key: k.latency, value: 10, unit: 'ms' }, // est. edge overhead
-      { key: k.availability, value: 0.9999, unit: 'ratio' },
+      { key: k.throughput, value: 10000, unit: 'req/s', est: true },
+      { key: k.latency, value: 10, unit: 'ms', est: true }, // est. edge overhead
+      // the published CloudFront SLA is 99.9% (https://aws.amazon.com/cloudfront/sla/) — this modelled
+      // 99.99% does not match it, so it stays an ILLUSTRATIVE estimate, never sourced to that page (a source must
+      // back the exact value). Flagged for a follow-up value correction; out of scope for a metadata-only pass.
+      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
       unitCostConfig(2, 'USD/(req/s)·month'), // managed AWS CloudFront (est., list): HTTPS request fee ≈ $2.59/(req/s)·mo above the 10M/mo free tier; egress billed separately
     ],
     relations: [payPerUseCost],
@@ -95,11 +99,11 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
       clientOut('out', 'https'), // calls AWS services (HTTPS + SigV4), plus any other backend (general code)
     ],
     config: [
-      { key: k.concurrency, value: 1000, unit: '1' }, // unreserved — the account pool (default quota, soft)
-      { key: k.perRequestDuration, value: 100, unit: 'ms' }, // est. typical short API/CRUD handler
-      { key: k.latency, value: 10, unit: 'ms' }, // est. invoke/runtime overhead (cold starts are a distribution, not a mean)
-      { key: k.availability, value: 0.9995, unit: 'ratio' }, // AWS Lambda SLA 99.95% (https://aws.amazon.com/lambda/sla/)
-      unitCostConfig(5, 'USD/(req/s)·month'), // managed AWS Lambda, sourced (see the note above): 1,024 MB × 100 ms, us-east-1
+      { key: k.concurrency, value: 1000, unit: '1', source: 'https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html' }, // unreserved — the account pool (default quota, soft)
+      { key: k.perRequestDuration, value: 100, unit: 'ms', est: true }, // est. typical short API/CRUD handler
+      { key: k.latency, value: 10, unit: 'ms', est: true }, // est. invoke/runtime overhead (cold starts are a distribution, not a mean)
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: 'https://aws.amazon.com/lambda/sla/' }, // AWS Lambda SLA 99.95%
+      unitCostConfig(5, 'USD/(req/s)·month'), // managed AWS Lambda (est., pay-per-use): derived from sourced per-request/GB-s pricing at an estimated 1,024 MB × 100 ms, us-east-1 (see the note above)
       ...lambdaAccountConcurrency().config,
     ],
     relations: [
@@ -121,10 +125,10 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
       clientOut('out', 'https'), // calls AWS services (HTTPS + SigV4), plus any other backend (general code)
     ],
     config: [
-      { key: k.concurrency, value: 10, unit: '1' }, // reservedConcurrentExecutions (CDK)
-      { key: k.perRequestDuration, value: 2300, unit: 'ms' }, // busy ≈ STT+LLM+TTS (est. from the parts)
-      { key: k.latency, value: 20, unit: 'ms' }, // own orchestration overhead (est.)
-      { key: k.availability, value: 0.9995, unit: 'ratio' }, // AWS Lambda SLA 99.95% (https://aws.amazon.com/lambda/sla/)
+      { key: k.concurrency, value: 10, unit: '1', est: true }, // reservedConcurrentExecutions (CDK) — a real deployed setting, but from a private IaC config, not a public vendor doc
+      { key: k.perRequestDuration, value: 2300, unit: 'ms', est: true }, // busy ≈ STT+LLM+TTS (est. from the parts)
+      { key: k.latency, value: 20, unit: 'ms', est: true }, // own orchestration overhead (est.)
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: 'https://aws.amazon.com/lambda/sla/' }, // AWS Lambda SLA 99.95%
       unitCostConfig(100, 'USD/(req/s)·month'), // managed AWS Lambda (est.): GB-s + invocations at 1024 MB / ~2.3 s/turn
       // AWS account concurrency ceiling (default 1,000/Region, soft): https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
       ...lambdaAccountConcurrency().config,
@@ -144,9 +148,9 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
       { name: 'out', dir: 'out', speaks: ['https'] },
     ],
     config: [
-      { key: k.throughput, value: 100, unit: 'req/s' },
-      { key: k.latency, value: 300, unit: 'ms' }, // est. streaming STT to final transcript
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 100, unit: 'req/s', est: true },
+      { key: k.latency, value: 300, unit: 'ms', est: true }, // est. streaming STT to final transcript
+      { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/ai/services/language-sla/' }, // Amazon ML Language SLA (covers Transcribe) 99.9%
       unitCostConfig(50, 'USD/(req/s)·month'), // managed AWS Transcribe (est., pay-per-use): streaming STT audio-seconds
     ],
     relations: [payPerUseCost],
@@ -159,9 +163,12 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
       { name: 'out', dir: 'out', speaks: ['https'] },
     ],
     config: [
-      { key: k.throughput, value: 50, unit: 'req/s' },
-      { key: k.latency, value: 1500, unit: 'ms' }, // MEASURED: Claude Sonnet ~1.5 s/turn (phase 0)
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 50, unit: 'req/s', est: true },
+      // MEASURED: Claude Sonnet ~1.5 s/turn (phase 0, the team's own empirical figure) — credible but not a
+      // published AWS number, so it takes the `est` bucket (the closest of the three provenance classes to
+      // "measured internally"; ManifestConfig has no separate "measured" category).
+      { key: k.latency, value: 1500, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/bedrock/sla/' }, // Amazon Bedrock SLA 99.9%
       unitCostConfig(90, 'USD/(req/s)·month'), // managed AWS Bedrock (est., pay-per-use): input+output tokens per turn
     ],
     relations: [payPerUseCost],
@@ -174,9 +181,9 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
       { name: 'out', dir: 'out', speaks: ['https'] },
     ],
     config: [
-      { key: k.throughput, value: 100, unit: 'req/s' },
-      { key: k.latency, value: 500, unit: 'ms' }, // est. generative TTS first audio
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 100, unit: 'req/s', est: true },
+      { key: k.latency, value: 500, unit: 'ms', est: true }, // est. generative TTS first audio
+      { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/ai/services/language-sla/' }, // Amazon ML Language SLA (covers Polly) 99.9%
       unitCostConfig(40, 'USD/(req/s)·month'), // managed AWS Polly (est., pay-per-use): generative TTS characters per turn
     ],
     relations: [payPerUseCost],
@@ -188,8 +195,8 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
     // path terminating here computes consistency:eventual unless the design declares strong reads (sourced, §2).
     ports: [{ name: 'in', dir: 'in', accepts: ['https'], guarantees: dynamodbGuarantees }],
     config: [
-      { key: k.throughput, value: 1000, unit: 'req/s' }, // on-demand, scales
-      { key: k.latency, value: 10, unit: 'ms' }, // single-digit ms
+      { key: k.throughput, value: 1000, unit: 'req/s', est: true }, // on-demand, scales
+      { key: k.latency, value: 10, unit: 'ms', est: true }, // single-digit ms
       DYNAMODB_AVAILABILITY.config, // deploymentMode (default single-Region 99.99%); mode 2 = global tables 99.999%
       unitCostConfig(3, 'USD/(req/s)·month'), // managed AWS DynamoDB (est., on-demand): read+write request units
       // DOCUMENTED item-size ceiling: 400 KB max item (https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html).

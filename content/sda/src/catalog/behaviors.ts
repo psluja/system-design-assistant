@@ -302,8 +302,19 @@ export const sizingRels = (): ManifestRelation[] => [
 /** The BASE cost-rate knob, as DATA: every priced component declares its base as a visible, editable config
  *  (read by the component's cost relation via `self(unitCost)`), so the price is never a magic literal buried
  *  in a relation string. The cost MODEL — what the base multiplies (units / replicas / throughput /
- *  concurrency) — differs per component; the base does not. `unit` documents the rate (e.g. USD/task·month). */
-export const unitCostConfig = (value: number, unit: string): ManifestConfig => ({ key: k.unitCost, value, unit });
+ *  concurrency) — differs per component; the base does not. `unit` documents the rate (e.g. USD/task·month).
+ * PROVENANCE: a `unitCost` is a hard, cost-bearing number, so it must never ride as a bare `default`
+ *. The overwhelming majority of catalog prices are WORKLOAD- or
+ *  hardware-dependent estimates — the same "(est., list)"/"(est., pay-per-use)" identity every call site's own
+ *  same-line comment already states (catalogs.test.ts's pricing-identity lint enforces the comment; this enforces
+ *  the DATA). Pass `source` only when the rate is DIRECTLY derivable from a published unit price with no estimated
+ *  input (e.g. a documented $/vCPU-hour × a fixed hours-per-month constant) — every other call defaults to `est`. */
+export const unitCostConfig = (value: number, unit: string, source?: string): ManifestConfig => ({
+  key: k.unitCost,
+  value,
+  unit,
+  ...(source !== undefined ? { source } : { est: true }),
+});
 
 /** The CALLER-SIDE RETRY POLICY knobs, as editable config DATA. A retry policy is a
  *  fact of the CALLER's code, so it rides on a node that ORIGINATES requests (a client or a calling service) —

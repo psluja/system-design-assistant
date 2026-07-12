@@ -41,11 +41,19 @@ const MEMCACHED_POOL_SOURCE = 'https://github.com/memcached/memcached/wiki/Confi
 // "Act as queue" behaviour, as DATA any component can carry (the engine stays domain-agnostic). The
 // limits (retention, max backlog, durability) are what distinguish SQS vs Redis vs SQL as a queue.
 // backlog = queueMode · max(0, arrivalRate − drainRate): >0 means it grows without bound (unstable).
-const queueCfg = (mode: number, retention: number, maxBacklog: number): ManifestConfig[] => [
+// `retentionSource`/`maxBacklogSource`: pass the primary-doc URL when `retention`/`maxBacklog` is a
+// genuine documented ceiling (SQS's 4-day default retention, Kafka's 7-day default). Every other caller's
+// retention/maxBacklog — including a practically-unbounded sentinel ("held until consumed"/"disk-bound, effectively
+// huge") — is still a capacity-bearing number the DES reads as a real buffer bound (analysis/sim.ts), so it is
+// never a bare default: it defaults to `est: true` (a chosen illustrative ceiling, not a published one). The ONE
+// true neutral is `retention === 0` (core NATS: no retention AT ALL, a literal fact, not an estimate of one).
+const queueCfg = (mode: number, retention: number, maxBacklog: number, retentionSource?: string, maxBacklogSource?: string): ManifestConfig[] => [
   { key: k.queueMode, value: mode, unit: '1' },
-  { key: k.drainRate, value: 1000, unit: 'msg/s' }, // consumer pull rate — the PRODUCER's write rate is read from the graph
-  { key: k.retention, value: retention, unit: 's' },
-  { key: k.maxBacklog, value: maxBacklog, unit: 'msg' },
+  // consumer pull rate FALLBACK (only used with no wired consumer) — a generic workload-dependent typical, never a
+  // published rate, so `est: true` uniformly.
+  { key: k.drainRate, value: 1000, unit: 'msg/s', est: true },
+  { key: k.retention, value: retention, unit: 's', ...(retention === 0 ? {} : retentionSource !== undefined ? { source: retentionSource } : { est: true }) },
+  { key: k.maxBacklog, value: maxBacklog, unit: 'msg', ...(maxBacklogSource !== undefined ? { source: maxBacklogSource } : { est: true }) },
 ];
 // backlog = (what the producers write IN, read from the graph via inflow, capped by the queue's ingest
 // ceiling) − (what the consumer drains). The drain is read from the WIRED consumer via outflow; with no
@@ -79,9 +87,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     type: 'client.web',
     ports: [{ name: 'out', dir: 'out', speaks: ['https', 'http'] }],
     config: [
-      { key: k.throughput, value: 5000, unit: 'req/s' },
-      { key: k.latency, value: 0, unit: 'ms' },
-      { key: k.availability, value: 1, unit: 'ratio' },
+      { key: k.throughput, value: 5000, unit: 'req/s', est: true }, // the workload the architect is expected to declare/tune — a credible illustrative starting rate, not a vendor fact
+      { key: k.latency, value: 0, unit: 'ms' }, // neutral: a client adds no hop latency of its own
+      { key: k.availability, value: 1, unit: 'ratio' }, // neutral: an abstract client is always "up"
       ...RETRY_POLICY_CONFIG, // a browser/client is a caller: timeout + retries (default 0 = off)
     ],
   },
@@ -94,9 +102,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['http'] },
     ],
     config: [
-      { key: k.throughput, value: 50000, unit: 'req/s' }, // tens of thousands of rps on a single node (typical)
-      { key: k.latency, value: 1, unit: 'ms' }, // proxy overhead (typical)
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 50000, unit: 'req/s', est: true }, // tens of thousands of rps on a single node (typical)
+      { key: k.latency, value: 1, unit: 'ms', est: true }, // proxy overhead (typical)
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed OSS: no vendor SLA
       unitCostConfig(0.0005, 'USD/(req/s)·month'), // self-managed nginx on a VM (est., list): $25/mo at the default 50k rps ceiling
     ],
     relations: [provisionedCost],
@@ -121,10 +129,10 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['postgresql', 'mysql', 'tds'] },
     ],
     config: [
-      { key: k.latency, value: 2, unit: 'ms' }, // sourced 1–3 ms proxy overhead
-      { key: k.availability, value: 0.9995, unit: 'ratio' },
-      { key: k.vcpus, value: 2, unit: '1' }, // target-instance vCPUs (billing driver; 2 = the billed minimum)
-      unitCostConfig(10.95, 'USD/vcpu·month'), // managed AWS RDS Proxy, sourced: $0.015/vCPU·h × 730 h (https://aws.amazon.com/rds/proxy/pricing/)
+      { key: k.latency, value: 2, unit: 'ms', source: 'https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html' }, // sourced 1–3 ms proxy overhead
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: RDS_SLA_SOURCE }, // no separately published RDS Proxy SLA — the RDS Multi-AZ SLA figure
+      { key: k.vcpus, value: 2, unit: '1', source: 'https://aws.amazon.com/rds/proxy/pricing/' }, // target-instance vCPUs (billing driver; 2 = the billed minimum)
+      unitCostConfig(10.95, 'USD/vcpu·month', 'https://aws.amazon.com/rds/proxy/pricing/'), // managed AWS RDS Proxy, sourced: $0.015/vCPU·h × 730 h
       ...connectionPool(100, 30, 'https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html').config, // pool ≈ MaxConnectionsPercent × target max_connections; held ≈ query ms
       // CONNECTION BORROW TIMEOUT: a client asking the proxy for a pooled connection waits AT MOST this long for
       // one to free; past it the proxy returns an ERROR. Default ConnectionBorrowTimeout = 120 s (120,000 ms):
@@ -152,9 +160,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['http'] },
     ],
     config: [
-      { key: k.throughput, value: 40000, unit: 'req/s' },
-      { key: k.latency, value: 1, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 40000, unit: 'req/s', est: true },
+      { key: k.latency, value: 1, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed OSS: no vendor SLA
       unitCostConfig(0.000625, 'USD/(req/s)·month'), // self-managed HAProxy on a VM (est., list): $25/mo at the default 40k rps ceiling
     ],
     relations: [provisionedCost],
@@ -168,9 +176,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['grpc'] },
     ],
     config: [
-      { key: k.throughput, value: 20000, unit: 'req/s' }, // HTTP/2 multiplexing → high throughput (typical)
-      { key: k.latency, value: 3, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 20000, unit: 'req/s', est: true }, // HTTP/2 multiplexing → high throughput (typical)
+      { key: k.latency, value: 3, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(0.0015, 'USD/(req/s)·month'), // self-managed gRPC gateway on a VM (est., list): $30/mo at the default 20k rps ceiling
     ],
     relations: [provisionedCost],
@@ -179,9 +187,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     type: 'gateway.websocket',
     ports: [{ name: 'in', dir: 'in', accepts: ['websocket'] }],
     config: [
-      { key: k.throughput, value: 50000, unit: 'msg/s' }, // capacity is really concurrent connections (typical)
-      { key: k.latency, value: 1, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 50000, unit: 'msg/s', est: true }, // capacity is really concurrent connections (typical)
+      { key: k.latency, value: 1, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(0.0006, 'USD/(msg/s)·month'), // self-managed WebSocket gateway on a VM (est., list): $30/mo at the default 50k msg/s ceiling
     ],
     relations: [provisionedCost],
@@ -193,9 +201,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'db', dir: 'out', speaks: ['postgresql'] },
     ],
     config: [
-      { key: k.throughput, value: 8000, unit: 'query/s' }, // resolver-bound; workload-dependent (typical)
-      { key: k.latency, value: 15, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 8000, unit: 'query/s', est: true }, // resolver-bound; workload-dependent (typical)
+      { key: k.latency, value: 15, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(0.005, 'USD/(query/s)·month'), // self-managed GraphQL gateway on a VM (est., list): $40/mo at the default 8k query/s ceiling
     ],
     relations: [provisionedCost],
@@ -210,11 +218,11 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       clientOut('out', 'https'), // a service runs general code — it calls other services, queues/streams, AWS APIs…
     ],
     config: [
-      { key: k.concurrency, value: 50, unit: '1' }, // per replica
-      { key: k.perRequestDuration, value: 25, unit: 'ms' },
-      { key: k.replicas, value: 2, unit: '1' }, // the scale-out knob
-      { key: k.latency, value: 25, unit: 'ms' },
-      { key: k.availability, value: 0.9995, unit: 'ratio' },
+      { key: k.concurrency, value: 50, unit: '1', est: true }, // per replica
+      { key: k.perRequestDuration, value: 25, unit: 'ms', est: true },
+      { key: k.replicas, value: 2, unit: '1' }, // the scale-out knob — an architect sizing choice, not an infra fact
+      { key: k.latency, value: 25, unit: 'ms', est: true },
+      { key: k.availability, value: 0.9995, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(30, 'USD/replica·month'), // self-managed replica (est., list): ~$30/replica·month
     ],
     relations: [
@@ -233,11 +241,11 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       clientOut('out', 'https'), // a service runs general code — it calls other services, queues/streams, AWS APIs…
     ],
     config: [
-      { key: k.concurrency, value: 40, unit: '1' }, // requests one task serves concurrently
-      { key: k.perRequestDuration, value: 25, unit: 'ms' },
-      { key: k.maxUnits, value: 100, unit: '1' }, // service/account task ceiling
-      { key: k.latency, value: 25, unit: 'ms' },
-      { key: k.availability, value: 0.9995, unit: 'ratio' }, // illustrative — ECS/Fargate has NO published AWS SLA (don't seed a sourced number)
+      { key: k.concurrency, value: 40, unit: '1', est: true }, // requests one task serves concurrently
+      { key: k.perRequestDuration, value: 25, unit: 'ms', est: true },
+      { key: k.maxUnits, value: 100, unit: '1' }, // service/account task ceiling — an architect sizing choice, not an infra fact
+      { key: k.latency, value: 25, unit: 'ms', est: true },
+      { key: k.availability, value: 0.9995, unit: 'ratio', est: true }, // illustrative — ECS/Fargate has NO published AWS SLA (don't seed a sourced number)
       unitCostConfig(30, 'USD/task·month'), // managed AWS Fargate (est./illustrative): ~$30/task·month
     ],
     relations: sizingRels(),
@@ -250,11 +258,11 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       clientOut('out', 'https'), // a service runs general code — it calls other services, queues/streams, AWS APIs…
     ],
     config: [
-      { key: k.concurrency, value: 80, unit: '1' }, // Cloud Run: up to 80 concurrent requests / instance (default)
-      { key: k.perRequestDuration, value: 25, unit: 'ms' },
-      { key: k.maxUnits, value: 1000, unit: '1' }, // scales wide; pay-per-use, scales to zero
-      { key: k.latency, value: 25, unit: 'ms' },
-      { key: k.availability, value: 0.9995, unit: 'ratio' },
+      { key: k.concurrency, value: 80, unit: '1', source: 'https://cloud.google.com/run/docs/about-concurrency' }, // Cloud Run: default 80 concurrent requests / instance (console default; CLI/Terraform default 80×vCPU)
+      { key: k.perRequestDuration, value: 25, unit: 'ms', est: true },
+      { key: k.maxUnits, value: 1000, unit: '1' }, // scales wide; pay-per-use, scales to zero — a sizing choice, not an infra fact
+      { key: k.latency, value: 25, unit: 'ms', est: true },
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: 'https://cloud.google.com/run/sla' }, // Cloud Run SLA: at least 99.95% monthly uptime
       unitCostConfig(12, 'USD/unit·month'), // managed Cloud Run (est., pay-per-use): ~$12/unit·month, cheaper per unit
     ],
     relations: sizingRels(),
@@ -267,11 +275,11 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       clientOut('out', 'https'), // a service runs general code — it calls other services, queues/streams, AWS APIs…
     ],
     config: [
-      { key: k.concurrency, value: 50, unit: '1' }, // per pod (HPA scales pod count)
-      { key: k.perRequestDuration, value: 25, unit: 'ms' },
-      { key: k.maxUnits, value: 200, unit: '1' }, // HPA maxReplicas
-      { key: k.latency, value: 25, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.concurrency, value: 50, unit: '1', est: true }, // per pod (HPA scales pod count)
+      { key: k.perRequestDuration, value: 25, unit: 'ms', est: true },
+      { key: k.maxUnits, value: 200, unit: '1' }, // HPA maxReplicas — an architect sizing choice, not an infra fact
+      { key: k.latency, value: 25, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed Kubernetes: no vendor SLA
       unitCostConfig(25, 'USD/pod·month'), // self-managed Kubernetes (est., list): ~node share per pod·month
     ],
     relations: sizingRels(),
@@ -284,10 +292,10 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       clientOut('out', 'https'), // a service runs general code — it calls other services, queues/streams, AWS APIs…
     ],
     config: [
-      { key: k.concurrency, value: 200, unit: '1' }, // a whole VM serves more, but is a coarser, pricier unit
-      { key: k.perRequestDuration, value: 25, unit: 'ms' },
-      { key: k.maxUnits, value: 50, unit: '1' }, // ASG max size
-      { key: k.latency, value: 25, unit: 'ms' },
+      { key: k.concurrency, value: 200, unit: '1', est: true }, // a whole VM serves more, but is a coarser, pricier unit
+      { key: k.perRequestDuration, value: 25, unit: 'ms', est: true },
+      { key: k.maxUnits, value: 50, unit: '1' }, // ASG max size — an architect sizing choice, not an infra fact
+      { key: k.latency, value: 25, unit: 'ms', est: true },
       EC2_AVAILABILITY.config, // deploymentMode (default ≥2-AZ); availability = sourced EC2 SLA per mode
       unitCostConfig(70, 'USD/instance·month'), // self-managed EC2 ASG (est., list): ~$70/instance·month (a full VM)
     ],
@@ -303,10 +311,10 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       clientOut('out', 'https'), // a service runs general code — it calls other services, queues/streams, AWS APIs…
     ],
     config: [
-      { key: k.concurrency, value: 100, unit: '1' },
-      { key: k.perRequestDuration, value: 40, unit: 'ms' },
-      { key: k.latency, value: 40, unit: 'ms' },
-      { key: k.availability, value: 0.9995, unit: 'ratio' },
+      { key: k.concurrency, value: 100, unit: '1', est: true },
+      { key: k.perRequestDuration, value: 40, unit: 'ms', est: true },
+      { key: k.latency, value: 40, unit: 'ms', est: true },
+      { key: k.availability, value: 0.9995, unit: 'ratio', est: true }, // generic "serverless" — no specific vendor SLA cited
       unitCostConfig(0.5, 'USD/(req/s)·month'), // managed serverless (est., pay-per-use): ~$0.5/mo per sustained req/s
     ],
     relations: [
@@ -320,8 +328,8 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     type: 'storage.object',
     ports: [{ name: 'in', dir: 'in', accepts: ['http'] }],
     config: [
-      { key: k.throughput, value: 5500, unit: 'req/s' }, // per-prefix typical
-      { key: k.latency, value: 20, unit: 'ms' },
+      { key: k.throughput, value: 5500, unit: 'req/s', source: 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html' }, // documented: ≥5,500 GET/HEAD requests/s per partitioned prefix
+      { key: k.latency, value: 20, unit: 'ms', est: true },
       { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/s3/sla/' }, // S3 availability SLA 99.9%
       { key: k.durability, value: 0.99999999999, unit: 'ratio', source: 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/DataDurability.html' }, // S3 11 nines durability
       unitCostConfig(1, 'USD/(req/s)·month'), // managed object store / S3-class (est., pay-per-use): per sustained req/s
@@ -339,10 +347,10 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       cacheOut('cache'),
     ],
     config: [
-      { key: k.concurrency, value: 500, unit: '1' }, // worker/thread pool (typical)
-      { key: k.perRequestDuration, value: 20, unit: 'ms' }, // app handler time (typical)
-      { key: k.latency, value: 20, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.concurrency, value: 500, unit: '1', est: true }, // worker/thread pool (typical)
+      { key: k.perRequestDuration, value: 20, unit: 'ms', est: true }, // app handler time (typical)
+      { key: k.latency, value: 20, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(0.24, 'USD/conc·month'), // self-managed app server on a VM (est., list): $120/mo at the default 500-worker pool; more workers (capacity) cost more
       ...RETRY_POLICY_CONFIG, // a service is a caller of its downstreams: it can declare a timeout + retries (default 0 = off)
     ],
@@ -370,10 +378,13 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['resp'] }, // a consumer pulls when used as a queue (act as queue)
     ],
     config: [
-      { key: k.throughput, value: 100000, unit: 'op/s' }, // single-threaded ~100k+ ops/s on one core (documented)
-      { key: k.latency, value: 0.5, unit: 'ms' }, // sub-millisecond (typical)
-      { key: k.availability, value: 0.999, unit: 'ratio' },
-      { key: k.durability, value: 0.99, unit: 'ratio' }, // in-memory: volatile unless AOF/RDB — the risk as a queue
+      // redis.io's FAQ documents single-threaded command processing and (via pipelining) "1 million requests
+      // per second" — NOT a specific ~100k ops/s ceiling for ordinary (non-pipelined) traffic. 100k op/s is a
+      // credible single-core estimate for typical, non-pipelined workloads, not a number redis.io states verbatim.
+      { key: k.throughput, value: 100000, unit: 'op/s', est: true }, // single-threaded; a typical non-pipelined single-core estimate (see https://redis.io/docs/latest/develop/get-started/faq/)
+      { key: k.latency, value: 0.5, unit: 'ms', est: true }, // sub-millisecond (typical)
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
+      { key: k.durability, value: 0.99, unit: 'ratio', est: true }, // in-memory: volatile unless AOF/RDB — the risk as a queue
       unitCostConfig(0.0009, 'USD/(op/s)·month'), // self-managed Redis on a VM (est., list): $90/mo at the default 100k op/s ceiling (a bigger node = more ops/s)
       ...queueCfg(0, 1_000_000_000, 1_000_000), // as a list queue: held until consumed, but RAM-bound & volatile
       ...connectionPool(1, 0.01, REDIS_POOL_SOURCE).config, // DES M/M/1 (single-threaded); 1 / (0.01 ms) = 100,000 op/s == throughput
@@ -386,9 +397,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     // A cache read with no declared invalidation is EVENTUAL — same sourced behaviour as redis (doc §2).
     ports: [{ name: 'in', dir: 'in', accepts: ['memcached'], guarantees: cacheReadGuarantees }], // the Memcached protocol — NOT RESP-compatible (the cache port speaks both)
     config: [
-      { key: k.throughput, value: 200000, unit: 'op/s' }, // multi-threaded (typical)
-      { key: k.latency, value: 0.5, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 200000, unit: 'op/s', est: true }, // multi-threaded (typical)
+      { key: k.latency, value: 0.5, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(0.00035, 'USD/(op/s)·month'), // self-managed Memcached on a VM (est., list): $70/mo at the default 200k op/s ceiling
       ...connectionPool(4, 0.02, MEMCACHED_POOL_SOURCE).config, // DES M/M/4 (4 worker threads); 4 / (0.02 ms) = 200,000 op/s == throughput
     ],
@@ -407,9 +418,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     config: [
       { key: k.concurrency, value: 100, unit: '1', source: 'https://www.postgresql.org/docs/current/runtime-config-connection.html' }, // max_connections default = 100
       { key: k.perRequestDuration, value: 50, unit: 'ms', est: true }, // query time (workload-dependent; typical mixed)
-      { key: k.latency, value: 50, unit: 'ms' },
+      { key: k.latency, value: 50, unit: 'ms', est: true },
       RDS_AVAILABILITY.config, // deploymentMode (default Multi-AZ); availability is the sourced RDS SLA per mode
-      { key: k.durability, value: 0.99999, unit: 'ratio' }, // ~5 nines with backups/PITR (typical)
+      { key: k.durability, value: 0.99999, unit: 'ratio', est: true }, // ~5 nines with backups/PITR (typical)
       unitCostConfig(1.4, 'USD/conn·month'), // managed relational DB, RDS-class (est.): $140/mo at the default 100 connections; capacity = connections, so it is priced
       ...queueCfg(0, 1_000_000_000, 1_000_000_000), // as a queue (SELECT … FOR UPDATE SKIP LOCKED): durable, ~unbounded retention, but drain is connection-bound
     ],
@@ -433,9 +444,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     config: [
       { key: k.concurrency, value: 100, unit: '1', source: 'https://www.postgresql.org/docs/current/runtime-config-connection.html' },
       { key: k.perRequestDuration, value: 50, unit: 'ms', est: true },
-      { key: k.latency, value: 50, unit: 'ms' },
+      { key: k.latency, value: 50, unit: 'ms', est: true },
       RDS_AVAILABILITY.config,
-      { key: k.durability, value: 0.99999, unit: 'ratio' },
+      { key: k.durability, value: 0.99999, unit: 'ratio', est: true },
       unitCostConfig(1.4, 'USD/conn·month'), // managed relational read replica, RDS-class (est.): matches the primary per-connection price
     ],
     relations: [
@@ -450,8 +461,8 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     ports: [{ name: 'in', dir: 'in', accepts: ['mysql'], guarantees: writerGuarantees }],
     config: [
       { key: k.concurrency, value: 151, unit: '1', source: 'https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_max_connections' }, // max_connections default = 151
-      { key: k.perRequestDuration, value: 30, unit: 'ms' },
-      { key: k.latency, value: 30, unit: 'ms' },
+      { key: k.perRequestDuration, value: 30, unit: 'ms', est: true },
+      { key: k.latency, value: 30, unit: 'ms', est: true },
       RDS_AVAILABILITY.config, // deploymentMode (default Multi-AZ); availability = sourced RDS SLA per mode
       unitCostConfig(130 / 151, 'USD/conn·month'), // managed relational DB, RDS-class (est.): $130/mo at the default 151 connections (max_connections)
     ],
@@ -467,9 +478,9 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     type: 'db.mongodb',
     ports: [{ name: 'in', dir: 'in', accepts: ['mongodb'] }],
     config: [
-      { key: k.throughput, value: 10000, unit: 'op/s' },
-      { key: k.latency, value: 5, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
+      { key: k.throughput, value: 10000, unit: 'op/s', est: true },
+      { key: k.latency, value: 5, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
       unitCostConfig(0.016, 'USD/(op/s)·month'), // self-managed MongoDB on a VM (est., list): $160/mo at the default 10k op/s ceiling
       ...connectionPool(50, 5, MONGO_POOL_SOURCE).config, // DES M/M/50 (in-flight = 10,000 op/s × 5 ms query, within maxPoolSize 100); 50 / (5 ms) = 10,000 op/s == throughput
     ],
@@ -490,10 +501,10 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
     // NEAR-REAL-TIME: an indexed document is searchable only after the next refresh, so a read is EVENTUAL (sourced).
     ports: [{ name: 'in', dir: 'in', accepts: ['http'], guarantees: searchGuarantees }],
     config: [
-      { key: k.throughput, value: 5000, unit: 'query/s' }, // query-heavy; shard/replica-dependent (est. simple-query ceiling)
-      { key: k.latency, value: 50, unit: 'ms' }, // search latency higher than a KV get
-      { key: k.availability, value: 0.99, unit: 'ratio' }, // small self-run cluster (illustrative — not a managed SLA)
-      unitCostConfig(0.036, 'USD/(query/s)·month'), // self-managed Elasticsearch on EC2 (est., list): 3× t3.large ≈ $182/mo compute at ~5k simple q/s; EBS/storage extra
+      { key: k.throughput, value: 5000, unit: 'query/s', est: true }, // query-heavy; shard/replica-dependent (est. simple-query ceiling)
+      { key: k.latency, value: 50, unit: 'ms', est: true }, // search latency higher than a KV get
+      { key: k.availability, value: 0.99, unit: 'ratio', est: true }, // small self-run cluster (illustrative — not a managed SLA)
+      unitCostConfig(0.036, 'USD/(query/s)·month'), // self-managed Elasticsearch on EC2 (est., list): derived from sourced EC2 list prices ÷ an estimated ~5k simple q/s ceiling — 3× t3.large ≈ $182/mo compute; EBS/storage extra
     ],
     relations: [provisionedCost],
   },
@@ -522,7 +533,7 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { key: k.throughput, value: 5000, unit: 'query/s', est: true }, // est. simple-query ceiling for a 3× r6g.large data-node domain (workload-dependent)
       { key: k.latency, value: 50, unit: 'ms', est: true }, // est. search latency (same engine class as self-managed ES)
       { key: k.availability, value: 0.999, unit: 'ratio', source: 'https://aws.amazon.com/opensearch-service/sla/' }, // Multi-AZ OpenSearch SLA 99.9%
-      unitCostConfig(0.13, 'USD/(query/s)·month'), // managed AWS OpenSearch, sourced (see the note above): 3-AZ domain ≈ $650/mo at ~5k query/s
+      unitCostConfig(0.13, 'USD/(query/s)·month'), // managed AWS OpenSearch (est., list): derived from sourced instance/EBS list prices ÷ an estimated ~5k query/s ceiling (see the note above) — 3-AZ domain ≈ $650/mo
     ],
     relations: [provisionedCost],
   },
@@ -542,12 +553,25 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['sqs'], guarantees: sqsStandardOut },
     ],
     config: [
-      { key: k.throughput, value: 3000, unit: 'msg/s' }, // per API action without batching (typical; higher batched)
-      { key: k.latency, value: 10, unit: 'ms' },
-      { key: k.availability, value: 0.9999, unit: 'ratio' },
-      { key: k.durability, value: 0.999999999, unit: 'ratio' }, // stored redundantly across AZs (managed, durable)
+      // NOTE: AWS documents standard-queue throughput as "a very high, nearly unlimited number of API calls per
+      // second" (no fixed TPS ceiling) — https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html.
+      // 3,000 msg/s is a credible modelled ceiling (a bounded system needs SOME ceiling to reason about), not a
+      // published quota — hence `est`, not `source`.
+      { key: k.throughput, value: 3000, unit: 'msg/s', est: true }, // per API action without batching (typical; higher batched)
+      { key: k.latency, value: 10, unit: 'ms', est: true },
+      // the published Amazon Messaging (SQS/SNS) SLA is 99.9% (https://aws.amazon.com/messaging/sla/) — this
+      // modelled 99.99% does not match it, so it stays an ILLUSTRATIVE estimate, never sourced to that page (a source
+      // must back the exact value). Flagged for a follow-up value correction; out of scope for a metadata-only pass.
+      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
+      { key: k.durability, value: 0.999999999, unit: 'ratio', est: true }, // illustrative "9 nines" (AWS does not publish a specific SQS durability figure, unlike S3's documented 11 nines)
       unitCostConfig(1, 'USD/(msg/s)·month'), // managed AWS SQS (est., pay-per-use): per sustained msg/s
-      ...queueCfg(1, 345600, 120000), // 4-day default retention (max 14d); ~120k in-flight (standard queue)
+      ...queueCfg(
+        1,
+        345600,
+        120000,
+        'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html', // documented: "a message is retained for 4 days" by default
+        'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-queues.html', // documented: standard queues support ≈120,000 in-flight messages
+      ), // 4-day default retention (max 14d); ~120k in-flight (standard queue)
       ...SQS_MESSAGE_LIMIT.config, // 256 KB documented max message size (informational unless payloadBytes is set)
     ],
     relations: [QUEUE_REL, payPerUseCost, SQS_MESSAGE_LIMIT.relation],
@@ -562,14 +586,25 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['sqs'], guarantees: sqsFifoOut },
     ],
     config: [
-      // FIFO default: 300 msg/s per API action (3,000 with batching), ordered + exactly-once:
-      // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-fifo.html
-      { key: k.throughput, value: 300, unit: 'msg/s' },
-      { key: k.latency, value: 10, unit: 'ms' },
-      { key: k.availability, value: 0.9999, unit: 'ratio' },
-      { key: k.durability, value: 0.999999999, unit: 'ratio' },
+      // FIFO default: 300 msg/s per API action (3,000 with batching), ordered + exactly-once, documented:
+      // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/troubleshooting-fifo-throttling-issues.html
+      // ("By default, FIFO queues support 300 transactions per second, per API action").
+      { key: k.throughput, value: 300, unit: 'msg/s', source: 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/troubleshooting-fifo-throttling-issues.html' },
+      { key: k.latency, value: 10, unit: 'ms', est: true },
+      // Same illustrative-vs-published-SLA gap as standard SQS (real Amazon Messaging SLA = 99.9%) — est, not sourced.
+      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
+      { key: k.durability, value: 0.999999999, unit: 'ratio', est: true }, // illustrative "9 nines" (not an AWS-published SQS figure)
       unitCostConfig(1.5, 'USD/(msg/s)·month'), // managed AWS SQS FIFO (est., pay-per-use): per sustained msg/s (dearer than standard)
-      ...queueCfg(1, 345600, 20000), // 4-day default retention; ~20k in-flight (FIFO is lower than standard)
+      ...queueCfg(
+        1,
+        345600,
+        20000,
+        'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html', // documented: "a message is retained for 4 days" by default (both queue types)
+        // NOTE: AWS's CURRENT docs (as of the Nov-2024 quota increase) state FIFO in-flight is now
+        // 120,000, matching standard — https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-fifo.html.
+        // This modelled 20,000 predates that increase; it stays `est` (not sourced to a now-different number) —
+        // flagged as a stale VALUE for a follow-up correction, out of scope for a metadata-only pass.
+      ), // 4-day default retention; ~20k in-flight (FIFO is lower than standard — STALE, see note above)
       ...SQS_MESSAGE_LIMIT.config, // 256 KB documented max message size (same as standard; informational unless payloadBytes is set)
     ],
     relations: [QUEUE_REL, payPerUseCost, SQS_MESSAGE_LIMIT.relation],
@@ -583,12 +618,12 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['amqp'], guarantees: rabbitmqOut },
     ],
     config: [
-      { key: k.throughput, value: 20000, unit: 'msg/s' },
-      { key: k.latency, value: 2, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
-      { key: k.durability, value: 0.9999, unit: 'ratio' }, // durable + mirrored/quorum queues (typical)
+      { key: k.throughput, value: 20000, unit: 'msg/s', est: true },
+      { key: k.latency, value: 2, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
+      { key: k.durability, value: 0.9999, unit: 'ratio', est: true }, // durable + mirrored/quorum queues (typical)
       unitCostConfig(0.006, 'USD/(msg/s)·month'), // self-managed RabbitMQ on a VM (est., list): $120/mo at the default 20k msg/s ceiling
-      ...queueCfg(1, 1_000_000_000, 1_000_000), // no default TTL (≈ held until consumed); memory/disk-bound depth
+      ...queueCfg(1, 1_000_000_000, 1_000_000), // no default TTL (≈ held until consumed); memory/disk-bound depth — both illustrative (est, via the queueCfg default)
     ],
     relations: [QUEUE_REL, provisionedCost],
     bands: [QUEUE_BAND],
@@ -603,12 +638,16 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['nats'], guarantees: natsOut },
     ],
     config: [
-      { key: k.throughput, value: 1000000, unit: 'msg/s' }, // core NATS is very high throughput
-      { key: k.latency, value: 0.5, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
-      { key: k.durability, value: 0.99, unit: 'ratio' }, // core NATS is fire-and-forget (JetStream adds durability)
+      { key: k.throughput, value: 1000000, unit: 'msg/s', est: true }, // core NATS is very high throughput
+      { key: k.latency, value: 0.5, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
+      { key: k.durability, value: 0.99, unit: 'ratio', est: true }, // core NATS is fire-and-forget (JetStream adds durability)
       unitCostConfig(0.00004, 'USD/(msg/s)·month'), // self-managed NATS on a VM (est., list): $40/mo at the default 1M msg/s ceiling
-      ...queueCfg(1, 0, 65536), // core NATS: NO retention — a slow/absent consumer drops messages
+      // maxBacklog 65536: NATS client libraries default a per-subscription pending-messages limit of 65,536 (e.g. the
+      // Go client's DefaultSubPendingMsgsLimit) — a credibly-matching but NOT independently doc-page-confirmed figure
+      // (docs.nats.io's own FAQ uses 65,536 for a DIFFERENT default — max simultaneous server connections), so this
+      // stays `est` (via the queueCfg default) rather than risk citing the wrong concept as its source.
+      ...queueCfg(1, 0, 65536), // core NATS: NO retention (retention=0 is a literal fact) — a slow/absent consumer drops messages
     ],
     relations: [QUEUE_REL, provisionedCost],
     bands: [QUEUE_BAND],
@@ -627,12 +666,17 @@ export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(
       { name: 'out', dir: 'out', speaks: ['kafka'], guarantees: kafkaOut },
     ],
     config: [
-      { key: k.throughput, value: 100000, unit: 'msg/s' }, // aggregate; ordering & throughput are PER-PARTITION
-      { key: k.latency, value: 5, unit: 'ms' },
-      { key: k.availability, value: 0.999, unit: 'ratio' },
-      { key: k.durability, value: 0.99999, unit: 'ratio' }, // replicated, append-only log
+      { key: k.throughput, value: 100000, unit: 'msg/s', est: true }, // aggregate; ordering & throughput are PER-PARTITION
+      { key: k.latency, value: 5, unit: 'ms', est: true },
+      { key: k.availability, value: 0.999, unit: 'ratio', est: true }, // self-managed: no vendor SLA
+      { key: k.durability, value: 0.99999, unit: 'ratio', est: true }, // replicated, append-only log
       unitCostConfig(0.0025, 'USD/(msg/s)·month'), // self-managed Kafka on a VM cluster (est., list): $250/mo at the default 100k msg/s ceiling
-      ...queueCfg(1, 604800, 1_000_000_000), // 7-day default retention; disk-bound depth (effectively huge)
+      ...queueCfg(
+        1,
+        604800,
+        1_000_000_000,
+        'https://docs.confluent.io/platform/current/installation/configuration/broker-configs.html', // documented: log.retention.hours default = 168 (7 days = 604,800 s)
+      ), // 7-day default retention; disk-bound depth (effectively huge, est via the queueCfg default)
     ],
     relations: [QUEUE_REL, provisionedCost],
     bands: [QUEUE_BAND],

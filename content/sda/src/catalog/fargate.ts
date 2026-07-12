@@ -5,7 +5,8 @@ import { writerGuarantees } from '../vocabulary/guarantees';
 
 // Aurora is covered by the Amazon RDS SLA: single-AZ 99.5%, Multi-AZ 99.95% (https://aws.amazon.com/rds/sla/).
 // Default Multi-AZ (the writer + reader cluster); deploymentMode 0 drops to single-instance.
-const AURORA_AVAILABILITY = availabilityByDeployment(0.995, 0.9995);
+const AURORA_SLA_SOURCE = 'https://aws.amazon.com/rds/sla/';
+const AURORA_AVAILABILITY = availabilityByDeployment(0.995, 0.9995, 0.9995, AURORA_SLA_SOURCE);
 
 /**
  * A SECOND real case from the CDK (C:\git\Architectureasaservice2 ·
@@ -26,9 +27,12 @@ export const fargateManifests: Readonly<Record<string, Manifest>> = withOverflow
       { name: 'out', dir: 'out', speaks: ['http'] },
     ],
     config: [
-      { key: k.throughput, value: 100000, unit: 'req/s' },
-      { key: k.latency, value: 2, unit: 'ms' }, // est. rule evaluation overhead
-      { key: k.availability, value: 0.9999, unit: 'ratio' },
+      { key: k.throughput, value: 100000, unit: 'req/s', est: true },
+      { key: k.latency, value: 2, unit: 'ms', est: true }, // est. rule evaluation overhead
+      // the published AWS WAF SLA is 99.95% (https://aws.amazon.com/waf/sla/) — this modelled 99.99% does
+      // not match it, so it stays an ILLUSTRATIVE estimate, never sourced to that page. Flagged for a follow-up
+      // value correction; out of scope for a metadata-only pass.
+      { key: k.availability, value: 0.9999, unit: 'ratio', est: true },
       unitCostConfig(0.0001, 'USD/(req/s)·month'), // managed AWS WAF (est.): ~$10/mo at the default 100k rps ceiling
     ],
     relations: [provisionedCost],
@@ -41,9 +45,9 @@ export const fargateManifests: Readonly<Record<string, Manifest>> = withOverflow
       { name: 'out', dir: 'out', speaks: ['http'] },
     ],
     config: [
-      { key: k.throughput, value: 10000, unit: 'req/s' }, // default account throttle (10k rps)
-      { key: k.latency, value: 10, unit: 'ms' }, // est.
-      { key: k.availability, value: 0.9995, unit: 'ratio' }, // API Gateway SLA 99.95% (https://aws.amazon.com/api-gateway/sla/)
+      { key: k.throughput, value: 10000, unit: 'req/s', source: 'https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html' }, // default account throttle (10k rps)
+      { key: k.latency, value: 10, unit: 'ms', est: true }, // est.
+      { key: k.availability, value: 0.9995, unit: 'ratio', source: 'https://aws.amazon.com/api-gateway/sla/' }, // API Gateway SLA 99.95%
       unitCostConfig(0.003, 'USD/(req/s)·month'), // managed AWS API Gateway (est.): ~$30/mo at the default 10k rps throttle
     ],
     relations: [provisionedCost],
@@ -56,9 +60,9 @@ export const fargateManifests: Readonly<Record<string, Manifest>> = withOverflow
       { name: 'out', dir: 'out', speaks: ['http'] },
     ],
     config: [
-      { key: k.throughput, value: 50000, unit: 'req/s' },
-      { key: k.latency, value: 2, unit: 'ms' }, // est.
-      { key: k.availability, value: 0.9999, unit: 'ratio' }, // ALB SLA 99.99% (Multi-AZ, https://aws.amazon.com/elasticloadbalancing/sla/)
+      { key: k.throughput, value: 50000, unit: 'req/s', est: true },
+      { key: k.latency, value: 2, unit: 'ms', est: true }, // est.
+      { key: k.availability, value: 0.9999, unit: 'ratio', source: 'https://aws.amazon.com/elasticloadbalancing/sla/' }, // ALB SLA 99.99% (Multi-AZ)
       unitCostConfig(0.0005, 'USD/(req/s)·month'), // managed AWS ALB (est.): ~$25/mo at the default 50k rps ceiling
     ],
     relations: [provisionedCost],
@@ -77,9 +81,9 @@ export const fargateManifests: Readonly<Record<string, Manifest>> = withOverflow
     // (The separate reader endpoint would be `eventual`; this single `in` is the writer endpoint.)
     ports: [{ name: 'in', dir: 'in', accepts: ['postgresql'], guarantees: writerGuarantees }],
     config: [
-      { key: k.concurrency, value: 200, unit: '1' }, // est. max_connections for a t3.medium Aurora PG
-      { key: k.perRequestDuration, value: 20, unit: 'ms' },
-      { key: k.latency, value: 20, unit: 'ms' },
+      { key: k.concurrency, value: 200, unit: '1', est: true }, // est. max_connections for a t3.medium Aurora PG
+      { key: k.perRequestDuration, value: 20, unit: 'ms', est: true },
+      { key: k.latency, value: 20, unit: 'ms', est: true },
       AURORA_AVAILABILITY.config, // deploymentMode (default Multi-AZ); availability = sourced RDS SLA per mode
       unitCostConfig(0.9, 'USD/conn·month'), // managed AWS Aurora (est.): ~$180/mo at the default 200 connections (t3.medium)
     ],

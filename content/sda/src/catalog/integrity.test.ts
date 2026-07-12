@@ -35,6 +35,20 @@ import { allCatalogs, instantiate, keys, protocolIds, registry, type Manifest } 
 //      badge `documented` and DROP the estimate flag, presenting an estimate as a documented fact. (b) a `source`
 //      is a real primary-doc URL (the same shape guarantee-slo.e2e checks for guarantee claims) — the assumptions
 //      register renders `documented` sources as live anchors, so a non-URL source would be fabricated authority.
+// 7. NO HARD NUMBER RIDES AS A BARE `default` — every config whose KEY is a capacity/latency/cost-
+//      bearing quantity (HARD_NUMBER_KEYS below: throughput, latency, perRequestDuration, concurrency,
+//      connectionPool, connectionHeldMs, drainRate, unitCost, availability, durability, vcpus, accountConcurrency,
+//      egressUsdPerGb, payloadBytes, maxItemBytes, retention, maxBacklog — the keys this pass actually swept, plus
+//      availability/durability which rule 6(b) already polices for `source`) must carry `source` OR `est: true`
+//      UNLESS its value is NEUTRAL. NEUTRAL is defined narrowly, mechanically, with NO per-component whitelist:
+//        (a) value === 0 — a literal zero (a disabled knob, "this hop adds no latency", "no retention at all");
+//        (b) (key is availability OR durability) AND value === 1 — an abstract/always-up node's ceiling ratio.
+//      Every other non-neutral hard number is either a PUBLISHED fact (`source`, a verifiable primary-doc URL) or
+//      an honest ESTIMATE (`est: true`) — never a silent, unlabelled default masquerading as either. Deliberately
+//      EXCLUDED from HARD_NUMBER_KEYS: `replicas`/`maxUnits` (an architect's SIZING choice, not an infra fact —
+//      "how many" is a knob the design turns, not a vendor limit) and `deploymentMode`/`queueMode` (mode flags,
+//      rule 3's own carve-out). A component whose bare default predates this law would have FAILED it — this law
+// only passes because the pass above added `source`/`est` to every entry it covers.
 //
 // Each it() states one law in plain English and every failure names the offending component + key + value.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -48,6 +62,34 @@ const LEGAL_DIRS: readonly string[] = ['in', 'out', 'bi'];
 const RATIO_KEYS = new Set<string>([keys.availability, keys.durability].map(String)); // must be a probability ∈ [0,1]
 const NON_NEGATIVE_KEYS = new Set<string>([keys.latency, keys.throughput, keys.cost, keys.perRequestDuration].map(String)); // ≥ 0
 const POSITIVE_UNIT_KEYS = new Set<string>([keys.replicas, keys.concurrency, keys.maxUnits].map(String)); // a count of things ⇒ ≥ 1
+
+// Law 7: the closed set of capacity/latency/cost-bearing config keys that must carry `source` or `est`
+// whenever their value is non-neutral — see the header note above for the full rationale and the exclusions.
+const HARD_NUMBER_KEYS = new Set<string>(
+  [
+    keys.throughput,
+    keys.latency,
+    keys.perRequestDuration,
+    keys.concurrency,
+    keys.connectionPool,
+    keys.connectionHeldMs,
+    keys.drainRate,
+    keys.unitCost,
+    keys.availability,
+    keys.durability,
+    keys.vcpus,
+    keys.accountConcurrency,
+    keys.egressUsdPerGb,
+    keys.payloadBytes,
+    keys.maxItemBytes,
+    keys.retention,
+    keys.maxBacklog,
+  ].map(String),
+);
+const RATIO_KEYS_FOR_NEUTRALITY = new Set<string>([keys.availability, keys.durability].map(String));
+/** Is this hard-number config value NEUTRAL (law 7 in the header above) — the ONLY case a hard number may stay a bare
+ *  `default` with neither `source` nor `est`? A literal zero, or availability/durability exactly at 1. */
+const isNeutralHardNumber = (key: string, value: number): boolean => value === 0 || (RATIO_KEYS_FOR_NEUTRALITY.has(key) && value === 1);
 
 describe('deep content integrity (every manifest, every catalog)', () => {
   for (const [type, m] of ALL_MANIFESTS) {
@@ -141,6 +183,18 @@ describe('deep content integrity (every manifest, every catalog)', () => {
           if (c.source === undefined) continue;
           const key = String(c.key);
           expect(c.source, `${type}: config "${key}" source "${c.source}" is not a well-formed https URL`).toMatch(/^https:\/\/[^\s]+$/);
+        }
+      });
+
+      it('no hard infra number (throughput/latency/cost/…) rides as a bare, unprovenanced default (law 7)', () => {
+        for (const c of m.config ?? []) {
+          const key = String(c.key);
+          if (!HARD_NUMBER_KEYS.has(key)) continue;
+          if (isNeutralHardNumber(key, c.value)) continue;
+          expect(
+            c.source !== undefined || c.est === true,
+            `${type}: hard-number config "${key}" = ${c.value} carries neither \`source\` nor \`est: true\` — a capacity/latency/cost-bearing number must be documented, estimated, or explicitly neutral (0, or availability/durability=1), never a silent default`,
+          ).toBe(true);
         }
       });
     });

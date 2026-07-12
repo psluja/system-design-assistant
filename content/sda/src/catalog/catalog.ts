@@ -35,9 +35,9 @@ export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOr
     type: 'client.source',
     ports: [{ name: 'out', dir: 'out', speaks: ['https', 'http'] }],
     config: [
-      { key: k.throughput, value: 1000, unit: 'req/s' },
-      { key: k.latency, value: 0, unit: 'ms' },
-      { key: k.availability, value: 1, unit: 'ratio' },
+      { key: k.throughput, value: 1000, unit: 'req/s', est: true }, // the workload the architect is expected to declare/tune — a credible illustrative starting rate, not a vendor fact
+      { key: k.latency, value: 0, unit: 'ms' }, // neutral: a client adds no hop latency of its own
+      { key: k.availability, value: 1, unit: 'ratio' }, // neutral: an abstract client is always "up"
       ...RETRY_POLICY_CONFIG, // a client is a caller: it can declare a timeout + retries (default 0 = off)
     ],
   },
@@ -102,8 +102,8 @@ export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOr
 
     ],
     config: [
-      { key: k.throughput, value: 800, unit: 'req/s' },
-      { key: k.latency, value: 40, unit: 'ms' },
+      { key: k.throughput, value: 800, unit: 'req/s', est: true },
+      { key: k.latency, value: 40, unit: 'ms', est: true },
       VM_AVAILABILITY.config, // deploymentMode (default ≥2-AZ); availability = sourced EC2 SLA per mode
       unitCostConfig(0.15, 'USD/(req/s)·month'), // self-managed VM / EC2 (est., list): $120/mo at the default 800 rps ceiling
     ],
@@ -137,10 +137,10 @@ export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOr
     // is bought in availability/durability/throughput, NOT in consistency — see the config below).
     ports: [{ name: 'in', dir: 'in', accepts: ['postgresql', 'mysql', 'tds', 'oracle-tns', 'odbc'], guarantees: writerGuarantees }],
     config: [
-      { key: k.throughput, value: 1000, unit: 'req/s' },
-      { key: k.latency, value: 12, unit: 'ms' },
-      { key: k.availability, value: 0.99, unit: 'ratio' }, // single-AZ (illustrative) — a real step below db.sql's 0.9999
-      { key: k.durability, value: 0.999, unit: 'ratio' }, // no PITR/replica (illustrative) — below db.postgres' ~5 nines
+      { key: k.throughput, value: 1000, unit: 'req/s', est: true },
+      { key: k.latency, value: 12, unit: 'ms', est: true },
+      { key: k.availability, value: 0.99, unit: 'ratio', est: true }, // single-AZ (illustrative) — a real step below db.sql's 0.9999
+      { key: k.durability, value: 0.999, unit: 'ratio', est: true }, // no PITR/replica (illustrative) — below db.postgres' ~5 nines
       unitCostConfig(0.09, 'USD/(req/s)·month'), // managed single-AZ DB (est./illustrative): $90/mo at the default 1000 rps ceiling — cheaper per rps than db.sql ($0.10)
       ...connectionPool(12, 12, SQL_POOL_SOURCE).config, // DES M/M/12 (in-flight = 1,000 req/s × 12 ms query); 12 / (12 ms) = 1,000 req/s == throughput
     ],
