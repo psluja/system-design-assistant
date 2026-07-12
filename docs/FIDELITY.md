@@ -50,7 +50,7 @@ Only the measured-capacity families can be broadened by adding real systems to t
 | Repair | solver | solver-incumbent | UNVALIDATED | `verified` |
 | ExplainInfeasible | solver | solver-incumbent | UNVALIDATED | `verified` |
 | Enumerate | solver | solver-incumbent | UNVALIDATED | `verified` |
-| Queueing tail (M/M/c p99) | family | analytic-closed-form, differential | Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017) 0.6%; DeathStarBench 0.4%; Kafka — producer write, 3x async replication (Kreps 2014) 1.5%; Kafka — producer write, no replication (Kreps 2014) 2.8%; RabbitMQ — classic queue (single node, AMQP 0.9.1) 5.3%; RabbitMQ — classic queue (single node, AMQP 1.0) 6.3%; Redis — LPUSH (single node, non-pipelined) 2.1%; Redis — SET (single node, non-pipelined) 2.3%; TechEmpower 20-query 0.7%; TechEmpower single-query 0.5% | `validated` |
+| Queueing tail (M/M/c p99) | family | analytic-closed-form, differential | Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017) 0.6%; DeathStarBench 0.2%; Kafka — producer write, 3x async replication (Kreps 2014) 1.5%; Kafka — producer write, no replication (Kreps 2014) 2.8%; RabbitMQ — classic queue (single node, AMQP 0.9.1) 5.3%; RabbitMQ — classic queue (single node, AMQP 1.0) 6.3%; Redis — LPUSH (single node, non-pipelined) 2.1%; Redis — SET (single node, non-pipelined) 2.3%; TechEmpower 20-query 0.7%; TechEmpower single-query 0.5% | `validated` |
 | Redundancy / availability | family | algebra | sourced (quota/price/SLA); no measured case | `sourced` |
 | Act as a queue (backlog) | family | analytic-closed-form, property | UNVALIDATED | `verified` |
 | Documented ceilings (outage caps) | family | algebra | sourced (quota/price/SLA); no measured case | `sourced` |
@@ -91,7 +91,7 @@ The measured systems SDA is held against, with the residual that remains after t
 | System | Metric | Measured | Fitted | Residual |
 |---|---|--:|--:|--:|
 | Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017) | capacityCeilingRps | 70,771 op/s | 71,207 | +0.6% |
-| DeathStarBench — Social Network | latencySharePct | 8.50 % | 8.54 | +0.4% |
+| DeathStarBench — Social Network | latencySharePct | 8.50 % | 8.52 | +0.2% |
 | Kafka — producer write, 3x async replication (Kreps 2014) | capacityCeilingRps | 786,980 msg/s | 798,556 | +1.5% |
 | Kafka — producer write, no replication (Kreps 2014) | capacityCeilingRps | 821,557 msg/s | 798,556 | -2.8% |
 | RabbitMQ — classic queue (single node, AMQP 1.0) | capacityCeilingRps | 99,413 msg/s | 93,188 | -6.3% |
@@ -105,7 +105,7 @@ Aggregate post-fit error: **3.0%** over 10 scored points. Out-of-sample (leave-o
 
 Leave-one-out generalization (the over-fit guard):
 - **Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017)** — capacityCeilingRps -81.9% _(disjoint fallback — predicted at catalog defaults)_.
-- **DeathStarBench — Social Network** — latencySharePct +30.6% _(disjoint fallback — predicted at catalog defaults)_.
+- **DeathStarBench — Social Network** — latencySharePct +6.5% _(disjoint fallback — predicted at catalog defaults)_.
 - **Kafka — producer write, 3x async replication (Kreps 2014)** — capacityCeilingRps +4.2% _(genuine out-of-sample)_.
 - **Kafka — producer write, no replication (Kreps 2014)** — capacityCeilingRps -4.1% _(genuine out-of-sample)_.
 - **RabbitMQ — classic queue (single node, AMQP 1.0)** — capacityCeilingRps -10.7% _(genuine out-of-sample)_.

@@ -1,4 +1,4 @@
-import type { Key, Node } from '@sda/engine-core';
+import type { Edge, Key, Node, Port, Transform } from '@sda/engine-core';
 import { keys } from '../vocabulary/registry';
 
 // Shared design-time reads for the queueing projectors. The analytic model (queueing.ts → nodeQueues) and the DES
@@ -93,4 +93,40 @@ export function queueStation(node: Node): QueueStation {
   const cpu = cpuStation(node);
   if (cpu === undefined) return base; // no CPU ceiling ⇒ EXACTLY the original station (byte-identical — the sacred pin)
   return stationCapacity(cpu) < stationCapacity(base) ? cpu : base; // the BINDING resource (lower c·μ) owns the queue
+}
+
+/**
+ * The MEAN per-completion multiplicity a flow transform induces on an edge.
+ * ratio(k) and prob(p) map directly to a mean count (k, or a Bernoulli(p)); batch(n) thins 1/n. cap/window are rate
+ * CEILINGS whose effect depends on the offered rate — a memoryless per-completion route cannot see that rate, so
+ * they induce NO thinning here (their steady-state effect is the forward-pass throttle + overflow verdict). THE ONE
+ * DEFINITION both the DES route-edge projector (sim.ts) and the analytic response-latency composition (queueing.ts)
+ * read, so the two engines can never drift on what a transform means for a single completion. Moved here (from
+ * sim.ts, byte-identical) so a SECOND consumer could not silently diverge.
+ */
+export function transformFactor(t: Transform | undefined): number {
+  if (t === undefined) return 1;
+  switch (t.kind) {
+    case 'ratio':
+    case 'prob':
+      return t.value;
+    case 'batch':
+      return 1 / t.value;
+    case 'cap':
+    case 'window':
+      return 1; // a ceiling, not a mean thinning — see the note above
+    case 'generate':
+      return 1; // a generator ORIGINATES at the node; the port's route edges relay the served flow untouched — identity
+  }
+}
+
+/**
+ * The MEAN per-completion multiplicity a single EDGE delivers, resolved the ONE way both engines read it (doc:
+ * flow-transformations-r2 §5): the WIRE's transform WINS over the source out-port's default (a per-wire routing
+ * split overrides broadcast fan-out), then the target IN-port's transform applies on top (its own consumption
+ * shape) — the two seams compose by PRODUCT, never added. Absent everywhere ⇒ 1 (today's untransformed edge,
+ * byte-identical). Shared by sim.ts's DES routing and queueing.ts's response-latency composition.
+ */
+export function edgeMultiplicity(edge: Edge, from: Port | undefined, to: Port | undefined): number {
+  return transformFactor(edge.transform ?? from?.transform) * transformFactor(to?.transform);
 }

@@ -27,10 +27,10 @@
 // @e2e content/sda/src/analysis/retry-feedback.e2e.test.ts
 // @status shipped
 
-import { type Cycle, type Graph, type Node, type NodeId, type Transform } from '@sda/engine-core';
+import { type Cycle, type Graph, type Node, type NodeId } from '@sda/engine-core';
 import { StationId, isFlatProfile, profileMean, profileValue, type ArrivalSource, type AttemptPolicy, type Distribution, type QueueingNetwork, type RateProfile, type RateProfilePoint, type RouteEdge, type Station } from '@sda/engine-sim';
 import { keys } from '../vocabulary/registry';
-import { cfg, queueStation } from './graph-read';
+import { cfg, edgeMultiplicity, queueStation } from './graph-read';
 import { combinedCycleProfile } from './load-stages';
 
 /**
@@ -49,31 +49,6 @@ function attemptPolicyOf(node: Node): AttemptPolicy | undefined {
     retries: Math.max(0, Math.floor(cfg(node, keys.retryCount) ?? 0)),
     backoffMs: Math.max(0, cfg(node, keys.retryBackoffMs) ?? 0),
   };
-}
-
-/**
- * The MEAN per-completion multiplicity a flow transform induces on a DES route edge.
- * ratio(k) and prob(p) map directly to a mean count (k, or a Bernoulli(p)); batch(n) thins 1/n. cap/window are
- * rate CEILINGS whose effect depends on the offered rate — a memoryless per-completion route cannot see that
- * rate, so they induce NO route thinning here (their steady-state effect is the forward-pass throttle + overflow
- * verdict; the DES then simulates the un-thinned stream, which is conservative — it never under-reports load).
- * That is the honest fidelity line: the DES reproduces ratio/batch/prob MEANS exactly and leaves ceilings to the
- * forward pass rather than faking a stateful token bucket in a memoryless edge.
- */
-function transformFactor(t: Transform | undefined): number {
-  if (t === undefined) return 1;
-  switch (t.kind) {
-    case 'ratio':
-    case 'prob':
-      return t.value;
-    case 'batch':
-      return 1 / t.value;
-    case 'cap':
-    case 'window':
-      return 1; // a ceiling, not a mean thinning — see the note above
-    case 'generate':
-      return 1; // a generator ORIGINATES at the node (its arrivals ride the node's ArrivalSource below); the port's route edges relay the served flow untouched — identity, like the scalar seam
-  }
 }
 
 /**
@@ -275,7 +250,9 @@ export function toQueueingNetwork(graph: Graph): QueueingNetwork {
     // Same OUT-side resolution as the forward pass: the WIRE's transform WINS
     // over the source out-port's, so a per-wire routing split (a 70/30 fan-out) thins each route edge by ITS own
     // share. Absent wire transform ⇒ the source port's f_out — the DES stays identical to today for broadcast fan-out.
-    const multiplicity = transformFactor(e.transform ?? from.transform) * transformFactor(to.transform);
+    // `edgeMultiplicity` (graph-read.ts) is the ONE definition — queueing.ts's response-latency weighting reads
+    // the exact same resolution, so the two engines cannot drift on what a transform means.
+    const multiplicity = edgeMultiplicity(e, from, to);
     // A FIRE-AND-FORGET wire (semantics 'async') marks the route edge async so the DES's per-node RESPONSE
     // sampling CUTS the caller's synchronous subtree at it — the caller does not
     // block on the message it dropped on a queue. This is PURE per-node response bookkeeping: it changes NOTHING

@@ -14,12 +14,13 @@
 //   demoted not deleted.
 // @where-tested content/sda/src/analysis/queueing.e2e.test.ts (analytic vs DES),
 //   content/sda/src/analysis/response-latency.e2e.test.ts, content/sda/src/analysis/origin-latency.e2e.test.ts,
-//   content/sda/src/analysis/headroom.test.ts
+//   content/sda/src/analysis/headroom.test.ts, content/sda/src/analysis/response-latency-transform.e2e.test.ts
+// (: sequential response weighted by the DES's own edge multiplicity — cache-aside ratio wires)
 
 import { applyTransform, type Graph, type Key, type Node, type Transform } from '@sda/engine-core';
 import { mmc } from '@sda/engine-sim';
 import { keys } from '../vocabulary/registry';
-import { PURE_DELAY, cfg, cpuStation, queueStation } from './graph-read';
+import { PURE_DELAY, cfg, cpuStation, edgeMultiplicity, queueStation } from './graph-read';
 
 // REAL (queueing-aware) latency — the analytic twin of the DES, cheap enough for the hot path so the canvas
 // and footer can show what users actually feel, live on every edit. The forward pass gives the no-queue sum
@@ -97,14 +98,19 @@ const offeredLoadOf = (graph: Graph, value: (id: string, key: Key) => number | u
   return out;
 };
 
-/** Successor adjacency (upstream → downstream) with each edge's async flag — one entry per node. */
-const successorsOf = (graph: Graph): Map<string, { to: string; async: boolean }[]> => {
-  const succ = new Map<string, { to: string; async: boolean }[]>();
+/** Successor adjacency (upstream → downstream) with each edge's async flag and its MEAN flow multiplicity (the SAME
+ *  wire/port transform resolution the DES route edges use — {@link edgeMultiplicity}, graph-read.ts) — one entry
+ *  per node. The weight is 1 for an untransformed edge (identity), so a no-transform graph carries weight-1 on
+ *  every edge (the sacred pin). */
+const successorsOf = (graph: Graph): Map<string, { to: string; async: boolean; weight: number }[]> => {
+  const succ = new Map<string, { to: string; async: boolean; weight: number }[]>();
   for (const id of graph.nodes.keys()) succ.set(String(id), []);
   for (const e of graph.edges.values()) {
-    const from = graph.ports.get(e.from)?.node;
-    const to = graph.ports.get(e.to)?.node;
-    if (from !== undefined && to !== undefined) succ.get(String(from))?.push({ to: String(to), async: e.semantics === 'async' });
+    const from = graph.ports.get(e.from);
+    const to = graph.ports.get(e.to);
+    if (from !== undefined && to !== undefined) {
+      succ.get(String(from.node))?.push({ to: String(to.node), async: e.semantics === 'async', weight: edgeMultiplicity(e, from, to) });
+    }
   }
   return succ;
 };
@@ -236,18 +242,33 @@ export function realCumulativeLatency(
  * source→node fold. Async downstream is decoupled and EXCLUDED; a saturated (∞) synchronous dependency
  * propagates ∞ up every caller. It is the caller-facing latency the canvas / MCP / design-doc display; the
  * engine can't compute it (M/M/c is content). Fan-out safe (each subtree once) and cycle-guarded.
+ *
+ * SEQUENTIAL (mode 0, default) is WEIGHTED by each sync child's MEAN flow multiplicity — the exact same
+ * wire/port transform resolution the DES route edges use ({@link edgeMultiplicity}, graph-read.ts): a cache-aside
+ * ratio(miss) wire on the svc→db edge means the caller only pays the DB's response on the miss fraction of
+ * requests, matching what the DES actually simulates. This is mathematically EXACT for the MEAN under
+ * probabilistic branching (E[R] = R_cache + (1−h)·R_db) and honest the other direction too — k>1 sync sub-calls
+ * really do cost k× the child. A weight of 0 contributes 0 regardless of the child's value (a branch that never
+ * fires — even an ∞ one — cannot be charged; this also sidesteps 0×Infinity = NaN). With no transform on any edge
+ * every weight is 1, so this reduces EXACTLY to the old plain sum (the sacred pin).
+ *
+ * PARALLEL (mode 1, max) and FASTEST (mode 2, min) stay UNWEIGHTED: probability-weighting a max/min is different
+ * math (the max/min of a mixture is not the weighted max/min of the branch means) — an honest simplification, not
+ * modelled here. A transformed wire into a parallel/fastest node still contributes its RAW response.
  */
 export function responseLatency(graph: Graph, value: (id: string, key: Key) => number | undefined, queues?: Map<string, NodeQueue>): Map<string, number> {
   const q = queues ?? nodeQueues(graph, value);
   const succ = successorsOf(graph);
   const nodeById = nodeIndex(graph);
   const own = (id: string): number => ownLatency(nodeById.get(id), q.get(id));
-  // Combine the SYNC children's responses per this node's composition (default sequential = sum).
-  const combine = (id: string, kids: readonly number[]): number => {
+  // Combine the SYNC children's responses per this node's composition (default sequential = mean-weighted sum).
+  const combine = (id: string, kids: readonly { value: number; weight: number }[]): number => {
     if (kids.length === 0) return 0;
     const node = nodeById.get(id);
     const mode = Math.round((node ? cfg(node, keys.latencyComposition) : undefined) ?? 0);
-    return mode === 1 ? Math.max(...kids) : mode === 2 ? Math.min(...kids) : kids.reduce((a, b) => a + b, 0);
+    if (mode === 1) return Math.max(...kids.map((k) => k.value)); // parallel / scatter-gather — UNWEIGHTED (see doc comment)
+    if (mode === 2) return Math.min(...kids.map((k) => k.value)); // fastest / hedged — UNWEIGHTED (see doc comment)
+    return kids.reduce((a, k) => a + (k.weight === 0 ? 0 : k.weight * k.value), 0); // sequential — mean-weighted sum
   };
   const memo = new Map<string, number>();
   const onPath = new Set<string>();
@@ -256,7 +277,7 @@ export function responseLatency(graph: Graph, value: (id: string, key: Key) => n
     if (cached !== undefined) return cached;
     if (onPath.has(id)) return own(id); // cycle guard: don't recurse through a loop
     onPath.add(id);
-    const kids = (succ.get(id) ?? []).filter((e) => !e.async).map((e) => resp(e.to));
+    const kids = (succ.get(id) ?? []).filter((e) => !e.async).map((e) => ({ value: resp(e.to), weight: e.weight }));
     onPath.delete(id);
     const r = own(id) + combine(id, kids);
     memo.set(id, r);

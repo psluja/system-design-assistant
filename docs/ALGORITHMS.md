@@ -386,7 +386,7 @@ Every algorithmic module in the codebase, cataloged from its `@algorithm` header
 - **Complexity:** O(V + E) memoized folds; Dijkstra O(V^2); mmc O(c) per node.
 - **Citations:** Erlang C / M/M/c (via engine/sim/src/analytic.ts); Little's law; Dijkstra 1959.
 - **Invariants:** Agrees with the DES within tolerance (differential-tested); rho >= 1 answers Infinity honestly (unbounded queue), never a finite lie; the ideal (no-queue) figure is kept alongside, demoted not deleted.
-- **Tested:** `content/sda/src/analysis/queueing.e2e.test.ts` (analytic vs DES), `content/sda/src/analysis/response-latency.e2e.test.ts`, `content/sda/src/analysis/origin-latency.e2e.test.ts`, `content/sda/src/analysis/headroom.test.ts`
+- **Tested:** `content/sda/src/analysis/queueing.e2e.test.ts` (analytic vs DES), `content/sda/src/analysis/response-latency.e2e.test.ts`, `content/sda/src/analysis/origin-latency.e2e.test.ts`, `content/sda/src/analysis/headroom.test.ts`, `content/sda/src/analysis/response-latency-transform.e2e.test.ts`
 
 ### Robust sizing by per-world solve + knob-wise max
 
