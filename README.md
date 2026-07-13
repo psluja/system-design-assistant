@@ -9,6 +9,12 @@ work: capacity, queueing-aware latency, tail percentiles, availability, delivery
 Run it backwards and the solver _sizes the design for you_. Every number is sourced or marked
 `unknown` — the tool is built so it **cannot lie**.
 
+### [▶ Try SDA live](https://psluja.github.io/system-design-assistant/)
+
+<sub>No install, no account — the whole engine runs in your browser and designs stay on your machine.
+Curious how honest its numbers are? [The live trust & fidelity trends](https://psluja.github.io/system-design-assistant/trust.html).</sub>
+
+[![Live demo](https://img.shields.io/badge/demo-live-success.svg)](https://psluja.github.io/system-design-assistant/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
 [![Status: beta](https://img.shields.io/badge/status-beta%20%28pre--publication%29-orange.svg)](#status)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](tsconfig.base.json)
