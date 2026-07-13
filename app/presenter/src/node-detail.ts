@@ -1,5 +1,5 @@
 import { NodeId, type Verdict } from '@sda/engine-core';
-import { isFactAssumption, keys, type Instance, type Manifest } from '@sda/content';
+import { isFactAssumption, keys, receivesWork, type Instance, type Manifest } from '@sda/content';
 import { fmt, formatMs } from './format';
 import { keyInfo } from './meta';
 import type { Suggestion } from './suggest';
@@ -21,12 +21,16 @@ export { PROMISES_TITLE };
 /** A tone that is definitely present — so `tone?` (exactOptionalPropertyTypes) is set only when we have one. */
 type Tint = NonNullable<VerdictRow['tone']>;
 
-/** One config knob of the selected node — the web renders an editable field, the vscode host an InputBox. */
+/** One config knob of the selected node — the web renders an editable field, the vscode host an InputBox.
+ * `group` is the NODE-CONTEXT-AWARE section it belongs in (`knobGroupFor`), precomputed here because
+ *  the vscode host receives only this row over the wire — never the node's manifest — so it must never re-derive
+ *  the classification (the "host renders, never re-derives" rule the whole protocol follows). */
 export interface KnobRow {
   readonly key: string;
   readonly label: string;
   readonly value: number;
   readonly unit: string;
+  readonly group: KnobGroupId;
 }
 /** One verdict row for the node (a labelled, pre-formatted value + status + optional tone). */
 export interface VerdictRow {
@@ -85,11 +89,76 @@ export const SECTION_CAPTIONS: Readonly<Record<KnobGroupId | 'promises', string>
   promises: 'The targets this node must meet. Set one only where you care; the engine checks it and computes everything else.',
 };
 
-/** Which INPUT group a config knob belongs to, by the registry role of its key: a `fact-assumption` key is an
- *  Assumption (a belief about the outside world); every other input role (resource-limit) is a Resource limit. A knob
- *  is never dropped — a key with no fact-assumption role falls to `limits`. */
+/** Which INPUT group a config knob belongs to, by the registry role of its key ALONE (no node context): a
+ *  `fact-assumption` key is an Assumption (a belief about the outside world); every other input role
+ *  (resource-limit) is a Resource limit. A knob is never dropped — a key with no fact-assumption role falls to
+ *  `limits`. This is the GLOBAL baseline every key except `throughput` actually needs — see `displayRoleFor` for
+ *  the node-context-aware refinement `throughput` requires. */
 export function knobGroupOf(key: string): KnobGroupId {
   return isFactAssumption(key) ? 'assumptions' : 'limits';
+}
+
+// ─── NODE-CONTEXT-AWARE REFINEMENT ─────────────────────────────
+// One key is DOUBLE-DUTY: `throughput` means a served CAPACITY on a node that RECEIVES work, but on a PURE SOURCE
+// (no `in`/`bi` port — `client.*` or any manifest dedicated to originating traffic) its config value is the
+// DECLARED DEMAND the design assumes — "the world sends X rps" (catalog/common.ts's "throughput-as-workload"
+// convenience preset over the universal origin mechanism). The registry's GLOBAL role table (`roles.throughput =
+// 'computed'`, read here via `knobGroupOf`) is correct for every RELAY; it is wrong for a source, because the
+// role axis classifies KEYS, not (key, node) pairs. `receivesWork` (content, the exact fact `withOverflow` already
+// uses to decide a node originates rather than relays) is the mechanical signal — never a second guess of a
+// node's shape, and never a per-case branch (every other key keeps its one global reading, unchanged).
+
+/** The three-way role a config KEY plays on a GIVEN NODE. Every knob (by construction, drawn from
+ *  `manifest.config`) resolves to `assumption` | `limit`; `computed` is returned only when asked about a key that
+ *  ISN'T a config knob on this manifest at all (an ordinary node's Little's-law relation) — read back, never
+ *  edited, so it is never rendered as a knob in the first place. */
+export type DisplayRole = 'assumption' | 'limit' | 'computed';
+
+/**
+ * The node-context-aware role of a config key: a key not declared in `manifest.config` is `computed`
+ * (a relation the engine derives, e.g. `compute.service`'s throughput = concurrency ÷ perRequestDuration); the
+ * universal `throughput` key on a PURE SOURCE (`!receivesWork`) is the DECLARED DEMAND — an `assumption`, never a
+ * ceiling, however the source is authored (a `client.*` preset or any manifest whose whole job is to originate);
+ * every other config key keeps the registry's GLOBAL reading (`knobGroupOf`), including `throughput` on a node
+ * that RECEIVES work — a fixed-throughput store's (e.g. `cache.redis`) config IS its real capacity, so it stays a
+ * `limit` exactly as the registry already says.
+ */
+export function displayRoleFor(manifest: Manifest, key: string): DisplayRole {
+  const isConfigKnob = (manifest.config ?? []).some((c) => String(c.key) === key);
+  if (!isConfigKnob) return 'computed';
+  if (key === String(keys.throughput) && !receivesWork(manifest)) return 'assumption';
+  return knobGroupOf(key) === 'assumptions' ? 'assumption' : 'limit';
+}
+
+/** Node-context-aware knob GROUP — `displayRoleFor` projected onto the two rendered Inspector sections (a real
+ *  knob, drawn from `manifest.config`, is never `computed`). The ONE function both shells consult so the origin
+ *  knob's section can never disagree between the web Inspector and the VS Code native tree. */
+export function knobGroupFor(manifest: Manifest, key: string): KnobGroupId {
+  return displayRoleFor(manifest, key) === 'limit' ? 'limits' : 'assumptions';
+}
+
+/** The origin knob's honest label — "Generated load", never "Throughput" (which reads as a served
+ *  capacity/ceiling and would contradict the Assumptions section it now sits in). Every other knob keeps its
+ *  registry `keyInfo` label, node context or not. */
+export const GENERATED_LOAD_LABEL = 'Generated load';
+
+/** The origin knob's tooltip — reuses the EXISTING per-row caption mechanism (`keyInfo(key).cfg`), just
+ *  with honest text: what the world sends is an assumption, never a cap this design provisions. */
+export const GENERATED_LOAD_TIP = 'What the world sends into this design — a DEMAND you assume, not a capacity you provision. The engine checks whether the rest of the system can sustain it, and computes what happens downstream.';
+
+/** Node-context-aware knob LABEL: `GENERATED_LOAD_LABEL` for the origin's declared demand, else the key's
+ *  registry `keyInfo().label` (unchanged for every other knob). */
+export function knobLabelFor(manifest: Manifest, key: string): string {
+  return displayRoleFor(manifest, key) === 'assumption' && key === String(keys.throughput) ? GENERATED_LOAD_LABEL : keyInfo(key).label;
+}
+
+/** Node-context-aware knob TOOLTIP (the per-row caption both shells already show — web's `data-tip`, the range
+ *  editor title): `GENERATED_LOAD_TIP` for the origin's declared demand, else the key's registry `keyInfo().cfg`
+ *  (falling back to `.desc`, unchanged for every other knob). */
+export function knobTipFor(manifest: Manifest, key: string): string {
+  if (displayRoleFor(manifest, key) === 'assumption' && key === String(keys.throughput)) return GENERATED_LOAD_TIP;
+  const info = keyInfo(key);
+  return info.cfg ?? info.desc;
 }
 
 // ─── HIDDEN KNOBS (owner: hide `assumedRps` from every human-facing surface — "for now, then we'll see") ─────────
@@ -116,11 +185,13 @@ export interface KnobGroup {
 }
 
 /** Partition a node's knobs into the role-titled groups in canonical order (Assumptions, then Resource limits),
- *  DROPPING an empty group (no-filler). Both shells iterate this so section order + headings are identical. */
+ *  DROPPING an empty group (no-filler). Both shells iterate this so section order + headings are identical. Reads
+ *  each row's OWN precomputed `.group` (node-context-aware, `knobGroupFor` — set once where the row was built)
+ *  rather than recomputing from the key alone, so this stays correct for the double-duty `throughput` key too. */
 export function knobGroups(knobs: readonly KnobRow[]): readonly KnobGroup[] {
   const order: readonly KnobGroupId[] = ['assumptions', 'limits'];
   return order
-    .map((id) => ({ id, title: KNOB_GROUP_TITLE[id], knobs: knobs.filter((k) => knobGroupOf(k.key) === id) }))
+    .map((id) => ({ id, title: KNOB_GROUP_TITLE[id], knobs: knobs.filter((k) => k.group === id) }))
     .filter((g) => g.knobs.length > 0);
 }
 
@@ -159,11 +230,13 @@ export function nodeDetail(input: NodeDetailInput): NodeDetail {
 
   // Hidden knobs (e.g. `assumedRps`) are dropped from the rendered list so NO shell that reads this model — the VS
   // Code Inspector tree, any nodeDetail consumer — shows them; the underlying cell/mechanism is untouched.
+  // `label` and `group` are NODE-CONTEXT-AWARE (`knobLabelFor`/`knobGroupFor`): computed HERE, once, and
+  // carried on the row — the VS Code host never sees `man` (only this wire-shaped row), so it must never re-derive
+  // the classification itself (the "host renders, never re-derives" rule the whole protocol follows).
   const knobs: KnobRow[] = (man.config ?? []).filter((c) => !isHiddenKnob(String(c.key))).map((c) => {
     const ck = String(c.key);
-    const info = keyInfo(ck);
     const cur = inst.config?.[c.key] ?? c.value;
-    return { key: ck, label: info.label, value: Number(cur), unit: info.unit };
+    return { key: ck, label: knobLabelFor(man, ck), value: Number(cur), unit: keyInfo(ck).unit, group: knobGroupFor(man, ck) };
   });
 
   const verdRows: VerdictRow[] = verdicts

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { formatRange, knobGroupOf, KNOB_GROUP_TITLE, SECTION_CAPTIONS, PROMISES_TITLE, overrideProvenanceBadge, overrideProvenanceLabel } from '@sda/presenter';
+import { formatRange, KNOB_GROUP_TITLE, SECTION_CAPTIONS, PROMISES_TITLE, overrideProvenanceBadge, overrideProvenanceLabel } from '@sda/presenter';
 import type { Range, ScenarioOverride } from '@sda/content';
 import type { KnobRow, NodeDetail, SuggestRow } from '../protocol';
 import { summaryRowLabel, toneDecor, kindIcon, kindOf, isDimensionlessUnit } from '../pure';
@@ -12,9 +12,8 @@ import type { ActiveEditorRegistry } from '../active-editor';
 // The native INSPECTOR view (`sda.inspector`), modelled on the debugger's VARIABLES pane: everything about the
 // SELECTED node, fed by the webview's `nodeDetail`. Top item = the node header (kind icon + type id as the muted
 // description + an inline reveal action); under it the sections, each with a codicon. The knob sections are GROUPED
-// BY THE REGISTRY ROLE AXIS rather than a flat
-// "Configuration" list, so a reader sees the difference that matters — a belief about the world vs a ceiling the
-// design commits to:
+// BY THE REGISTRY ROLE AXIS rather than a flat "Configuration" list, so a reader sees the difference that matters — a belief
+// about the world vs a ceiling the design commits to:
 //   • Assumptions (facts about your world) ($(globe)) — one leaf per `fact-assumption` knob (offered load, a
 //     service-time estimate, a caller's retry policy). Like Variables, the LABEL is the knob name and the dimmed
 //     `description` is `value unit`. An inline pencil edits it; clicking the row also opens the InputBox (native →
@@ -46,7 +45,7 @@ type Item =
 
 /** The section groups under a node header, in display order (the role-grouped knobs → promises → ports → verdicts →
  *  suggestions). `assumptions`/`limits` are the two INPUT-knob groups of the registry role axis (presenter
- *  `knobGroupOf`); `promises` is the node's SLO bands. */
+ *  `knobGroupFor`, node-context-aware); `promises` is the node's SLO bands. */
 type SectionKind = 'assumptions' | 'limits' | 'promises' | 'ports' | 'verdicts' | 'suggestions';
 
 /** The tone a verdict row carries (SummaryRow['tone'] — kept local so the union above stays readable). */
@@ -86,11 +85,13 @@ export class InspectorTreeProvider implements vscode.TreeDataProvider<Item> {
       // EXCEPTION is Promises: it is ALWAYS shown for a selected node (even with zero SLOs) because its
       // "+ Add promise…" row is the entry point the user is looking for — hiding it when empty would be the
       // very gap this feature closes (there'd be nowhere to click to add the first SLO).
-      // The knobs split by the registry role axis (presenter `knobGroupOf`): Assumptions (facts about your world)
-      // then Resource limits, each shown only when it has a knob (no-filler). The two headings + order are the same
-      // form the web Inspector renders.
-      if (d.knobs.some((k) => knobGroupOf(k.key) === 'assumptions')) sections.push({ kind: 'section', section: 'assumptions', detail: d });
-      if (d.knobs.some((k) => knobGroupOf(k.key) === 'limits')) sections.push({ kind: 'section', section: 'limits', detail: d });
+      // The knobs split by the registry role axis, NODE-CONTEXT-AWARE (presenter `knobGroupFor`):
+      // Assumptions (facts about your world) then Resource limits, each shown only when it has a knob (no-filler).
+      // Each row's `.group` was precomputed by the webview (which alone holds the manifest) and rides the wire —
+      // the host reads it verbatim, it never re-derives the classification from the key alone. The two headings +
+      // order are the same form the web Inspector renders.
+      if (d.knobs.some((k) => k.group === 'assumptions')) sections.push({ kind: 'section', section: 'assumptions', detail: d });
+      if (d.knobs.some((k) => k.group === 'limits')) sections.push({ kind: 'section', section: 'limits', detail: d });
       sections.push({ kind: 'section', section: 'promises', detail: d });
       // Ports is shown for a selected node with ports: it is the per-component transform knob the owner required on
       // EVERY component, so the entry point must be discoverable even when identity.
@@ -117,7 +118,7 @@ export class InspectorTreeProvider implements vscode.TreeDataProvider<Item> {
         const activeScenario = this.active.current?.activeScenario;
         const overrides = activeScenario !== undefined ? worldOverridesFor(rangeText, activeScenario, d.node) : undefined;
         return d.knobs
-          .filter((knob) => knobGroupOf(knob.key) === group)
+          .filter((knob) => knob.group === group)
           .map((knob) => {
             const range = ranges.get(knob.key);
             const world = overrides?.get(knob.key);

@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { keys } from '@sda/content';
-import { knobGroupOf, knobGroups, isHiddenKnob, KNOB_GROUP_TITLE, PROMISES_TITLE, type KnobRow } from './node-detail';
+import { keys, commonManifests } from '@sda/content';
+import {
+  knobGroupOf, knobGroups, isHiddenKnob, KNOB_GROUP_TITLE, PROMISES_TITLE,
+  displayRoleFor, knobGroupFor, knobLabelFor, knobTipFor, GENERATED_LOAD_LABEL, GENERATED_LOAD_TIP,
+  type KnobRow,
+} from './node-detail';
 import { bandComparator, num } from './band-text';
 
 // THE INSPECTOR ROLE AXIS — the ONE classifier both shells render, pinned here so the
 // section headings/order can never drift between the web Inspector and the VS Code native tree.
 
-const knob = (key: string): KnobRow => ({ key, label: key, value: 0, unit: '' });
+const knob = (key: string): KnobRow => ({ key, label: key, value: 0, unit: '', group: knobGroupOf(key) });
+
+// Three real manifests standing in for the three node CONTEXTS `displayRoleFor` distinguishes:
+//   • client.web    — a PURE SOURCE (no in/bi port): `throughput` config is the DECLARED DEMAND, an assumption.
+//   • cache.redis   — RECEIVES work, `throughput` is its own config: a fixed-throughput store's real capacity.
+//   • compute.service — RECEIVES work, `throughput` is a RELATION (Little's law), never a config knob at all.
+const clientWeb = commonManifests['client.web']!;
+const cacheRedis = commonManifests['cache.redis']!;
+const computeService = commonManifests['compute.service']!;
 
 describe('knobGroupOf — a config knob is grouped by its registry role', () => {
   it('fact-assumption keys are Assumptions (facts about your world)', () => {
@@ -44,6 +56,40 @@ describe('knobGroups — partition into role-titled sections, in order, dropping
 
   it('is empty for a node with no knobs', () => {
     expect(knobGroups([])).toEqual([]);
+  });
+});
+
+// — the double-duty `throughput` key needs NODE CONTEXT, not just its global registry role: a pure
+// source's declared demand vs a fixed-throughput store's real capacity vs an ordinary node's computed read-back.
+describe('displayRoleFor / knobGroupFor / knobLabelFor / knobTipFor — throughput is node-context-aware', () => {
+  it("client.web's throughput config is an ASSUMPTION (the declared demand), not a limit, though its GLOBAL registry role is 'computed'", () => {
+    expect(displayRoleFor(clientWeb, String(keys.throughput))).toBe('assumption');
+    expect(knobGroupFor(clientWeb, String(keys.throughput))).toBe('assumptions');
+    expect(knobLabelFor(clientWeb, String(keys.throughput))).toBe(GENERATED_LOAD_LABEL);
+    expect(knobLabelFor(clientWeb, String(keys.throughput))).toBe('Generated load');
+    expect(knobTipFor(clientWeb, String(keys.throughput))).toBe(GENERATED_LOAD_TIP);
+  });
+
+  it("cache.redis's throughput config stays a LIMIT (a fixed-throughput store's real capacity) — it RECEIVES work", () => {
+    expect(displayRoleFor(cacheRedis, String(keys.throughput))).toBe('limit');
+    expect(knobGroupFor(cacheRedis, String(keys.throughput))).toBe('limits');
+    // The label/tooltip are UNCHANGED from the global keyInfo — no "Generated load" on a real capacity knob.
+    expect(knobLabelFor(cacheRedis, String(keys.throughput))).toBe('Throughput');
+    expect(knobLabelFor(cacheRedis, String(keys.throughput))).not.toBe(GENERATED_LOAD_LABEL);
+  });
+
+  it("compute.service's throughput is COMPUTED (a Little's-law relation) — never a config knob, absent from the Inspector's knobs at all", () => {
+    expect(displayRoleFor(computeService, String(keys.throughput))).toBe('computed');
+    // Confirms the actual manifest shape backing the 'computed' classification: no config entry for throughput.
+    expect((computeService.config ?? []).some((c) => String(c.key) === String(keys.throughput))).toBe(false);
+    expect((computeService.relations ?? []).some((r) => String(r.key) === String(keys.throughput))).toBe(true);
+  });
+
+  it('every other config key keeps its ordinary GLOBAL grouping regardless of node context', () => {
+    for (const manifest of [clientWeb, cacheRedis, computeService]) {
+      expect(knobGroupFor(manifest, String(keys.availability))).toBe('limits'); // resource-limit, global
+    }
+    expect(knobGroupFor(clientWeb, String(keys.timeoutMs))).toBe('assumptions'); // fact-assumption, global (client.web declares retry policy config)
   });
 });
 

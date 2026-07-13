@@ -251,7 +251,11 @@ export function withDeploymentCost(base: ManifestRelation): ManifestRelation {
 
 const hasThroughput = (m: Manifest): boolean =>
   (m.config ?? []).some((c) => c.key === k.throughput) || (m.relations ?? []).some((r) => r.key === k.throughput);
-const receivesWork = (m: Manifest): boolean => m.ports.some((p) => p.dir === 'in' || p.dir === 'bi');
+/** Does this manifest RECEIVE work (an `in`/`bi` port)? The exact fact `withOverflow` uses to skip pure sources
+ * (a client/generator OFFERS load, it never receives it) — exported so the presenter's Inspector can
+ *  ask the SAME question when deciding whether a node's `throughput` config is a served capacity or a pure
+ *  source's declared/generated demand, never a second guess of a node's shape. */
+export const receivesWork = (m: Manifest): boolean => m.ports.some((p) => p.dir === 'in' || p.dir === 'bi');
 const hasOverflow = (m: Manifest): boolean => (m.relations ?? []).some((r) => r.key === k.overflow);
 const hasOrigin = (m: Manifest): boolean =>
   (m.config ?? []).some((c) => c.key === k.assumedRps) || (m.relations ?? []).some((r) => r.key === k.assumedRps);

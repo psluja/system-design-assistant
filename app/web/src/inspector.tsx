@@ -4,7 +4,7 @@ import type { Key, Verdict } from '@sda/engine-core';
 import { registry, keys, protocolNote, type AssumptionScenario, type Manifest, type Range } from '@sda/content';
 import {
   keyInfo, fmt, formatMs, opnd, rate, prettyExpr,
-  knobGroupOf, isHiddenKnob, KNOB_GROUP_TITLE, SECTION_CAPTIONS, PROMISES_TITLE, resolvePortTransform,
+  knobGroupFor, knobLabelFor, knobTipFor, isHiddenKnob, KNOB_GROUP_TITLE, SECTION_CAPTIONS, PROMISES_TITLE, resolvePortTransform,
   formatRange, overrideProvenanceLabel, formatResponseTail,
   type Suggestion, type NodeResponseView,
 } from '@sda/presenter';
@@ -196,11 +196,11 @@ export function InspectorPanel({
               </span>
             </div>
           </div>
-          {/* The registry ROLE AXIS replaces the flat
-              "Configuration" list: a node's input knobs group into ASSUMPTIONS (facts about your world — a belief
-              the design rests on) and RESOURCE LIMITS (a ceiling/sizing the design commits to). Computed values
-              stay in the Verdict/Cost readouts; promises (SLO bands) get their own section below. One form with
-              the VS Code native Inspector (same headings/order). */}
+          {/* The registry ROLE AXIS via the shared presenter `knobGroupFor` —
+              NODE-CONTEXT-AWARE — replaces the flat "Configuration" list: a node's input knobs group
+              into ASSUMPTIONS (facts about your world — a belief the design rests on) and RESOURCE LIMITS (a
+              ceiling/sizing the design commits to). Computed values stay in the Verdict/Cost readouts; promises
+              (SLO bands) get their own section below. One form with the VS Code native Inspector (same order). */}
           {(() => {
             const cfgs = selMan.config ?? [];
             // Render ONE knob field: the queueMode toggle, or a numeric field with the world-override badge + the
@@ -224,9 +224,14 @@ export function InspectorPanel({
               // keyed by config key. The ± affordance is COLLAPSED by default (a bare "±"); once a range is set the
               // button shows the compact ±(lo–hi) indicator beside the point value — together they read `130 ±(100–180)`.
               const range = selInst.ranges?.[ck] ?? null;
+              // NODE-CONTEXT-AWARE label + tooltip (shared presenter `knobLabelFor`/`knobTipFor`): the
+              // double-duty `throughput` key reads "Generated load" + the honest assumption tooltip on a pure
+              // source (client.web's convenience preset); every other knob is unaffected — same label/tip as before.
+              const label = knobLabelFor(selMan, ck);
+              const tip = knobTipFor(selMan, ck);
               return (
                 <div className="field" key={`${selInst.id}:${ck}`}>
-                  <label data-tip={keyInfo(ck).cfg ?? keyInfo(ck).desc}>{keyInfo(ck).label}{activeOv && <span className="tagmode" style={{ marginLeft: 6 }} title={overrideProvenanceLabel(activeOv.provenance)}>{activeOv.provenance ?? 'manual'}</span>}</label>
+                  <label data-tip={tip}>{label}{activeOv && <span className="tagmode" style={{ marginLeft: 6 }} title={overrideProvenanceLabel(activeOv.provenance)}>{activeOv.provenance ?? 'manual'}</span>}</label>
                   <div className="slo-row">
                     <SyncedField value={String(cur)} onCommit={(raw) => { const n = Number(raw); if (raw.trim() !== '' && !Number.isNaN(n)) onCommitConfig(selInst.id, ck, n); }} />
                     {/* Always reserve the unit gutter (empty when the knob is unitless) so EVERY input ends at the same right edge. */}
@@ -241,7 +246,7 @@ export function InspectorPanel({
                     {/* The ± range affordance — opens the RangeEditor popover; the label is the collapsed indicator when set. */}
                     <button type="button" className={'knob-range-btn' + (range ? ' has-range' : '')}
                       title={range ? `Uncertainty range ${formatRange(range)} — click to edit or clear` : 'Add an uncertainty ± range (a soft input like 1,500–3,000) — sampled by the Monte-Carlo run'}
-                      onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onEditRange(selInst.id, ck, keyInfo(ck).label, keyInfo(ck).unit, Number(cur), range, { x: Math.max(12, r.left - 250), y: r.bottom + 4 }); }}>
+                      onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onEditRange(selInst.id, ck, label, keyInfo(ck).unit, Number(cur), range, { x: Math.max(12, r.left - 250), y: r.bottom + 4 }); }}>
                       {range ? formatRange(range) : '±'}
                     </button>
                   </div>
@@ -268,7 +273,10 @@ export function InspectorPanel({
             return (['assumptions', 'limits'] as const).map((gid) => {
               // HIDDEN knobs (e.g. `assumedRps`) are suppressed from the rendered list — the shared `isHiddenKnob`
               // (presenter) is the ONE decision both shells consult, so an 'Assumed traffic' row never surfaces here.
-              const knobs = cfgs.filter((c) => !isHiddenKnob(String(c.key)) && knobGroupOf(String(c.key)) === gid);
+              // `knobGroupFor` is NODE-CONTEXT-AWARE: a pure source's `throughput` config (client.web's
+              // declared demand) lands in `assumptions`, never `limits`, even though the key's GLOBAL registry role
+              // is `computed` — every other knob keeps its ordinary global grouping.
+              const knobs = cfgs.filter((c) => !isHiddenKnob(String(c.key)) && knobGroupFor(selMan, String(c.key)) === gid);
               const withComp = gid === 'limits' && showComposition;
               if (knobs.length === 0 && !withComp) return null; // no-filler: an empty group is not shown
               return (

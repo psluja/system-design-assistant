@@ -47,12 +47,16 @@ export interface SummarySection {
   readonly title: string;
   readonly rows: readonly SummaryRow[];
 }
-/** A config knob of the selected node — editable natively (InputBox → the HOST edits the document JSON). */
+/** A config knob of the selected node — editable natively (InputBox → the HOST edits the document JSON). `group`
+ *  is the NODE-CONTEXT-AWARE Inspector section it belongs in ('assumptions' | 'limits' — presenter's
+ * `knobGroupFor`), precomputed by the webview (which alone holds the node's manifest) and carried
+ *  verbatim: the host RENDERS this feed, it never re-derives a classification from the key alone. */
 export interface KnobRow {
   readonly key: string;
   readonly label: string;
   readonly value: number;
   readonly unit: string;
+  readonly group: 'assumptions' | 'limits';
 }
 /** One "what fits" suggestion for an open port of the selected node (native QuickPick). */
 export interface SuggestRow {

@@ -156,7 +156,7 @@ export {
 } from './analysis/request-class';
 export { provisioningTunables, quantizeKnob, DISCRETE_KNOBS } from './analysis/provision';
 export { robustRepair, robustOptimize, type RobustInput, type RobustChange, type RobustOutcome } from './analysis/robust';
-export { TARGET_UTILIZATION, egress } from './catalog/behaviors';
+export { TARGET_UTILIZATION, egress, receivesWork } from './catalog/behaviors';
 export {
   localContribution,
   localOwnAvailability,
