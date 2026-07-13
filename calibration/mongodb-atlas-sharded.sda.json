@@ -1,0 +1,49 @@
+{
+  "schema": 11,
+  "id": "mongodb-atlas-sharded",
+  "name": "MongoDB Atlas — sharded cluster (calibration #8, benchANT YCSB caching benchmark)",
+  "instances": [
+    {
+      "id": "loaders",
+      "type": "client.web",
+      "config": {
+        "throughput": 44898.4
+      }
+    },
+    {
+      "id": "mongo",
+      "type": "db.mongodb",
+      "config": {
+        "connectionPool": 600,
+        "connectionHeldMs": 13.1014,
+        "throughput": 45797
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["loaders", "out"],
+      "to": ["mongo", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "loaders": { "x": 60, "y": 80 },
+    "mongo": { "x": 480, "y": 80 }
+  },
+  "labels": {
+    "loaders": "YCSB loaders (8x, -target 6000 each)",
+    "mongo": "MongoDB Atlas M200_NVME, SHARDED x6"
+  },
+  "descriptions": {
+    "loaders": "8 YCSB CoreWorkload loader nodes (c5.4xlarge), each targeting 6,000 op/s (48,000 combined nominal), 50/50 read/update, uniform key distribution, ~1 KB records (10 fields x 100 bytes). Achieved combined 44,898.4 op/s (93.5% of the nominal target) — the loaders could not sustain the target rate, the signature of a server-side ceiling.",
+    "mongo": "One MongoDB Atlas 6.0 SHARDED cluster (6x M200_NVME, AWS us-west-2), modeled as a single aggregate SDA node — the same aggregate-cluster convention the Cassandra/Kafka cluster entries use. connectionPool (600) is PINNED: the MongoDB driver's documented default maxPoolSize (100 connections per client-to-shard mongos route — MONGO_POOL_SOURCE) x 6 shards. connectionHeldMs is the FITTED tunable (a NODE-scoped tunable, not shared with DeathStarBench's type-scoped db.mongodb:connectionHeldMs — a different, near-idle deployment): fitted by `pnpm calibrate` to 13.1014 ms, the value that reproduces the measured 13.8101 ms blended read/update mean at the achieved 44,898.4 op/s load, given the pinned pool (post-fit residual -0.9%, grid-search granularity — see CALIBRATION-REPORT.md). `throughput` (45,797 op/s) is a derived, non-fitted display value kept consistent with pool/held by construction (== 600 / (connectionHeldMs/1000)), the same consistency convention the Redis/Cassandra entries follow."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

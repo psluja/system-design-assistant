@@ -34,6 +34,17 @@ export interface SummarySection {
  *  identical text on every surface so the node's Promises and the System's Promises are indistinguishable in FORM. */
 export const PROMISES_TITLE = 'Promises';
 
+// SHARED SECTION TITLES (one-source by construction) — every System-panel section title that both shells
+// render VERBATIM identically lives here as a named constant, never as a literal repeated in app/web/src/system-
+// panel.tsx. A parity lint (app/web/src/system-panel-titles.test.ts) asserts the web source contains none of these
+// texts as a bare string literal — only as an imported reference — so a rename here can never silently drift out of
+// sync with the other shell again.
+export const RESPONSE_TIME_TITLE = 'Response time · end-to-end';
+export const RESPONSE_PER_COMPONENT_TITLE = 'Response time · per component';
+export const LOAD_PER_COMPONENT_TITLE = 'Load per component';
+export const PROPAGATION_LAG_TITLE = 'Propagation lag · flow-scoped';
+export const COST_BREAKDOWN_TITLE = 'Cost · breakdown';
+
 /** What the one-line System VERDICT needs — the counts and headline numbers the shells already hold (owner-approved
  *  story, 2026-07-11). Pure inputs so both shells compute the identical verdict: the web renders it as the top pill,
  *  the VS Code System tree as its top item. */
@@ -218,6 +229,44 @@ function hasRetryStory(sim: SimTail): boolean {
   return sim.retryPolicy === true || (sim.amplification !== undefined && sim.amplification > 1) || (sim.errorRate !== undefined && sim.errorRate > 0);
 }
 
+/** The MEASURED "Response time · end-to-end" rows for a run that HAS landed — p50/p95/p99 plus the retry-outcome
+ *  rows (ONLY with a retry story: ui-no-absent-feature-filler). Exported so both shells build the identical rows
+ * from the same sim: the web System panel's `responseTime` block and this module's `summarySections`
+ *  used to hand-roll this same logic twice (the AMPLIFICATION_WARN threshold + retry-condition + row texts), a
+ *  drift risk every edit had to defeat by hand. The "no sim yet" fallback stays PER-SHELL (a `<p>` on web, a
+ *  `status` row here) — the two empty states are rendered too differently in markup to share, and neither carries
+ *  logic worth extracting. */
+export function responseTimeRows(sim: SimTail): SummaryRow[] {
+  const rows: SummaryRow[] = [
+    { label: 'p50 · typical', value: formatMs(sim.p50) },
+    { label: 'p95', value: formatMs(sim.p95) },
+    { label: 'p99 · tail', value: formatMs(sim.p99) },
+  ];
+  if (hasRetryStory(sim)) {
+    if (sim.goodputRps !== undefined) rows.push({ label: 'Goodput (succeeded)', value: `${fmt(sim.goodputRps)} req/s` });
+    if (sim.errorRate !== undefined) {
+      rows.push({ label: 'Failed after retries', value: `${fmt(sim.errorRate)} req/s`, ...(sim.errorRate > 0 ? { tone: 'bad' as const } : {}) });
+    }
+    if (sim.amplification !== undefined) {
+      rows.push({ label: 'Retry amplification', value: `×${fmt(sim.amplification)}`, ...(sim.amplification > AMPLIFICATION_WARN ? { tone: 'warn' as const } : {}) });
+    }
+  }
+  return rows;
+}
+
+/** The "Cost · breakdown" rows both shells show identically: compute/storage, egress, on-demand total. The 1-yr /
+ *  3-yr commitment rows are NOT included here — the VS Code System tree appends them inline (unchanged), while the
+ *  web System panel renders them itself with an embedded coloured savings figure (`−$X`) the plain string `value`
+ *  here cannot carry; they are also hidden for the first release (HIDE_ADVANCED, owner 2026-07-11). Exported so the
+ *  three rows every surface DOES show are built once, not hand-duplicated per shell. */
+export function costBreakdownRows(costBreak: CostBreakdown): SummaryRow[] {
+  return [
+    { label: 'Compute / storage', value: `$${fmt(costBreak.computeUsdMonth)}/mo` },
+    { label: 'Data transfer (egress)', value: `$${fmt(costBreak.egressUsdMonth)}/mo` },
+    { label: 'Total · on-demand', value: `$${fmt(costBreak.totalUsdMonth)}/mo` },
+  ];
+}
+
 /** Everything `summarySections` needs, all already computed by the shell (the presenter re-derives nothing that
  *  the engine/content didn't — it only calls `systemSummary` for the cost/flow depth, exactly as both shells do). */
 export interface SummaryInput {
@@ -350,30 +399,14 @@ export function summarySections(input: SummaryInput): SummarySection[] {
     sections.push({ title: `${flows.length > 1 ? `Flow ${i + 1} · ` : 'System · '}${labelOf(fl.source, typeOf(fl.source))} → ${labelOf(fl.terminal, typeOf(fl.terminal))}`, rows });
   });
 
-  // Response time · end-to-end (the background DES). With a real sim, show p50/p95/p99. Otherwise an honest pending
+  // Response time · end-to-end (the background DES). With a real sim, the SHARED responseTimeRows (p50/p95/p99 +
+  // retry outcome) — the same rows the web System panel builds from the identical sim. Otherwise an honest pending
   // row — and when there is NO traffic origin at all, say WHY (a client-less design cannot be told to "set a client
   // throughput"; the fix is assumedRps on any node or a client).
   const tailRows: SummaryRow[] = sim
-    ? [
-        { label: 'p50', value: formatMs(sim.p50) },
-        { label: 'p95', value: formatMs(sim.p95) },
-        { label: 'p99 · tail', value: formatMs(sim.p99) },
-      ]
+    ? responseTimeRows(sim)
     : [{ label: 'status', value: noOrigin ? NO_ORIGIN_REASON : 'set a client throughput to simulate the tail' }];
-  // RETRY OUTCOME rows — ONLY when the sim ran on a design with a retry story (a declared policy or measured retry
-  // traffic). These come from the SAME DES run and belong next to the tail (both are time-domain truths the scalar
-  // pass can't see). Self-explanatory labels for an outsider: what succeeded, what failed, how much the retries
-  // multiplied the work. Failures > 0 is a real breach (violation tone); heavy amplification is a warning.
-  if (sim && hasRetryStory(sim)) {
-    if (sim.goodputRps !== undefined) tailRows.push({ label: 'Goodput (succeeded)', value: `${fmt(sim.goodputRps)} req/s` });
-    if (sim.errorRate !== undefined) {
-      tailRows.push({ label: 'Failed after retries', value: `${fmt(sim.errorRate)} req/s`, ...(sim.errorRate > 0 ? { tone: 'bad' as const } : {}) });
-    }
-    if (sim.amplification !== undefined) {
-      tailRows.push({ label: 'Retry amplification', value: `×${fmt(sim.amplification)}`, ...(sim.amplification > AMPLIFICATION_WARN ? { tone: 'warn' as const } : {}) });
-    }
-  }
-  sections.push({ title: 'Response time · end-to-end', rows: tailRows });
+  sections.push({ title: RESPONSE_TIME_TITLE, rows: tailRows });
 
   // Response latency · per node — the request→response tail a caller of each
   // REQUIREMENT-BEARING node (a latency/tailLatency band) actually feels, measured from the same DES run. One row
@@ -381,13 +414,13 @@ export function summarySections(input: SummaryInput): SummarySection[] {
   // requirement (no-filler — a design with no latency SLO adds no section). This is the whole-design roll-up of the
   // per-node number the canvas chip shows and the Inspector expands.
   const respRows = responseRows(sim, instances, verdicts, labelOf, typeOf);
-  if (respRows.length > 0) sections.push({ title: 'Response time · per component', rows: respRows });
+  if (respRows.length > 0) sections.push({ title: RESPONSE_PER_COMPONENT_TITLE, rows: respRows });
 
   // Propagation lag · flow-scoped — one row per declared CDC/replication deadline
   // (source → terminal, async queue waits INCLUDED), with the honest read-back. ONLY when the design declares one
   // (no-filler); a design with no lag SLO adds no section.
   if (lag && lag.length > 0) {
-    sections.push({ title: 'Propagation lag · flow-scoped', rows: lag.map((v) => lagRow(v, labelOf, typeOf)) });
+    sections.push({ title: PROPAGATION_LAG_TITLE, rows: lag.map((v) => lagRow(v, labelOf, typeOf)) });
   }
 
   // Load per component — every queued node, tone by the same thresholds the web System panel uses. WORST-CASE LOAD
@@ -418,16 +451,17 @@ export function summarySections(input: SummaryInput): SummarySection[] {
       loadRows.push({ label: labelOf(id, typeOf(id)), value: `${pct >= 1000 ? '≥1000' : pct.toFixed(0)}%`, tone: 'bad' });
     }
   }
-  if (loadRows.length > 0) sections.push({ title: 'Load per component', rows: loadRows });
+  if (loadRows.length > 0) sections.push({ title: LOAD_PER_COMPONENT_TITLE, rows: loadRows });
 
-  // Cost breakdown — the CostBreakdown fields, exactly as the web System panel shows them.
+  // Cost breakdown — the SHARED costBreakdownRows (compute/egress/total), exactly as the web System panel shows
+  // them, plus the VS Code tree's OWN 1-yr/3-yr commit rows (the native tree has no HIDE_ADVANCED gate, so it shows
+  // every row; the web System panel renders its commit rows itself, with an embedded coloured savings figure the
+  // plain string `value` here can't carry — see costBreakdownRows' doc comment).
   if (costBreak && costBreak.totalUsdMonth > 0.005) {
     sections.push({
-      title: 'Cost',
+      title: COST_BREAKDOWN_TITLE,
       rows: [
-        { label: 'Compute / storage', value: `$${fmt(costBreak.computeUsdMonth)}/mo` },
-        { label: 'Data transfer (egress)', value: `$${fmt(costBreak.egressUsdMonth)}/mo` },
-        { label: 'Total · on-demand', value: `$${fmt(costBreak.totalUsdMonth)}/mo` },
+        ...costBreakdownRows(costBreak),
         { label: '1-yr commit', value: `$${fmt(costBreak.committed1yrUsdMonth)}/mo`, tone: 'ok' },
         { label: '3-yr commit', value: `$${fmt(costBreak.committed3yrUsdMonth)}/mo`, tone: 'ok' },
       ],

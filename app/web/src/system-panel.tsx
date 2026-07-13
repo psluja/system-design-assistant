@@ -8,8 +8,10 @@ import {
   type LagVerdict, type NodePeak, type TwoTierResult, type UncertaintyResult,
 } from '@sda/content';
 import {
-  fmt, formatMs, plural, responseRows, lagRows, requirementOptions, systemVerdict,
+  fmt, plural, responseRows, lagRows, requirementOptions, systemVerdict,
   uncertaintySection, envelopeSection, worldsMatrix, twoTierSection, worstCaseRho, PROMISES_TITLE,
+  responseTimeRows, costBreakdownRows,
+  RESPONSE_TIME_TITLE, RESPONSE_PER_COMPONENT_TITLE, LOAD_PER_COMPONENT_TITLE, PROPAGATION_LAG_TITLE, COST_BREAKDOWN_TITLE,
   type FlowGuaranteeLine, type SimTail, type SummaryRow, type UncertaintyState,
 } from '@sda/presenter';
 
@@ -25,6 +27,32 @@ import {
 // Hidden for the FIRST RELEASE (owner, 2026-07-11): advanced / niche System-panel bits — the qualitative guarantee
 // controls and the 1-yr / 3-yr commitment pricing. The logic stays; only the display is gated. Set to false to restore.
 const HIDE_ADVANCED = true;
+
+/** The generic `.vr` row list every read-only System block renders — ONE markup for a presenter-computed
+ *  {@link SummaryRow}[], so a section's CONTENT (label/value/tone) comes only from the shared presenter, never
+ * hand-typed per section (one-source by construction). */
+function Rows({ rows }: { rows: readonly SummaryRow[] }): JSX.Element {
+  return (
+    <>
+      {rows.map((r, i) => (
+        <div className="vr" key={i}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>
+      ))}
+    </>
+  );
+}
+
+/** The generic read-only System section card — a title (from the presenter, never a literal), an optional caption
+ *  tooltip, and its {@link Rows}. Every STRUCTURALLY read-only block (load limits, response time, uncertainty,
+ *  propagation lag, load stages, response per component) renders through this ONE component; only sections with
+ *  genuine web-only INTERACTIVITY (editable promise/cost inputs, the demand-scenario buttons) keep bespoke JSX. */
+function Section({ title, caption, rows }: { title: string; caption?: string; rows: readonly SummaryRow[] }): JSX.Element {
+  return (
+    <div className="sec">
+      <div className="syshdr" data-tip={caption}>{title}</div>
+      <Rows rows={rows} />
+    </div>
+  );
+}
 
 /** The "add a guarantee requirement" control for one flow. A single dimension
  *  `<select>` offering only the dimensions not YET required on this flow; choosing one declares a requirement at that
@@ -112,31 +140,24 @@ export function SystemPanel({
     const section = envelopeSection({ result: envW.env, computing: envW.computing && envW.env === null }, (id) => labelOf(id, typeOf(id)));
     if (section === null) return null;
     return (
-      <div className="sec"><div className="syshdr" data-tip="How far each entry point can be pushed before a promise breaks, WHAT breaks first, and where the latency knee sits — computed with NO declared demand (the default answer). An exact monthly bill / utilisation needs a chosen load (a demand scenario).">{section.title}</div>
-        {section.rows.map((r, i) => <div className="vr" key={`env-${i}`}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>)}
-      </div>
+      <Section
+        title={section.title}
+        caption="How far each entry point can be pushed before a promise breaks, WHAT breaks first, and where the latency knee sits — computed with NO declared demand (the default answer). An exact monthly bill / utilisation needs a chosen load (a demand scenario)."
+        rows={section.rows}
+      />
     );
   })();
 
-  // RESPONSE TIME · END-TO-END — the p50/p95/p99 a client actually feels, from the discrete-event simulation.
+  // RESPONSE TIME · END-TO-END — the p50/p95/p99 a client actually feels, from the discrete-event simulation. The
+  // "sim landed" rows are the SHARED `responseTimeRows`: the exact rows {@link summarySections} builds for
+  // the VS Code System tree from the same sim, so the two shells can no longer drift on the retry-outcome logic
+  // (the AMPLIFICATION_WARN threshold + which rows appear). The "no sim yet" fallback stays web's own paragraph —
+  // its markup (a muted line, not a row) has no vscode analogue worth sharing.
   const responseTime = (
-    <div className="sec"><div className="syshdr" data-tip="The end-to-end response time a client feels (p50 typical / p95 / p99 tail), measured by the discrete-event simulation over time — the distribution the instant analytic mean can't show. Runs automatically in the background on every change.">Response time · end-to-end{simRefreshing ? ' · refreshing…' : ''}</div>
-      {sim ? (
-        <>
-          <div className="vr"><span className="k">p50 · typical</span><span className="v">{formatMs(sim.p50)}</span></div>
-          <div className="vr"><span className="k">p95</span><span className="v">{formatMs(sim.p95)}</span></div>
-          <div className="vr"><span className="k">p99 · tail</span><span className="v">{formatMs(sim.p99)}</span></div>
-          {/* RETRY OUTCOME — ONLY with a retry story (a declared policy, or measured retry
-              traffic/failures). Past saturation retries LOWER goodput; the tool must show that honestly. */}
-          {(sim.retryPolicy || sim.amplification > 1 || sim.errorRate > 0) && (
-            <>
-              <div className="vr" data-tip="Requests that actually SUCCEED per second (retries and failures excluded) — the useful work delivered. Past saturation, retries LOWER this below capacity."><span className="k">Goodput (succeeded)</span><span className="v">{fmt(sim.goodput)} req/s</span></div>
-              <div className="vr" data-tip="Requests that FAIL per second after every retry is spent — the honest error rate under load."><span className="k">Failed after retries</span><span className="v" style={sim.errorRate > 0 ? { color: 'var(--bad)' } : undefined}>{fmt(sim.errorRate)} req/s</span></div>
-              <div className="vr" data-tip="Attempts ÷ arrivals — how much the retries multiply the offered work. ×1 = no retry traffic; higher means a retry storm hitting an already-busy tier."><span className="k">Retry amplification</span><span className="v" style={sim.amplification > 1.2 ? { color: 'var(--warn)' } : undefined}>×{fmt(sim.amplification)}</span></div>
-            </>
-          )}
-        </>
-      ) : (
+    <div className="sec"><div className="syshdr" data-tip="The end-to-end response time a client feels (p50 typical / p95 / p99 tail), measured by the discrete-event simulation over time — the distribution the instant analytic mean can't show. Runs automatically in the background on every change.">{RESPONSE_TIME_TITLE}{simRefreshing ? ' · refreshing…' : ''}</div>
+      {/* SimSnapshot carries the retry outcome as `goodput` (its own field, populated by the sim worker); the shared
+          presenter SimTail names it `goodputRps` — remapped here so responseTimeRows sees the real number. */}
+      {sim ? <Rows rows={responseTimeRows({ ...sim, goodputRps: sim.goodput })} /> : (
         <p className="muted" style={{ margin: '4px 0' }}>{simRefreshing ? 'measuring…' : 'set a client throughput to simulate the response time'}</p>
       )}
     </div>
@@ -148,27 +169,34 @@ export function SystemPanel({
     const section = uncertaintySection({ result: unc.result, state: unc.state, ...(unc.backend ? { backend: unc.backend } : {}), ...(unc.elapsedMs !== undefined ? { elapsedMs: unc.elapsedMs } : {}) }, (id) => labelOf(id, typeOf(id)));
     if (section === null) return null;
     return (
-      <div className="sec"><div className="syshdr" data-tip="Assumption uncertainty (Monte Carlo): every declared ± range is sampled thousands of times, so each conclusion is a DISTRIBUTION, not a false-precision point. Recomputes continuously in the background — a fast fp32 GPU PREVIEW while you edit, then a CPU-CONFIRMED (verdict-grade) pass when the design rests. fp32 is never shown as final truth.">{section.title}</div>
-        {section.rows.map((r, i) => <div className="vr" key={`unc-${i}`}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>)}
-      </div>
+      <Section
+        title={section.title}
+        caption="Assumption uncertainty (Monte Carlo): every declared ± range is sampled thousands of times, so each conclusion is a DISTRIBUTION, not a false-precision point. Recomputes continuously in the background — a fast fp32 GPU PREVIEW while you edit, then a CPU-CONFIRMED (verdict-grade) pass when the design rests. fp32 is never shown as final truth."
+        rows={section.rows}
+      />
     );
   })();
 
   // PROPAGATION LAG · flow-scoped — declared CDC/replication deadlines, present ONLY when declared (no-filler).
   const propagationLag = lagV.length > 0 && (
-    <div className="sec"><div className="syshdr" data-tip="Declared flow-scoped propagation deadlines (a change captured at the source reaches the destination within X ms) — async queue waits INCLUDED. The simulation measures the true mean; without a run the scalar can only prove a violation or read unknown.">Propagation lag · flow-scoped</div>
-      {lagRows(lagV, labelOf, typeOf).map((r, i) => <div className="vr" key={`lag-${i}`}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>)}
-    </div>
+    <Section
+      title={PROPAGATION_LAG_TITLE}
+      caption="Declared flow-scoped propagation deadlines (a change captured at the source reaches the destination within X ms) — async queue waits INCLUDED. The simulation measures the true mean; without a run the scalar can only prove a violation or read unknown."
+      rows={lagRows(lagV, labelOf, typeOf)}
+    />
   );
 
   // LOAD STAGES · TRANSIENT — the AMBIENT two-tier read-out, present only when a generator declares cycles (no-filler).
-  const loadStages = twoTier !== null && (
-    <div className="sec"><div className="syshdr" data-tip="Traffic that changes over time: whenever a generator declares periodic cycles, the design is evaluated over its whole auto-derived season in two tiers — a cheap analytic sweep of the ρ-envelope + worst window + honest mean bill (Tier-1), then a targeted discrete-event simulation that PROVES the true backlog and drain at the worst window (Tier-2). Live and ambient; two labelled bases.">Load stages · transient</div>
-      {twoTierSection(twoTier, (id) => labelOf(id, typeOf(id))).rows.map((r, i) => (
-        <div className="vr" key={`twotier-r-${i}`}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>
-      ))}
-    </div>
-  );
+  const loadStages = twoTier !== null && (() => {
+    const section = twoTierSection(twoTier, (id) => labelOf(id, typeOf(id)));
+    return (
+      <Section
+        title={section.title}
+        caption="Traffic that changes over time: whenever a generator declares periodic cycles, the design is evaluated over its whole auto-derived season in two tiers — a cheap analytic sweep of the ρ-envelope + worst window + honest mean bill (Tier-1), then a targeted discrete-event simulation that PROVES the true backlog and drain at the worst window (Tier-2). Live and ambient; two labelled bases."
+        rows={section.rows}
+      />
+    );
+  })();
 
   // RESPONSE TIME · PER COMPONENT — each promise-bearing node's OWN response tail, from the same DES run (no-filler:
   // absent before a run / with no latency SLO). Shares the presenter row-builder with the VS Code System tree.
@@ -176,18 +204,20 @@ export function SystemPanel({
     const rows: SummaryRow[] = responseRows(sim, doc.instances, verds, labelOf, typeOf);
     if (rows.length === 0) return null;
     return (
-      <div className="sec"><div className="syshdr" data-tip="Each promise-bearing node's OWN request→response tail (p50/p95/p99) measured by the simulation — the compact p50→p99 range the canvas bar shows, expanded. A node's response cuts at async boundaries: it is what a caller of that node actually waits for.">Response time · per component{simRefreshing ? ' · refreshing…' : ''}</div>
-        {rows.map((r, i) => <div className="vr" key={`resp-${i}`}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>)}
+      <div className="sec">
+        <div className="syshdr" data-tip="Each promise-bearing node's OWN request→response tail (p50/p95/p99) measured by the simulation — the compact p50→p99 range the canvas bar shows, expanded. A node's response cuts at async boundaries: it is what a caller of that node actually waits for.">{RESPONSE_PER_COMPONENT_TITLE}{simRefreshing ? ' · refreshing…' : ''}</div>
+        <Rows rows={rows} />
       </div>
     );
   })();
 
-  // COST · BREAKDOWN — the bill depth (compute/storage + internet egress + total). Present only with real cost.
+  // COST · BREAKDOWN — the bill depth (compute/storage + internet egress + total). Present only with real cost. The
+  // three always-shown rows are the SHARED `costBreakdownRows` — the same rows {@link summarySections}
+  // builds for the VS Code tree. The 1-yr/3-yr commit rows stay bespoke JSX: hidden for the first release
+  // (HIDE_ADVANCED) and carrying an embedded coloured savings figure a plain string row value can't express.
   const costBreakdown = costBreak && costBreak.totalUsdMonth > 0.005 && (
-    <div className="sec"><div className="syshdr" data-tip="The bill depth: compute/storage + the most-missed internet egress line (set each tier's payload), and the grand total.">Cost · breakdown</div>
-      <div className="vr"><span className="k">Compute / storage</span><span className="v">${fmt(costBreak.computeUsdMonth)}/mo</span></div>
-      <div className="vr"><span className="k">Data transfer (egress)</span><span className="v">${fmt(costBreak.egressUsdMonth)}/mo</span></div>
-      <div className="vr"><span className="k">Total · on-demand</span><span className="v">${fmt(costBreak.totalUsdMonth)}/mo</span></div>
+    <div className="sec"><div className="syshdr" data-tip="The bill depth: compute/storage + the most-missed internet egress line (set each tier's payload), and the grand total.">{COST_BREAKDOWN_TITLE}</div>
+      <Rows rows={costBreakdownRows(costBreak)} />
       <div className="vr" hidden={HIDE_ADVANCED}><span className="k">1-yr commit</span><span className="v">${fmt(costBreak.committed1yrUsdMonth)}/mo <span style={{ color: 'var(--ok)' }}>−${fmt(costBreak.totalUsdMonth - costBreak.committed1yrUsdMonth)}</span></span></div>
       <div className="vr" hidden={HIDE_ADVANCED}><span className="k">3-yr commit</span><span className="v">${fmt(costBreak.committed3yrUsdMonth)}/mo <span style={{ color: 'var(--ok)' }}>−${fmt(costBreak.totalUsdMonth - costBreak.committed3yrUsdMonth)}</span></span></div>
     </div>
@@ -282,7 +312,7 @@ export function SystemPanel({
         {/* WHERE THE LOAD SITS — each component's utilisation (offered ÷ capacity). The single most useful "what to
             fix next" read-out: the reddest tier is the bottleneck. Above ~70% the queue grows; at/over 100% it
             overloads and drops traffic. Instant (no simulation); with a shaped generator, the declared-peak load. */}
-        <div className="syshdr" data-tip="Per-component load = utilisation (offered ÷ capacity). Above ~70% the queue grows; at or over 100% the component overloads — it drops load and queues without bound. Instant, no simulation. With a shaped generator each row reads the WORST-WINDOW load (the declared peak).">Load per component</div>
+        <div className="syshdr" data-tip="Per-component load = utilisation (offered ÷ capacity). Above ~70% the queue grows; at or over 100% the component overloads — it drops load and queues without bound. Instant, no simulation. With a shaped generator each row reads the WORST-WINDOW load (the declared peak).">{LOAD_PER_COMPONENT_TITLE}</div>
         <p className="muted" style={{ margin: '0 2px 6px' }}>Share of each component's capacity in use — the reddest is the bottleneck; over 100% it overloads and drops traffic.</p>
         {fl.ids.map((id) => {
           const q = queues.get(id);
@@ -375,7 +405,7 @@ export function SystemPanel({
           <button className="wlens-btn" style={{ marginLeft: 'auto' }} onClick={onDeriveTrio} title="Fill the low / expected / high worlds with values derived from THIS design's load limits (badged 'derived', live-tracking until you edit them)">✨ Suggest 3 (low / expected / high)</button>
         </div>
         {deriveNote && <p className="muted" style={{ margin: '4px 0', color: 'var(--warn, #8a5a00)' }}>{deriveNote}</p>}
-        {section ? section.rows.map((r, i) => <div className="vr" key={`world-${i}`}><span className="k">{r.label}</span><span className={'v ' + (r.tone ?? '')}>{r.value}</span></div>)
+        {section ? <Rows rows={section.rows} />
           : <p className="muted" style={{ margin: '4px 0' }}>No scenarios yet — <b>Suggest 3</b> fills low / expected / high, or add your own.</p>}
       </div>
     );

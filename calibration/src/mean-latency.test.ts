@@ -103,9 +103,11 @@ describe('meanLatencyMsAtLoad — the metric-kind plumbing (Phase A, synthetic f
 describe('meanLatencyMsAtLoad — the fixture is ISOLATED from the shipped corpus (Phase A)', () => {
   const realCorpus = loadCorpus();
 
-  it('the real corpus still has exactly ten scored points and does not contain the fixture', () => {
+  it('the real corpus still has exactly twelve scored points and does not contain the fixture', () => {
     const scored = realCorpus.flatMap((e) => e.entry.groundTruth.filter((g) => g.measured !== null));
-    expect(scored.length, 'the plumbing fixture must NOT change the scored-points count').toBe(10);
+    // 10 pre- points + the 2 real meanLatencyMsAtLoad entries this task adds (MongoDB Atlas + ScyllaDB,
+    // benchANT YCSB) — the plumbing fixture itself must NOT change this count.
+    expect(scored.length, 'the plumbing fixture must NOT change the scored-points count').toBe(12);
     expect(realCorpus.some((e) => e.entry.name === FIXTURE_NAME), 'the fixture must not be a shipped corpus entry').toBe(false);
     const provenances = realCorpus.flatMap((e) => [e.entry.notes, ...e.entry.sources.map((s) => s.url), ...e.entry.groundTruth.map((g) => g.sourceUrl)]);
     expect(provenances.some((p) => p.includes('PLUMBING FIXTURE')), 'the fixture provenance must not appear in the corpus').toBe(false);

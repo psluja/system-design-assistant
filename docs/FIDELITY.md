@@ -8,12 +8,12 @@ The V&V coverage matrix as a published report. It crosses every engine capabilit
 
 The headline is a **vector**, not one blended number: mixing a latency residual with a cost source would be dishonest (doc §7.1, §11.3).
 
-- **Performance fidelity (fitted):** 3.0% over 10 scored points · out-of-sample 8.9%.
+- **Performance fidelity (fitted):** 2.7% over 12 scored points · out-of-sample 8.9%.
 - **Cost fidelity:** sourced-only — no measured bill in the corpus (UNVALIDATED; cost is deterministic algebra over a cited unit price, not a fitted residual).
 - **Availability fidelity:** sourced-only — no measured DR in the corpus (UNVALIDATED; availability is a series product vs the published SLA, not a fitted residual).
 - **Modeling behaviors (8), by evidence nature:** **2 measured-capacity** (validated vs measured systems) · **3 theory-dynamics** (closed-form + DES anchored) · **3 sourced-algebra** (current vs cited quota/price/SLA) — the white-space is the RIGHT evidence per nature, not gaps (breakdown below).
 - **Engine capabilities (14 total):** 2 validated · 9 verified (analytic anchor only) · 3 sourced (deterministic algebra over a cited quota/price/SLA) · 0 with **no anchor at all**.
-- **Corpus:** 10 architectures.
+- **Corpus:** 12 architectures.
 - **Documented gaps:** 5 permanent structural limits + 4 addressable verification gaps.
 
 > **The honest reading:** of the 8 modeling behaviors, only the 2 **measured-capacity** families can be — and are — validated against real measured systems (~2%). The other 6 are NOT gaps: **theory-dynamics** anchored to a closed form + the DES, and **sourced-algebra** correct against a cited quota / price / SLA — the RIGHT evidence for their nature, not a missing measurement. The two most-used solver capabilities (`evaluate`, `evaluateBatch`) are oracle-graded (`verified`). What the corpus can still broaden is the measured-capacity families; this report shows exactly which white-space is real.
@@ -23,7 +23,7 @@ The headline is a **vector**, not one blended number: mixing a latency residual 
 The 8 behaviors are three different KINDS of thing, and each deserves a different kind of evidence. "Validated against a measured system" is the right bar for capacity; it is the WRONG bar for deterministic algebra or a time-dynamic with no published curve. Green only where the evidence appropriate to the behavior's nature exists — the white-space below is NOT gaps, it is behaviors whose honest evidence is theory or a cited source.
 
 **Measured-capacity (2)** — a clean measurable number a real benchmark pins; validated against a measured system where one exists. The ONLY nature the corpus can broaden.
-- Queueing tail (M/M/c p99) — `validated` · Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017), DeathStarBench, Kafka — producer write, 3x async replication (Kreps 2014), Kafka — producer write, no replication (Kreps 2014), RabbitMQ — classic queue (single node, AMQP 0.9.1), RabbitMQ — classic queue (single node, AMQP 1.0), Redis — LPUSH (single node, non-pipelined), Redis — SET (single node, non-pipelined), TechEmpower 20-query, TechEmpower single-query
+- Queueing tail (M/M/c p99) — `validated` · Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017), DeathStarBench, Kafka — producer write, 3x async replication (Kreps 2014), Kafka — producer write, no replication (Kreps 2014), MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023), RabbitMQ — classic queue (single node, AMQP 0.9.1), RabbitMQ — classic queue (single node, AMQP 1.0), Redis — LPUSH (single node, non-pipelined), Redis — SET (single node, non-pipelined), ScyllaDB — 3-node cluster, caching workload (uniform), YCSB (benchANT 2023), TechEmpower 20-query, TechEmpower single-query
 - CPU-bound tier — `validated` · TechEmpower 20-query, TechEmpower single-query
 
 **Theory-dynamics (3)** — a time-behavior anchored to a closed form AND differentially tested against the DES — trustworthy for direction and relative magnitude, but not calibratable to one measured system (the curves are rarely published, a single point is degenerate). Honestly `verified`, not a gap.
@@ -50,7 +50,7 @@ Only the measured-capacity families can be broadened by adding real systems to t
 | Repair | solver | solver-incumbent | UNVALIDATED | `verified` |
 | ExplainInfeasible | solver | solver-incumbent | UNVALIDATED | `verified` |
 | Enumerate | solver | solver-incumbent | UNVALIDATED | `verified` |
-| Queueing tail (M/M/c p99) | family | analytic-closed-form, differential | Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017) 0.6%; DeathStarBench 0.2%; Kafka — producer write, 3x async replication (Kreps 2014) 1.5%; Kafka — producer write, no replication (Kreps 2014) 2.8%; RabbitMQ — classic queue (single node, AMQP 0.9.1) 5.3%; RabbitMQ — classic queue (single node, AMQP 1.0) 6.3%; Redis — LPUSH (single node, non-pipelined) 2.1%; Redis — SET (single node, non-pipelined) 2.3%; TechEmpower 20-query 0.7%; TechEmpower single-query 0.5% | `validated` |
+| Queueing tail (M/M/c p99) | family | analytic-closed-form, differential | Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017) 0.6%; DeathStarBench 0.2%; Kafka — producer write, 3x async replication (Kreps 2014) 1.5%; Kafka — producer write, no replication (Kreps 2014) 2.8%; MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023) 0.9%; RabbitMQ — classic queue (single node, AMQP 0.9.1) 5.3%; RabbitMQ — classic queue (single node, AMQP 1.0) 6.3%; Redis — LPUSH (single node, non-pipelined) 2.1%; Redis — SET (single node, non-pipelined) 2.3%; ScyllaDB — 3-node cluster, caching workload (uniform), YCSB (benchANT 2023) 1.1%; TechEmpower 20-query 0.7%; TechEmpower single-query 0.5% | `validated` |
 | Redundancy / availability | family | algebra | sourced (quota/price/SLA); no measured case | `sourced` |
 | Act as a queue (backlog) | family | analytic-closed-form, property | UNVALIDATED | `verified` |
 | Documented ceilings (outage caps) | family | algebra | sourced (quota/price/SLA); no measured case | `sourced` |
@@ -71,14 +71,14 @@ The six reported metrics crossed with the three load regimes where a model behav
 | Metric | below-knee | at-knee | past-saturation |
 |---|---|---|---|
 | Throughput ceiling | `verified` | `validated` Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017) | `verified` |
-| p50 / p99 tail | `verified` | `verified` | `verified` |
+| p50 / p99 tail | `validated` MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023) | `verified` | `verified` |
 | Bottleneck / latency share | `validated` DeathStarBench | `verified` | `verified` |
 | Cost / bill | `sourced` | `sourced` | `UNVALIDATED` |
 | Availability / nines | `sourced` | `UNVALIDATED` | `UNVALIDATED` |
 | Transient / peak survival | `verified` | `verified` | `UNVALIDATED` |
 
 _Grid notes:_
-- **p50 / p99 tail · below-knee** — scorable on the analytic MEAN sojourn at a stated sub-saturation load (meanLatencyMsAtLoad), NOT a p99 curve; the seeded DES corroborates p50/p95/p99 at the same load. No measured latency-at-load entry in the corpus yet — the cell is scorable but awaits one
+- **p50 / p99 tail · below-knee** — scored on the analytic MEAN sojourn at a stated sub-saturation load (meanLatencyMsAtLoad), NOT a p99 curve; the seeded DES corroborates p50/p95/p99 at the same load, report-only (never scored)
 - **Cost / bill · past-saturation** — no real bill in the corpus — UNVALIDATED
 - **Availability / nines · at-knee** — availability is load-independent — no at-knee cell (n/a)
 - **Availability / nines · past-saturation** — no measured DR / end-to-end availability in the corpus — UNVALIDATED
@@ -94,24 +94,28 @@ The measured systems SDA is held against, with the residual that remains after t
 | DeathStarBench — Social Network | latencySharePct | 8.50 % | 8.52 | +0.2% |
 | Kafka — producer write, 3x async replication (Kreps 2014) | capacityCeilingRps | 786,980 msg/s | 798,556 | +1.5% |
 | Kafka — producer write, no replication (Kreps 2014) | capacityCeilingRps | 821,557 msg/s | 798,556 | -2.8% |
+| MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023) | meanLatencyMsAtLoad | 14 ms | 14 | -0.9% |
 | RabbitMQ — classic queue (single node, AMQP 1.0) | capacityCeilingRps | 99,413 msg/s | 93,188 | -6.3% |
 | RabbitMQ — classic queue (single node, AMQP 0.9.1) | capacityCeilingRps | 88,534 msg/s | 93,188 | +5.3% |
 | Redis — LPUSH (single node, non-pipelined) | capacityCeilingRps | 188,324 op/s | 184,375 | -2.1% |
 | Redis — SET (single node, non-pipelined) | capacityCeilingRps | 180,180 op/s | 184,375 | +2.3% |
+| ScyllaDB — 3-node cluster, caching workload (uniform), YCSB (benchANT 2023) | meanLatencyMsAtLoad | 3 ms | 3 | +1.1% |
 | TechEmpower — Multiple Queries (20 per request) | capacityCeilingRps | 5,900 req/s | 5,858 | -0.7% |
 | TechEmpower — Single Database Query | capacityCeilingRps | 104,000 req/s | 104,538 | +0.5% |
 
-Aggregate post-fit error: **3.0%** over 10 scored points. Out-of-sample (leave-one-out over the constrained entries): **8.9%** — the honest reminder that 10 architectures with mostly-disjoint tunables cannot yet cross-validate each other.
+Aggregate post-fit error: **2.7%** over 12 scored points. Out-of-sample (leave-one-out over the constrained entries): **8.9%** — the honest reminder that 12 architectures with mostly-disjoint tunables cannot yet cross-validate each other.
 
 Leave-one-out generalization (the over-fit guard):
 - **Cassandra — 3-node cluster write ceiling, RF=3 QUORUM (ScyllaDB bake-off benchmark, 2017)** — capacityCeilingRps -81.9% _(disjoint fallback — predicted at catalog defaults)_.
 - **DeathStarBench — Social Network** — latencySharePct +6.5% _(disjoint fallback — predicted at catalog defaults)_.
 - **Kafka — producer write, 3x async replication (Kreps 2014)** — capacityCeilingRps +4.2% _(genuine out-of-sample)_.
 - **Kafka — producer write, no replication (Kreps 2014)** — capacityCeilingRps -4.1% _(genuine out-of-sample)_.
+- **MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023)** — meanLatencyMsAtLoad -63.8% _(disjoint fallback — predicted at catalog defaults)_.
 - **RabbitMQ — classic queue (single node, AMQP 1.0)** — capacityCeilingRps -10.7% _(genuine out-of-sample)_.
 - **RabbitMQ — classic queue (single node, AMQP 0.9.1)** — capacityCeilingRps +12.7% _(genuine out-of-sample)_.
 - **Redis — LPUSH (single node, non-pipelined)** — capacityCeilingRps -4.2% _(genuine out-of-sample)_.
 - **Redis — SET (single node, non-pipelined)** — capacityCeilingRps +4.5% _(genuine out-of-sample)_.
+- **ScyllaDB — 3-node cluster, caching workload (uniform), YCSB (benchANT 2023)** — meanLatencyMsAtLoad n/a _(disjoint fallback — predicted at catalog defaults)_.
 - **TechEmpower — Multiple Queries (20 per request)** — capacityCeilingRps -11.4% _(genuine out-of-sample)_.
 - **TechEmpower — Single Database Query** — capacityCeilingRps +12.7% _(genuine out-of-sample)_.
 

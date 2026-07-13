@@ -1,0 +1,49 @@
+{
+  "schema": 11,
+  "id": "scylladb-ycsb-cluster",
+  "name": "ScyllaDB — 3-node cluster (calibration #9, benchANT YCSB caching benchmark)",
+  "instances": [
+    {
+      "id": "loaders",
+      "type": "client.web",
+      "config": {
+        "throughput": 77176.9
+      }
+    },
+    {
+      "id": "scylla",
+      "type": "db.cassandra",
+      "config": {
+        "connectionPool": 192,
+        "connectionHeldMs": 2.45638,
+        "throughput": 78164
+      }
+    }
+  ],
+  "wires": [
+    {
+      "from": ["loaders", "out"],
+      "to": ["scylla", "in"],
+      "semantics": "sync"
+    }
+  ],
+  "layout": {
+    "loaders": { "x": 60, "y": 80 },
+    "scylla": { "x": 480, "y": 80 }
+  },
+  "labels": {
+    "loaders": "YCSB loaders (2x, -target 45000 each)",
+    "scylla": "ScyllaDB 5.1.3, 3x i4i.2xlarge, RF=3 QUORUM"
+  },
+  "descriptions": {
+    "loaders": "2 YCSB CoreWorkload loader nodes (c5.4xlarge), each targeting 45,000 op/s (90,000 combined nominal), 50/50 read/update, uniform key distribution, ~1 KB records (10 fields x 100 bytes). Achieved combined 77,176.9 op/s (85.75% of the nominal target).",
+    "scylla": "One ScyllaDB 5.1.3 cluster (3x i4i.2xlarge, AWS us-west-2), replication factor 3, consistency QUORUM (read+write) — modeled with SDA's db.cassandra type, the CQL wire-compatible mapping the corpus already uses for a Cassandra-protocol store, as a single aggregate SDA node (the same aggregate-cluster convention the Cassandra 2017 write-ceiling / Kafka cluster entries use). connectionPool (192) is PINNED: cassandra.yaml's documented per-node concurrent_reads + concurrent_writes defaults (32+32=64, CASSANDRA_POOL_SOURCE) x 3 nodes — an INDEPENDENT scaling judgment call from the existing 2017 Cassandra write-ceiling entry (which pins 64 UNSCALED for its own cluster); this entry's tunables are NODE-scoped, so it shares nothing with that entry's type-scoped db.cassandra:throughput. connectionHeldMs is the FITTED tunable: fitted by `pnpm calibrate` to 2.45638 ms, the value that reproduces the measured 3.2328 ms blended read/update mean at the achieved 77,176.9 op/s load, given the pinned pool (post-fit residual +1.1%, grid-search granularity — see CALIBRATION-REPORT.md). `throughput` (78,164 op/s) is a derived, non-fitted display value kept consistent with pool/held by construction (== 192 / (connectionHeldMs/1000))."
+  },
+  "groups": [],
+  "components": [],
+  "guaranteeSlos": [],
+  "lagSlos": [],
+  "requestClasses": [],
+  "scenarios": [],
+  "systemPromises": []
+}

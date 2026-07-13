@@ -128,9 +128,11 @@ describe('the matrix is HONEST — green only where evidence exists (owner manda
     expect(h.totalCapabilities).toBe(CAPABILITIES.length);
   });
 
-  it('exactly two metrics×regimes cells are corpus-validated (throughput at-knee, bottleneck below-knee)', () => {
+  it('exactly three metrics×regimes cells are corpus-validated (throughput at-knee, bottleneck below-knee, tail below-knee)', () => {
+    // adds the corpus's first meanLatencyMsAtLoad points (MongoDB Atlas + ScyllaDB, benchANT YCSB), which
+    // flips `tail|below-knee` from an honest "awaits one" hole to corpus-validated.
     const validatedCells = matrix.grid.filter((g) => g.status === 'validated').map((g) => `${g.metric}|${g.regime}`).sort();
-    expect(validatedCells).toEqual(['bottleneck|below-knee', 'throughputCeiling|at-knee']);
+    expect(validatedCells).toEqual(['bottleneck|below-knee', 'tail|below-knee', 'throughputCeiling|at-knee']);
   });
 });
 

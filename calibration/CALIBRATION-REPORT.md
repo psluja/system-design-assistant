@@ -6,7 +6,7 @@ This harness predicts each corpus system with SDA's engine (instantiate → eval
 
 ## Aggregate fidelity
 
-- **Post-fit aggregate error (RMS of relative errors over all scored points):** 3.0%
+- **Post-fit aggregate error (RMS of relative errors over all scored points):** 2.7%
 - **Out-of-sample generalization (leave-one-out RMS over entries whose tunables the fold-in set constrained):** 8.9%
 
 ## Fitted tunables (recommended — NOT applied)
@@ -20,7 +20,9 @@ This harness predicts each corpus system with SDA's engine (instantiate → eval
 | `db.cassandra`.throughput | 1.280e+4 | **7.121e+4** | op/s |
 | `db.mongodb`.connectionHeldMs | 5.000 | **4.602** | ms |
 | `db.postgres`.perRequestDuration | 50.00 | **0.2390** | ms |
+| `mongo`.connectionHeldMs | 5.000 | **13.10** | ms |
 | `queue.rabbitmq`.throughput | 2.000e+4 | **9.319e+4** | msg/s |
+| `scylla`.connectionHeldMs | 5.000 | **2.456** | ms |
 | `stream.kafka`.throughput | 1.000e+5 | **7.986e+5** | msg/s |
 
 ## Per-entry: predicted vs measured, and the residual
@@ -65,6 +67,16 @@ _Residual (RMS of fitted errors): 2.8%._
 
 _DES tail corroboration @ 678,773 req/s (DES seed 7, 2k warmup / 8k measured, at ~0.85x the fitted ceiling): p50 6068.32 ms · p95 9499.01 ms · p99 9824.26 ms._
 
+### MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023)
+
+| Metric | Measured | Out-of-box (defaults) | Error | Fitted | Residual |
+|---|--:|--:|--:|--:|--:|
+| meanLatencyMsAtLoad | 14 ms | n/a | n/a | 14 | **-0.9%** |
+
+_Residual (RMS of fitted errors): 0.9%._
+
+_DES tail corroboration @ 44,898 req/s (DES seed 7, 2k warmup / 8k measured, at the stated measured load): p50 9.55 ms · p95 39.62 ms · p99 59.24 ms._
+
 ### RabbitMQ — classic queue (single node, AMQP 1.0)
 
 | Metric | Measured | Out-of-box (defaults) | Error | Fitted | Residual |
@@ -105,6 +117,16 @@ _Residual (RMS of fitted errors): 2.3%._
 
 _DES tail corroboration @ 156,719 req/s (DES seed 7, 2k warmup / 8k measured, at ~0.85x the fitted ceiling): p50 0.02 ms · p95 0.12 ms · p99 0.17 ms._
 
+### ScyllaDB — 3-node cluster, caching workload (uniform), YCSB (benchANT 2023)
+
+| Metric | Measured | Out-of-box (defaults) | Error | Fitted | Residual |
+|---|--:|--:|--:|--:|--:|
+| meanLatencyMsAtLoad | 3 ms | n/a | n/a | 3 | **+1.1%** |
+
+_Residual (RMS of fitted errors): 1.1%._
+
+_DES tail corroboration @ 77,177 req/s (DES seed 7, 2k warmup / 8k measured, at the stated measured load): p50 1.76 ms · p95 7.53 ms · p99 11.86 ms._
+
 ### TechEmpower — Multiple Queries (20 per request)
 
 | Metric | Measured | Out-of-box (defaults) | Error | Fitted | Residual |
@@ -139,10 +161,12 @@ Fit on the rest of the corpus, then predict the held-out entry. With few, disjoi
 - **Held out: DeathStarBench — Social Network** — latencySharePct: predicted 9.06 vs measured 8.50 (+6.5%). _held-out tunables db.mongodb:connectionHeldMs are DISJOINT from the fold-in set, so they fall back to catalog defaults — the honest un-calibrated generalization (not a true out-of-sample test)._
 - **Held out: Kafka — producer write, 3x async replication (Kreps 2014)** — capacityCeilingRps: predicted 819,970 vs measured 786,980 (+4.2%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: Kafka — producer write, no replication (Kreps 2014)** — capacityCeilingRps: predicted 787,849 vs measured 821,557 (-4.1%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
+- **Held out: MongoDB Atlas — sharded cluster, caching workload (uniform), YCSB (benchANT 2023)** — meanLatencyMsAtLoad: predicted 5 vs measured 14 (-63.8%). _held-out tunables mongo:connectionHeldMs are DISJOINT from the fold-in set, so they fall back to catalog defaults — the honest un-calibrated generalization (not a true out-of-sample test)._
 - **Held out: RabbitMQ — classic queue (single node, AMQP 1.0)** — capacityCeilingRps: predicted 88,753 vs measured 99,413 (-10.7%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: RabbitMQ — classic queue (single node, AMQP 0.9.1)** — capacityCeilingRps: predicted 99,810 vs measured 88,534 (+12.7%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: Redis — LPUSH (single node, non-pipelined)** — capacityCeilingRps: predicted 180,430 vs measured 188,324 (-4.2%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: Redis — SET (single node, non-pipelined)** — capacityCeilingRps: predicted 188,320 vs measured 180,180 (+4.5%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
+- **Held out: ScyllaDB — 3-node cluster, caching workload (uniform), YCSB (benchANT 2023)** — meanLatencyMsAtLoad: predicted n/a vs measured 3 (n/a). _held-out tunables scylla:connectionHeldMs are DISJOINT from the fold-in set, so they fall back to catalog defaults — the honest un-calibrated generalization (not a true out-of-sample test)._
 - **Held out: TechEmpower — Multiple Queries (20 per request)** — capacityCeilingRps: predicted 5,227 vs measured 5,900 (-11.4%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 - **Held out: TechEmpower — Single Database Query** — capacityCeilingRps: predicted 117,166 vs measured 104,000 (+12.7%). _held-out tunables were all constrained by the fold-in set (a genuine out-of-sample prediction)._
 

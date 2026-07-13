@@ -220,7 +220,7 @@ describe('summarySections — the shared System roll-up', () => {
     });
     const tail = withSim.find((x) => x.title === 'Response time · end-to-end')!;
     expect(tail.rows).toEqual([
-      { label: 'p50', value: '40 ms' },
+      { label: 'p50 · typical', value: '40 ms' },
       { label: 'p95', value: '120 ms' },
       { label: 'p99 · tail', value: '250 ms' },
     ]);
@@ -281,7 +281,7 @@ describe('summarySections — retry outcome rows', () => {
     // A saturated retry storm: 8 succeed, 4 fail after retries, attempts ×1.6 the arrivals.
     const tail = tailOf({ p50: 40, p95: 120, p99: 250, goodputRps: 8, errorRate: 4, amplification: 1.6, retryPolicy: true });
     const labels = tail.rows.map((r) => r.label);
-    expect(labels).toEqual(['p50', 'p95', 'p99 · tail', 'Goodput (succeeded)', 'Failed after retries', 'Retry amplification']);
+    expect(labels).toEqual(['p50 · typical', 'p95', 'p99 · tail', 'Goodput (succeeded)', 'Failed after retries', 'Retry amplification']);
     expect(tail.rows.find((r) => r.label === 'Goodput (succeeded)')?.value).toBe('8 req/s');
     // Failures > 0 read as a VIOLATION (bad tone); heavy amplification (>1.2) reads as a WARNING.
     const failed = tail.rows.find((r) => r.label === 'Failed after retries')!;
@@ -306,7 +306,7 @@ describe('summarySections — retry outcome rows', () => {
 
   it('ADDS NO retry rows when there is no story (no policy, ×1, 0 failures) — never advertise an absent feature', () => {
     const tail = tailOf({ p50: 40, p95: 120, p99: 250, goodputRps: 600, errorRate: 0, amplification: 1, retryPolicy: false });
-    expect(tail.rows.map((r) => r.label)).toEqual(['p50', 'p95', 'p99 · tail']);
+    expect(tail.rows.map((r) => r.label)).toEqual(['p50 · typical', 'p95', 'p99 · tail']);
   });
 
   it('ADDS the rows when retry traffic is measured even if the policy flag is absent (amplification alone is a story)', () => {
@@ -316,7 +316,7 @@ describe('summarySections — retry outcome rows', () => {
 
   it('ADDS NO rows when the sim is a bare tail (no retry fields at all)', () => {
     const tail = tailOf({ p50: 40, p95: 120, p99: 250 });
-    expect(tail.rows.map((r) => r.label)).toEqual(['p50', 'p95', 'p99 · tail']);
+    expect(tail.rows.map((r) => r.label)).toEqual(['p50 · typical', 'p95', 'p99 · tail']);
   });
 });
 
