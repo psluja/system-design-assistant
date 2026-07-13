@@ -1,11 +1,14 @@
 name: Publish VS Code extension
 
-# Publishes app/vscode to the Visual Studio Marketplace (and, if an OVSX_TOKEN secret is set, to Open VSX) when a
-# tag matching `vscode-v*` is pushed, or on a manual dispatch. The version published is whatever app/vscode/package.json
-# declares — bump it before tagging (e.g. set 0.0.54, commit, `git tag vscode-v0.0.54 && git push --tags`).
+# On every `vscode-v*` tag: builds the extension, packages the .vsix, and creates a GitHub RELEASE with the
+# .vsix attached — so the extension is installable ("Extensions: Install from VSIX…") even before/without a
+# Marketplace publisher account. The Marketplace and Open VSX publishes are OPTIONAL extras that run only when
+# their secrets exist. The version published is whatever app/vscode/package.json declares — bump it before
+# tagging (e.g. set 0.0.54, commit, `git tag vscode-v0.0.54 && git push --tags`); the release step FAILS if the
+# tag and package.json disagree, so a stale tag can never ship a mislabeled artifact.
 #
-# Required repo secret:  VSCE_PAT  — an Azure DevOps Personal Access Token with scope Marketplace > Manage, for the
-#                                    `sda` publisher (create the publisher at https://marketplace.visualstudio.com/manage).
+# Optional repo secret:  VSCE_PAT   — an Azure DevOps Personal Access Token with scope Marketplace > Manage, for
+#                                     the `sda` publisher (create it at https://marketplace.visualstudio.com/manage).
 # Optional repo secret:  OVSX_TOKEN — an Open VSX access token (https://open-vsx.org) to also publish there.
 
 on:
@@ -14,7 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # create the GitHub Release + upload the .vsix asset (read-only is enough for everything else)
 
 concurrency:
   group: vscode-publish
@@ -43,17 +46,53 @@ jobs:
       - name: Build the extension
         run: pnpm --filter sda-vscode run build
 
-      - name: Publish to the Visual Studio Marketplace
-        run: pnpm --filter sda-vscode exec vsce publish --no-dependencies -p "$VSCE_PAT"
+      - name: Package the .vsix
+        id: pack
+        run: |
+          VERSION="$(node -p "require('./app/vscode/package.json').version")"
+          ASSET="sda-vscode-${VERSION}.vsix"
+          pnpm --filter sda-vscode exec vsce package --no-dependencies -o "$GITHUB_WORKSPACE/$ASSET"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+
+      # The distribution that needs NO account anywhere: every vscode-v* tag ships the .vsix as a GitHub Release
+      # asset. The tag must match package.json's version — a mismatch fails loudly instead of shipping a
+      # mislabeled artifact.
+      - name: Create the GitHub Release with the .vsix (tags only)
+        if: startsWith(github.ref, 'refs/tags/vscode-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#vscode-v}"
+          if [ "$TAG_VERSION" != "${{ steps.pack.outputs.version }}" ]; then
+            echo "::error::tag says $TAG_VERSION but app/vscode/package.json says ${{ steps.pack.outputs.version }} — bump/commit before tagging."
+            exit 1
+          fi
+          NOTES="$(printf '%s\n\n%s' \
+            'Design and live-simulate system architecture on a canvas inside VS Code — capacity, queueing-aware latency, simulated tails, availability and cost, plus a built-in MCP server so AI agents can drive the open design. Fully client-side.' \
+            '**Install without the Marketplace:** download the `.vsix` below, then in VS Code run **Extensions: Install from VSIX…** and pick the file.')"
+          gh release create "$GITHUB_REF_NAME" "$GITHUB_WORKSPACE/${{ steps.pack.outputs.asset }}" \
+            --title "SDA for VS Code ${TAG_VERSION}" \
+            --generate-notes \
+            --notes "$NOTES" \
+            --verify-tag
+
+      # Optional extras — each runs only when its secret is present, so a tag on a repo with no publisher account
+      # still ships the Release above and the workflow stays green.
+      - name: Publish to the Visual Studio Marketplace (when VSCE_PAT is set)
+        run: |
+          if [ -n "$VSCE_PAT" ]; then
+            pnpm --filter sda-vscode exec vsce publish --no-dependencies -p "$VSCE_PAT"
+          else
+            echo "VSCE_PAT not set — skipping the Marketplace (the .vsix still shipped via the GitHub Release)."
+          fi
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
-      # Open VSX (VSCodium, Cursor, Gitpod, …) — only runs when the OVSX_TOKEN secret is present, otherwise skipped.
-      - name: Publish to Open VSX (optional)
+      - name: Publish to Open VSX (when OVSX_TOKEN is set)
         run: |
           if [ -n "$OVSX_TOKEN" ]; then
-            pnpm --filter sda-vscode exec vsce package --no-dependencies -o "$GITHUB_WORKSPACE/extension.vsix"
-            npx -y ovsx publish "$GITHUB_WORKSPACE/extension.vsix" -p "$OVSX_TOKEN"
+            npx -y ovsx publish "$GITHUB_WORKSPACE/${{ steps.pack.outputs.asset }}" -p "$OVSX_TOKEN"
           else
             echo "OVSX_TOKEN not set — skipping Open VSX."
           fi
