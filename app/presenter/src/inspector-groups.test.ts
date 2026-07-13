@@ -59,15 +59,22 @@ describe('knobGroups — partition into role-titled sections, in order, dropping
   });
 });
 
-// — the double-duty `throughput` key needs NODE CONTEXT, not just its global registry role: a pure
+// /108 — the double-duty origin-demand keys need NODE CONTEXT, not just their global registry role: a pure
 // source's declared demand vs a fixed-throughput store's real capacity vs an ordinary node's computed read-back.
-describe('displayRoleFor / knobGroupFor / knobLabelFor / knobTipFor — throughput is node-context-aware', () => {
-  it("client.web's throughput config is an ASSUMPTION (the declared demand), not a limit, though its GLOBAL registry role is 'computed'", () => {
-    expect(displayRoleFor(clientWeb, String(keys.throughput))).toBe('assumption');
-    expect(knobGroupFor(clientWeb, String(keys.throughput))).toBe('assumptions');
-    expect(knobLabelFor(clientWeb, String(keys.throughput))).toBe(GENERATED_LOAD_LABEL);
-    expect(knobLabelFor(clientWeb, String(keys.throughput))).toBe('Generated load');
-    expect(knobTipFor(clientWeb, String(keys.throughput))).toBe(GENERATED_LOAD_TIP);
+// unified the client preset onto `assumedRps` (its historical `throughput`-as-workload spelling is gone
+// from the catalog, though a pre-unification custom manifest may still carry it — kept working the same way).
+describe('displayRoleFor / knobGroupFor / knobLabelFor / knobTipFor — the origin demand key is node-context-aware (108)', () => {
+  it("client.web's assumedRps config is an ASSUMPTION (the declared demand), labeled 'Generated load'", () => {
+    expect(displayRoleFor(clientWeb, String(keys.assumedRps))).toBe('assumption');
+    expect(knobGroupFor(clientWeb, String(keys.assumedRps))).toBe('assumptions');
+    expect(knobLabelFor(clientWeb, String(keys.assumedRps))).toBe(GENERATED_LOAD_LABEL);
+    expect(knobLabelFor(clientWeb, String(keys.assumedRps))).toBe('Generated load');
+    expect(knobTipFor(clientWeb, String(keys.assumedRps))).toBe(GENERATED_LOAD_TIP);
+  });
+
+  it("client.web no longer declares `throughput` at all — it reads as COMPUTED, an undeclared key", () => {
+    expect((clientWeb.config ?? []).some((c) => String(c.key) === String(keys.throughput))).toBe(false);
+    expect(displayRoleFor(clientWeb, String(keys.throughput))).toBe('computed');
   });
 
   it("cache.redis's throughput config stays a LIMIT (a fixed-throughput store's real capacity) — it RECEIVES work", () => {
@@ -94,11 +101,15 @@ describe('displayRoleFor / knobGroupFor / knobLabelFor / knobTipFor — throughp
 });
 
 describe('isHiddenKnob — a hidden knob is suppressed from every human-facing surface (mechanism intact)', () => {
-  it('assumedRps is hidden (authored via a generator now); ordinary knobs are not', () => {
-    expect(isHiddenKnob(String(keys.assumedRps))).toBe(true);
+  it('assumedRps is hidden on a node that RECEIVES work (authored via a generator there); ordinary knobs are not', () => {
+    expect(isHiddenKnob(computeService, String(keys.assumedRps))).toBe(true);
     for (const k of [keys.concurrency, keys.perRequestDuration, keys.replicas, keys.maxUnits, keys.timeoutMs, keys.unitCost]) {
-      expect(isHiddenKnob(String(k))).toBe(false);
+      expect(isHiddenKnob(computeService, String(k))).toBe(false);
     }
+  });
+
+  it("assumedRps is SHOWN on a dedicated source (client.web): its only demand mechanism now", () => {
+    expect(isHiddenKnob(clientWeb, String(keys.assumedRps))).toBe(false);
   });
 });
 

@@ -30,6 +30,9 @@ const native = makeNativeAdapter({ registry });
 const evaluateBatch: EvaluateBatch = native.evaluateBatch!;
 
 const overflowSlo: ManifestBand = { key: keys.overflow, band: { shape: 'minTargetMax', max: 0 } };
+// `c`'s BASE demand deliberately keeps the LEGACY `{ throughput: 100 }` spelling (the pre-unification client
+// preset) — proving the compatibility sugar carries it through world evaluation; the SCENARIOS below
+// override the unified `assumedRps` knob directly (the one every demand-facing surface now reads).
 const instances: Instance[] = [
   { id: 'c', type: 'client.web', config: { throughput: 100 } },
   { id: 'a', type: 'compute.service', config: { concurrency: 1, perRequestDuration: 1 }, bands: [overflowSlo] },
@@ -37,8 +40,8 @@ const instances: Instance[] = [
 const wires: Wire[] = [{ from: ['c', 'out'], to: ['a', 'in'] }];
 // Two derived worlds: a comfortable "real" (holds) and a stress "pessimistic" past the edge (breaks a.overflow).
 const scenarios: AssumptionScenario[] = [
-  { id: 'real', name: 'Real', overrides: [{ node: 'c', key: 'throughput', value: 500, provenance: 'derived' }] },
-  { id: 'pessimistic', name: 'Pessimistic', overrides: [{ node: 'c', key: 'throughput', value: 5000, provenance: 'derived' }] },
+  { id: 'real', name: 'Real', overrides: [{ node: 'c', key: 'assumedRps', value: 500, provenance: 'derived' }] },
+  { id: 'pessimistic', name: 'Pessimistic', overrides: [{ node: 'c', key: 'assumedRps', value: 5000, provenance: 'derived' }] },
 ];
 
 async function docInputs(withWorlds: boolean) {
@@ -75,7 +78,7 @@ describe('scenario-comparison section — the DocModel (assumption-model §8)', 
     const real = rows.find((w) => w.id === 'real')!;
     expect(real.feasible).toBe(true);
     expect(real.derivedCount).toBe(1); // one derived override
-    expect(real.overrides[0]).toMatchObject({ node: 'c', key: 'throughput', value: 500, provenance: 'derived' });
+    expect(real.overrides[0]).toMatchObject({ node: 'c', key: 'assumedRps', value: 500, provenance: 'derived' });
 
     // pessimistic is past the edge — it breaks the overflow SLO, and the row NAMES which SLO breaks (the §8 honesty).
     const pess = rows.find((w) => w.id === 'pessimistic')!;

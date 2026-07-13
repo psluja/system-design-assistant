@@ -254,3 +254,152 @@ describe('deserialize migration — the demand-key chain, all four links (kept f
     if (again.ok) expect(again.value.instances[0]!.transforms?.db).toEqual({ kind: 'generate', level: 500, curve });
   });
 });
+
+// ─── CLIENT-THROUGHPUT-AS-DEMAND MIGRATION (the chain's FIFTH link) ────────────────────────────────────
+// A PURE SOURCE's demand historically rode on `config.throughput` (the `client.*` "convenience preset" over the
+// universal origin mechanism) — a SECOND demand mechanism the scenario engine could not reach (its GLOBAL role is
+// `computed`). It now folds onto `config.assumedRps` (the fact-assumption every demand-facing surface reads) on
+// load, kept FOREVER — a historical export loads, evaluates IDENTICALLY, and re-serialises canonically.
+describe('deserialize migration — client-throughput-as-demand folds onto assumedRps (the chain\'s fifth link)', () => {
+  /** A historical client design: `client.web`'s `throughput` config declares its demand, wired into a receiving
+   *  service so the fold's effect (the client's emitted rate) is observable downstream. */
+  const legacyClientJson = (): string =>
+    JSON.stringify({
+      schema: 3,
+      id: 'client-migration-fixture',
+      name: 'Client demand unification',
+      instances: [
+        { id: 'users', type: 'client.web', config: { throughput: 800 } },
+        { id: 'svc', type: 'compute.service', config: { concurrency: 100000, perRequestDuration: 1 } },
+      ],
+      wires: [{ from: ['users', 'out'], to: ['svc', 'in'] }],
+    });
+
+  /** The SAME design authored CANONICALLY: `assumedRps` directly, no `throughput` config on the client at all. */
+  const canonicalClientJson = (): string =>
+    JSON.stringify({
+      schema: 11,
+      id: 'client-migration-fixture',
+      name: 'Client demand unification',
+      instances: [
+        { id: 'users', type: 'client.web', config: { assumedRps: 800 } },
+        { id: 'svc', type: 'compute.service', config: { concurrency: 100000, perRequestDuration: 1 } },
+      ],
+      wires: [{ from: ['users', 'out'], to: ['svc', 'in'] }],
+    });
+
+  it('a historical client.web export declaring "throughput" loads as the CANONICAL assumedRps config (never generator-folded)', () => {
+    const back = deserialize(legacyClientJson());
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const users = back.value.instances.find((i) => i.id === 'users')!;
+    expect(users.config).toEqual({ assumedRps: 800 }); // the legacy key is gone, the value moved
+    // DEDICATED SOURCE (no in/bi port): unlike the fourth link (assumedRps → generator), it stays a PLAIN config
+    // knob — never swept into a generator transform (the Inspector's "Generated load" field reads it directly).
+    expect(users.transforms).toBeUndefined();
+    expect(back.value.schema).toBe(11);
+  });
+
+  it('EVALUATION-EQUIVALENCE (sacred): the migrated client design evaluates BIT-IDENTICALLY to the canonical assumedRps form', () => {
+    expect(fingerprint(legacyClientJson())).toBe(fingerprint(canonicalClientJson()));
+  });
+
+  it('re-serialises CANONICALLY (no "throughput" on the client) and the round-trip is a fixpoint', () => {
+    const back = deserialize(legacyClientJson());
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const out = serialize(back.value);
+    expect(out).toContain('"assumedRps"');
+    const users = back.value.instances.find((i) => i.id === 'users')!;
+    expect('throughput' in (users.config ?? {})).toBe(false);
+    const again = deserialize(out);
+    expect(again.ok).toBe(true);
+    if (again.ok) expect(serialize(again.value)).toBe(out);
+  });
+
+  it("a RECEIVING node's throughput (a real capacity ceiling) is UNTOUCHED — the receivesWork gate", () => {
+    const json = JSON.stringify({
+      schema: 3,
+      id: 'cap',
+      name: 'capacity untouched',
+      instances: [{ id: 'cache', type: 'cache.redis', config: { throughput: 50000 } }],
+      wires: [],
+    });
+    const back = deserialize(json);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(back.value.instances[0]!.config).toEqual({ throughput: 50000 }); // untouched: a genuine served capacity
+  });
+
+  it('an instance ALREADY declaring assumedRps keeps it — the legacy throughput value is dropped, never overwriting it', () => {
+    const json = JSON.stringify({
+      schema: 3,
+      id: 'both',
+      name: 'both keys',
+      instances: [{ id: 'users', type: 'client.web', config: { throughput: 100, assumedRps: 900 } }],
+      wires: [],
+    });
+    const back = deserialize(json);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(back.value.instances[0]!.config).toEqual({ assumedRps: 900 }); // the newer, more specific knob wins
+  });
+
+  it('migrates an uncertainty RANGE keyed by the legacy throughput name on a dedicated source', () => {
+    const json = JSON.stringify({
+      schema: 3,
+      id: 'r',
+      name: 'ranged client',
+      instances: [{ id: 'users', type: 'client.web', config: { throughput: 800 }, ranges: { throughput: { lo: 500, hi: 1200 } } }],
+      wires: [],
+    });
+    const back = deserialize(json);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const inst = back.value.instances[0]!;
+    expect(inst.ranges!.assumedRps).toEqual({ lo: 500, hi: 1200 });
+    expect('throughput' in inst.ranges!).toBe(false);
+    expect(inst.config).toEqual({ assumedRps: 800 });
+  });
+
+  it('migrates a SCENARIO override keyed by the legacy throughput name on a dedicated source — and it survives the role check', () => {
+    const json = JSON.stringify({
+      schema: 7,
+      id: 'w',
+      name: 'worlds',
+      instances: [{ id: 'users', type: 'client.web', config: { throughput: 800 } }],
+      wires: [],
+      scenarios: [{ id: 'stress', overrides: [{ node: 'users', key: 'throughput', value: 5000 }] }],
+    });
+    const back = deserialize(json);
+    // a role-boundary rejection (the current scenarioProblems would refuse a raw "throughput" override) would
+    // surface here as a load error — that it loads proves the rename runs BEFORE the validator ever sees it.
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(back.value.scenarios[0]!.overrides[0]).toMatchObject({ node: 'users', key: 'assumedRps', value: 5000 });
+  });
+
+  it('an UNKNOWN type is left alone — no manifest to check receivesWork against', () => {
+    const json = JSON.stringify({
+      schema: 3,
+      id: 'u',
+      name: 'unknown',
+      instances: [{ id: 'x', type: 'totally.unknown', config: { throughput: 42 } }],
+      wires: [],
+    });
+    const back = deserialize(json);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(back.value.instances[0]!.config).toEqual({ throughput: 42 });
+  });
+
+  it('is IDEMPOTENT: an already-canonical client.web file (assumedRps only) round-trips byte-identically', () => {
+    const back = deserialize(canonicalClientJson());
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const out = serialize(back.value);
+    const again = deserialize(out);
+    expect(again.ok).toBe(true);
+    if (again.ok) expect(serialize(again.value)).toBe(out);
+  });
+});

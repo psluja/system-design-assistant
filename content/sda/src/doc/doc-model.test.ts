@@ -258,8 +258,18 @@ describe('DocModel — provenance derivation (§3, mechanical)', () => {
   });
 
   it('never pads: an inert zero default (assumedRps / retry) does not appear as a row', () => {
-    expect(find(a, 'client', 'Offered traffic')).toBeUndefined(); // client has no assumedRps set (throughput preset drives it)
+    // `client`'s assumedRps is no longer an inert 0 default — it IS the client's declared demand (its own
+    // "Offered traffic" row, asserted next) — so the "never pads" check moves to a RELAY (`gw`), which still
+    // carries the mechanism's inert 0 default (it does not originate) and must not pad the register with it.
+    expect(find(a, 'gw', 'Offered traffic')).toBeUndefined();
     expect(a.some((r) => r.label === 'Retry count')).toBe(false);
+  });
+
+  it("shows the client's declared demand as its OWN 'Offered traffic' row (: the unified assumedRps knob)", () => {
+    const traffic = find(a, 'client', 'Offered traffic');
+    expect(traffic?.provenance).toBe('estimate'); // the catalog default is `est: true` (a credible illustrative rate)
+    expect(traffic?.value).toBe(1000); // client.source's declared default (catalog.ts)
+    expect(traffic?.unit).toBe('req/s');
   });
 
   it('surfaces a MANIFEST-level flow transform (the closed leftover) badged estimate, at manifest level', () => {

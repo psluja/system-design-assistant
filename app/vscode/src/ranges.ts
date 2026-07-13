@@ -75,9 +75,10 @@ export function configKnobsFor(text: string, node: string): readonly KnobChoice[
   for (const m of parsed.value.components) catalog[m.type] = m; // custom project components win, like the shells
   const man = catalog[inst.type];
   if (man === undefined) return [];
-  // HIDDEN knobs (e.g. `assumedRps`) are suppressed from the picker too — the same `isHiddenKnob` decision the
-  // Inspector uses, so a hidden knob offers no 'Assumed traffic' choice on any human-facing surface.
-  return (man.config ?? []).filter((c) => !isHiddenKnob(String(c.key))).map((c) => {
+  // HIDDEN knobs are suppressed from the picker too — the same NODE-CONTEXT-AWARE `isHiddenKnob` decision the
+  // Inspector uses: `assumedRps` offers no 'Assumed traffic' choice on a relay, but DOES appear (as the
+  // dedicated source's declared demand) on a client-shaped component, on every human-facing surface alike.
+  return (man.config ?? []).filter((c) => !isHiddenKnob(man, String(c.key))).map((c) => {
     const key = String(c.key);
     const info = keyInfo(key);
     const value = Number(inst.config?.[key] ?? c.value);

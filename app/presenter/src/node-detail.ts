@@ -98,15 +98,20 @@ export function knobGroupOf(key: string): KnobGroupId {
   return isFactAssumption(key) ? 'assumptions' : 'limits';
 }
 
-// ─── NODE-CONTEXT-AWARE REFINEMENT ─────────────────────────────
-// One key is DOUBLE-DUTY: `throughput` means a served CAPACITY on a node that RECEIVES work, but on a PURE SOURCE
-// (no `in`/`bi` port — `client.*` or any manifest dedicated to originating traffic) its config value is the
-// DECLARED DEMAND the design assumes — "the world sends X rps" (catalog/common.ts's "throughput-as-workload"
-// convenience preset over the universal origin mechanism). The registry's GLOBAL role table (`roles.throughput =
-// 'computed'`, read here via `knobGroupOf`) is correct for every RELAY; it is wrong for a source, because the
-// role axis classifies KEYS, not (key, node) pairs. `receivesWork` (content, the exact fact `withOverflow` already
-// uses to decide a node originates rather than relays) is the mechanical signal — never a second guess of a
-// node's shape, and never a per-case branch (every other key keeps its one global reading, unchanged).
+// ─── NODE-CONTEXT-AWARE REFINEMENT ───────────────────
+// TWO keys are DOUBLE-DUTY on a PURE SOURCE (no `in`/`bi` port — `client.*` or any manifest dedicated to
+// originating traffic): its declared demand is the universal `assumedRps` origin knob (: unified — the
+// catalog's historical `throughput`-as-workload convenience preset is gone, but a pre-unification custom/hand-
+// authored manifest may still carry `throughput` as its own config, kept working by the same instantiate-seam
+// compatibility sugar). EITHER key, on such a node, is the DECLARED DEMAND the design assumes — "the world sends
+// X rps" — never a served capacity. `assumedRps`'s GLOBAL registry role is already `fact-assumption` (so
+// `knobGroupOf` alone gets its SECTION right everywhere); `throughput`'s GLOBAL role is `computed` (right for
+// every RELAY, wrong for a source, because the role axis classifies KEYS, not (key, node) pairs) — the special
+// case below exists for THAT key, plus the shared "Generated load" LABEL for either spelling on a source.
+// `receivesWork` (content, the exact fact `withOverflow` already uses to decide a node originates rather than
+// relays) is the mechanical signal — never a second guess of a node's shape, and never a per-case branch (every
+// other key keeps its one global reading, unchanged).
+const ORIGIN_DEMAND_KEYS: ReadonlySet<string> = new Set<string>([String(keys.throughput), String(keys.assumedRps)]);
 
 /** The three-way role a config KEY plays on a GIVEN NODE. Every knob (by construction, drawn from
  *  `manifest.config`) resolves to `assumption` | `limit`; `computed` is returned only when asked about a key that
@@ -115,18 +120,18 @@ export function knobGroupOf(key: string): KnobGroupId {
 export type DisplayRole = 'assumption' | 'limit' | 'computed';
 
 /**
- * The node-context-aware role of a config key: a key not declared in `manifest.config` is `computed`
- * (a relation the engine derives, e.g. `compute.service`'s throughput = concurrency ÷ perRequestDuration); the
- * universal `throughput` key on a PURE SOURCE (`!receivesWork`) is the DECLARED DEMAND — an `assumption`, never a
- * ceiling, however the source is authored (a `client.*` preset or any manifest whose whole job is to originate);
- * every other config key keeps the registry's GLOBAL reading (`knobGroupOf`), including `throughput` on a node
- * that RECEIVES work — a fixed-throughput store's (e.g. `cache.redis`) config IS its real capacity, so it stays a
- * `limit` exactly as the registry already says.
+ * The node-context-aware role of a config key (108): a key not declared in `manifest.config` is
+ * `computed` (a relation the engine derives, e.g. `compute.service`'s throughput = concurrency ÷
+ * perRequestDuration); `throughput` OR `assumedRps` on a PURE SOURCE (`!receivesWork`) is the DECLARED DEMAND — an
+ * `assumption`, never a ceiling, however the source is authored (a `client.*` preset or any manifest whose whole
+ * job is to originate); every other config key keeps the registry's GLOBAL reading (`knobGroupOf`), including
+ * `throughput` on a node that RECEIVES work — a fixed-throughput store's (e.g. `cache.redis`) config IS its real
+ * capacity, so it stays a `limit` exactly as the registry already says.
  */
 export function displayRoleFor(manifest: Manifest, key: string): DisplayRole {
   const isConfigKnob = (manifest.config ?? []).some((c) => String(c.key) === key);
   if (!isConfigKnob) return 'computed';
-  if (key === String(keys.throughput) && !receivesWork(manifest)) return 'assumption';
+  if (ORIGIN_DEMAND_KEYS.has(key) && !receivesWork(manifest)) return 'assumption';
   return knobGroupOf(key) === 'assumptions' ? 'assumption' : 'limit';
 }
 
@@ -137,26 +142,27 @@ export function knobGroupFor(manifest: Manifest, key: string): KnobGroupId {
   return displayRoleFor(manifest, key) === 'limit' ? 'limits' : 'assumptions';
 }
 
-/** The origin knob's honest label — "Generated load", never "Throughput" (which reads as a served
- *  capacity/ceiling and would contradict the Assumptions section it now sits in). Every other knob keeps its
- *  registry `keyInfo` label, node context or not. */
+/** The origin knob's honest label — "Generated load", never "Throughput"/"Assumed traffic" (which read
+ *  as a served capacity/ceiling or generic machinery, contradicting the Assumptions section it now sits in).
+ *  Every other knob keeps its registry `keyInfo` label, node context or not. */
 export const GENERATED_LOAD_LABEL = 'Generated load';
 
 /** The origin knob's tooltip — reuses the EXISTING per-row caption mechanism (`keyInfo(key).cfg`), just
  *  with honest text: what the world sends is an assumption, never a cap this design provisions. */
 export const GENERATED_LOAD_TIP = 'What the world sends into this design — a DEMAND you assume, not a capacity you provision. The engine checks whether the rest of the system can sustain it, and computes what happens downstream.';
 
-/** Node-context-aware knob LABEL: `GENERATED_LOAD_LABEL` for the origin's declared demand, else the key's
- *  registry `keyInfo().label` (unchanged for every other knob). */
+/** Node-context-aware knob LABEL: `GENERATED_LOAD_LABEL` for the origin's declared demand (`assumedRps` — the
+ * unified knob, — or the legacy `throughput` spelling a pre-unification custom manifest may still
+ *  carry), else the key's registry `keyInfo().label` (unchanged for every other knob). */
 export function knobLabelFor(manifest: Manifest, key: string): string {
-  return displayRoleFor(manifest, key) === 'assumption' && key === String(keys.throughput) ? GENERATED_LOAD_LABEL : keyInfo(key).label;
+  return ORIGIN_DEMAND_KEYS.has(key) && displayRoleFor(manifest, key) === 'assumption' ? GENERATED_LOAD_LABEL : keyInfo(key).label;
 }
 
 /** Node-context-aware knob TOOLTIP (the per-row caption both shells already show — web's `data-tip`, the range
  *  editor title): `GENERATED_LOAD_TIP` for the origin's declared demand, else the key's registry `keyInfo().cfg`
  *  (falling back to `.desc`, unchanged for every other knob). */
 export function knobTipFor(manifest: Manifest, key: string): string {
-  if (displayRoleFor(manifest, key) === 'assumption' && key === String(keys.throughput)) return GENERATED_LOAD_TIP;
+  if (ORIGIN_DEMAND_KEYS.has(key) && displayRoleFor(manifest, key) === 'assumption') return GENERATED_LOAD_TIP;
   const info = keyInfo(key);
   return info.cfg ?? info.desc;
 }
@@ -164,17 +170,23 @@ export function knobTipFor(manifest: Manifest, key: string): string {
 // ─── HIDDEN KNOBS (owner: hide `assumedRps` from every human-facing surface — "for now, then we'll see") ─────────
 // A HIDDEN knob is one whose HUMAN-FACING display is suppressed while its MECHANISM stays fully live: the registry
 // cell, its role/aggregate, the engine origin fold, and the worlds / Monte-Carlo / envelope addressing of the cell
-// are all UNTOUCHED. `assumedRps` (the traffic-origin cell) is now AUTHORED via a port `generate` transform — R1
-// sugar writes the very same cell — so the raw 'Assumed traffic' knob is redundant and hidden pending the full
-// assumedRps→generator consolidation. It lives HERE, the ONE knob composition both shells render through, so the web
-// Inspector, the VS Code Inspector tree AND the native range picker all suppress it from a SINGLE list (each consults
-// `isHiddenKnob`) — the value can never leak onto a knob row on one surface while hidden on another.
+// are all UNTOUCHED. On a node that RECEIVES work (a relay), `assumedRps` (the traffic-origin cell) is AUTHORED via
+// a port `generate` transform — R1 sugar writes the very same cell — so the raw 'Assumed traffic' knob there is
+// redundant and stays hidden. CHANGE: on a DEDICATED SOURCE (no `in`/`bi` port — `client.*` or any
+// manifest whose whole job is to originate) `assumedRps` is now the ONLY demand mechanism (the historical
+// `throughput`-as-workload preset is gone) — hiding it there would blank the Inspector's entire "Generated load"
+// row, so a dedicated source shows it, node-context-aware exactly like `displayRoleFor`'s `throughput`
+// special case. It lives HERE, the ONE knob composition both shells render through, so the web Inspector, the VS
+// Code Inspector tree AND the native range picker all suppress it from a SINGLE list (each consults `isHiddenKnob`)
+// — the value can never leak onto a knob row on one surface while hidden on another.
 export const HIDDEN_KNOB_KEYS: ReadonlySet<string> = new Set<string>([String(keys.assumedRps)]);
 
 /** Whether a config knob is HIDDEN from every human-facing knob surface (its mechanism is unaffected — only the
- *  rendered knob is suppressed). Both shells filter their knob lists through this, so hiding stays ONE decision. */
-export function isHiddenKnob(key: string): boolean {
-  return HIDDEN_KNOB_KEYS.has(key);
+ *  rendered knob is suppressed). Both shells filter their knob lists through this, so hiding stays ONE decision.
+ * Node-context-aware: `assumedRps` is hidden on a node that RECEIVES work (there it is generator
+ *  machinery, redundant with the transform editor) but SHOWN on a dedicated source (its only demand knob). */
+export function isHiddenKnob(manifest: Manifest, key: string): boolean {
+  return HIDDEN_KNOB_KEYS.has(key) && receivesWork(manifest);
 }
 
 /** One role-titled group of knobs for the Inspector. */
@@ -233,7 +245,7 @@ export function nodeDetail(input: NodeDetailInput): NodeDetail {
   // `label` and `group` are NODE-CONTEXT-AWARE (`knobLabelFor`/`knobGroupFor`): computed HERE, once, and
   // carried on the row — the VS Code host never sees `man` (only this wire-shaped row), so it must never re-derive
   // the classification itself (the "host renders, never re-derives" rule the whole protocol follows).
-  const knobs: KnobRow[] = (man.config ?? []).filter((c) => !isHiddenKnob(String(c.key))).map((c) => {
+  const knobs: KnobRow[] = (man.config ?? []).filter((c) => !isHiddenKnob(man, String(c.key))).map((c) => {
     const ck = String(c.key);
     const cur = inst.config?.[c.key] ?? c.value;
     return { key: ck, label: knobLabelFor(man, ck), value: Number(cur), unit: keyInfo(ck).unit, group: knobGroupFor(man, ck) };

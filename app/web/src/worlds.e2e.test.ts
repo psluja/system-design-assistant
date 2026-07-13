@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { NodeId } from '@sda/engine-core';
 import { Studio, emptyProject } from '@sda/core';
 import {
-  registry, allManifests, computeEnvelope, deriveDefaultScenarios, mergeDerivedTrio, resetScenario, evaluateWorlds,
+  registry, allManifests, keys, computeEnvelope, deriveDefaultScenarios, mergeDerivedTrio, resetScenario, evaluateWorlds,
   applyScenarioToGraph, isScenarioOverridable, hasScenarios,
 } from '@sda/content';
 import { evaluate } from '@sda/engine-solve';
@@ -43,7 +44,7 @@ describe('web assumption model — envelope, the derived trio, worlds matrix, th
     const merged = mergeDerivedTrio(proj.scenarios, derived.scenarios);
     expect(s.dispatchBatch(merged.map((w) => ({ kind: 'declareScenario', decl: w }))).ok).toBe(true);
     const real = s.project().scenarios.find((w) => w.id === 'real')!;
-    expect(real.overrides[0]).toMatchObject({ node: 'users', key: 'throughput', value: 1200, provenance: 'derived' }); // 2000 × 0.60
+    expect(real.overrides[0]).toMatchObject({ node: 'users', key: 'assumedRps', value: 1200, provenance: 'derived' }); // 2000 × 0.60
   });
 
   it('the worlds matrix reflects all worlds; the active-lens overlay changes the verdicts (the stress world breaks)', async () => {
@@ -76,7 +77,8 @@ describe('web assumption model — envelope, the derived trio, worlds matrix, th
   it('the edit-routing decision: a demand knob is world-overridable; a limit / computed is not (base edit)', () => {
     const s = studioWithDesign();
     const { instances, wires } = s.project();
-    expect(isScenarioOverridable('users', 'throughput', instances, wires)).toBe(true); // a source client's demand
+    expect(isScenarioOverridable('users', 'assumedRps', instances, wires)).toBe(true); // a source client's demand (: the unified knob)
+    expect(isScenarioOverridable('users', 'throughput', instances, wires)).toBe(false); // retired: always a computed result now, even at a source
     expect(isScenarioOverridable('svc', 'concurrency', instances, wires)).toBe(false); // a resource limit
     expect(isScenarioOverridable('svc', 'throughput', instances, wires)).toBe(false); // a computed capacity, not an origin
     expect(hasScenarios(s.project().scenarios)).toBe(false);
@@ -104,9 +106,11 @@ describe('web — the consistency religion: edit routing, reset, new design', ()
     expect(active).toBe('real');
 
     // The exact commitConfig routing: active + overridable ⇒ setScenarioOverride into the active world.
-    s.dispatch({ kind: 'setScenarioOverride', scenario: active, node: 'users', key: 'throughput', value: 1600 });
+    // the world overrides the UNIFIED `assumedRps` knob (the client's `throughput` cell is now a
+    // DERIVED origin-emission relation, never a fixed input to substitute onto).
+    s.dispatch({ kind: 'setScenarioOverride', scenario: active, node: 'users', key: 'assumedRps', value: 1600 });
     const real = s.project().scenarios.find((w) => w.id === 'real')!;
-    expect(real.overrides.find((o) => o.node === 'users' && o.key === 'throughput')?.value).toBe(1600); // in the world
+    expect(real.overrides.find((o) => o.node === 'users' && o.key === 'assumedRps')?.value).toBe(1600); // in the world
     expect(s.project().instances.find((i) => i.id === 'users')?.config?.throughput).toBe(800); // BASE untouched — religion
 
     // THE CANVAS SHOWS IT: the active-lens overlay substitutes the fixed input cell the whole pipeline evaluates.
@@ -116,9 +120,14 @@ describe('web — the consistency religion: edit routing, reset, new design', ()
     let cellVal: number | undefined;
     for (const n of overlaid.nodes.values()) {
       if (String(n.id) !== 'users') continue;
-      for (const c of n.cells) if (String(c.key) === 'throughput' && c.kind === 'input' && c.value.kind === 'fixed') cellVal = c.value.quantity.value;
+      for (const c of n.cells) if (String(c.key) === 'assumedRps' && c.kind === 'input' && c.value.kind === 'fixed') cellVal = c.value.quantity.value;
     }
     expect(cellVal).toBe(1600);
+    // the DERIVED throughput relation carries the override through to the emitted rate — proves the overlay is not
+    // just a dangling cell edit but actually reaches what the rest of the design evaluates against.
+    const ev = evaluate(overlaid, registry);
+    if (!ev.ok) throw new Error(ev.error.join('; '));
+    expect(ev.value.value(NodeId('users'), keys.throughput)).toBe(1600);
   });
 
   it('LENS OFF — the edit writes the shared base (setConfig)', () => {
@@ -134,12 +143,12 @@ describe('web — the consistency religion: edit routing, reset, new design', ()
     const solvers = await bindBrowserSolvers(registry);
     const env = await computeEnvelope({ instances: proj.instances, wires: proj.wires, registry, catalog }, solvers.optimize!);
     const fresh = deriveDefaultScenarios({ instances: proj.instances, wires: proj.wires, catalog, envelope: env }).scenarios;
-    s.dispatch({ kind: 'setScenarioOverride', scenario: 'real', node: 'users', key: 'throughput', value: 9999 }); // freeze
+    s.dispatch({ kind: 'setScenarioOverride', scenario: 'real', node: 'users', key: 'assumedRps', value: 9999 }); // freeze
     // resetWorld's core: fresh derivation → resetScenario → declareScenario (replace-in-place).
     const reset = resetScenario(s.project().scenarios, fresh, 'real')!;
     s.dispatch({ kind: 'declareScenario', decl: reset });
     const real = s.project().scenarios.find((w) => w.id === 'real')!;
-    expect(real.overrides.find((o) => o.node === 'users' && o.key === 'throughput')).toMatchObject({ value: 1200, provenance: 'derived' });
+    expect(real.overrides.find((o) => o.node === 'users' && o.key === 'assumedRps')).toMatchObject({ value: 1200, provenance: 'derived' });
   });
 
   it('NEW DESIGN — resets to an empty project, undoably (no data loss)', () => {

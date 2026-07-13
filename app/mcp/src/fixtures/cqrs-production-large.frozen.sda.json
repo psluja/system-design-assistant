@@ -1,7 +1,7 @@
 {
   "schema": 7,
   "id": "p1",
-  "name": "Untitled",
+  "name": "CQRS production (large)",
   "instances": [
     {
       "id": "cli_cmd",
@@ -27,7 +27,16 @@
           "lo": 6000,
           "hi": 14000
         }
-      }
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 80
+          }
+        }
+      ]
     },
     {
       "id": "waf",
@@ -44,24 +53,54 @@
     },
     {
       "id": "alb_w",
-      "type": "lb.alb"
+      "type": "lb.alb",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        }
+      ]
     },
     {
       "id": "apigw",
-      "type": "apigw.rest"
+      "type": "apigw.rest",
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        }
+      ]
     },
     {
       "id": "cmd",
-      "type": "compute.service",
+      "type": "compute.fargate",
       "config": {
-        "availability": 0.9995
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 2
       },
       "transforms": {
         "out": {
           "kind": "ratio",
           "value": 3
         }
-      }
+      },
+      "bands": [
+        {
+          "key": "latency",
+          "band": {
+            "shape": "minTargetMax",
+            "max": 200
+          }
+        }
+      ]
     },
     {
       "id": "rds",
@@ -80,7 +119,13 @@
     },
     {
       "id": "saga",
-      "type": "compute.service",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 3
+      },
       "transforms": {
         "db": {
           "kind": "prob",
@@ -90,7 +135,13 @@
     },
     {
       "id": "proj_read",
-      "type": "compute.service",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 20,
+        "latency": 20,
+        "maxUnits": 3
+      },
       "ranges": {
         "perRequestDuration": {
           "lo": 10,
@@ -101,11 +152,23 @@
     },
     {
       "id": "proj_srch",
-      "type": "compute.service"
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 3
+      }
     },
     {
       "id": "proj_hot",
-      "type": "compute.service"
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 10,
+        "latency": 10,
+        "maxUnits": 2
+      }
     },
     {
       "id": "rstore",
@@ -133,7 +196,7 @@
     },
     {
       "id": "es",
-      "type": "search.elasticsearch"
+      "type": "search.opensearch"
     },
     {
       "id": "redis",
@@ -148,11 +211,17 @@
     },
     {
       "id": "notifier",
-      "type": "compute.faas"
+      "type": "compute.lambda"
     },
     {
       "id": "analytics",
-      "type": "compute.service",
+      "type": "compute.fargate",
+      "config": {
+        "concurrency": 16,
+        "perRequestDuration": 25,
+        "latency": 25,
+        "maxUnits": 3
+      },
       "transforms": {
         "out": {
           "kind": "window",
@@ -213,8 +282,12 @@
     },
     {
       "id": "query",
-      "type": "compute.service",
+      "type": "compute.fargate",
       "config": {
+        "concurrency": 16,
+        "perRequestDuration": 10,
+        "latency": 10,
+        "maxUnits": 6,
         "availability": 0.9997
       }
     }
@@ -414,7 +487,7 @@
     {
       "from": [
         "proj_hot",
-        "cache"
+        "out"
       ],
       "to": [
         "redis",
@@ -469,7 +542,7 @@
     {
       "from": [
         "query",
-        "cache"
+        "out"
       ],
       "to": [
         "redis",
@@ -495,96 +568,96 @@
   ],
   "layout": {
     "cli_cmd": {
-      "x": 80,
-      "y": 80
-    },
-    "cli_qry": {
-      "x": 320,
-      "y": 80
+      "x": 60,
+      "y": 58
     },
     "waf": {
-      "x": 560,
-      "y": 80
+      "x": 380,
+      "y": 58
     },
     "alb_w": {
-      "x": 800,
-      "y": 80
+      "x": 700,
+      "y": 58
     },
     "apigw": {
-      "x": 80,
-      "y": 230
+      "x": 1020,
+      "y": 58
     },
     "cmd": {
-      "x": 320,
-      "y": 230
+      "x": 1340,
+      "y": 58
     },
     "rds": {
-      "x": 560,
-      "y": 230
+      "x": 2300,
+      "y": -138
     },
     "aurora": {
-      "x": 800,
-      "y": 230
+      "x": 2620,
+      "y": -138
     },
     "kafka": {
-      "x": 80,
-      "y": 380
+      "x": 1660,
+      "y": 242
     },
     "saga": {
-      "x": 320,
-      "y": 380
+      "x": 1980,
+      "y": 242
     },
     "proj_read": {
-      "x": 560,
-      "y": 380
+      "x": 1980,
+      "y": 1502
     },
     "proj_srch": {
-      "x": 800,
-      "y": 380
+      "x": 1980,
+      "y": 734
     },
     "proj_hot": {
-      "x": 80,
-      "y": 530
+      "x": 1980,
+      "y": 998
     },
     "rstore": {
-      "x": 320,
-      "y": 530
+      "x": 2300,
+      "y": 1686
     },
     "es": {
-      "x": 560,
-      "y": 530
+      "x": 2300,
+      "y": 822
     },
     "redis": {
-      "x": 800,
-      "y": 530
+      "x": 2300,
+      "y": 998
     },
     "dlq": {
-      "x": 80,
-      "y": 680
+      "x": 2300,
+      "y": 646
     },
     "notifier": {
-      "x": 320,
-      "y": 680
+      "x": 1980,
+      "y": 426
     },
     "analytics": {
-      "x": 560,
-      "y": 680
+      "x": 1980,
+      "y": 1326
     },
     "s3_an": {
-      "x": 800,
-      "y": 680
+      "x": 2300,
+      "y": 1326
+    },
+    "cli_qry": {
+      "x": 60,
+      "y": 1686
     },
     "cdn": {
-      "x": 80,
-      "y": 830
+      "x": 380,
+      "y": 1686
     },
     "alb_r": {
-      "x": 320,
-      "y": 830
+      "x": 700,
+      "y": 1686
     },
     "query": {
-      "x": 560,
-      "y": 830
+      "x": 1020,
+      "y": 1686
     }
   },
   "labels": {
@@ -601,8 +674,8 @@
     "proj_read": "Read-model projector",
     "proj_srch": "Search projector",
     "proj_hot": "Hot projector",
-    "rstore": "Read store (Postgres)",
-    "es": "Search index (ES)",
+    "rstore": "Read store (RDS PG)",
+    "es": "Search (OpenSearch)",
     "redis": "Hot cache (Redis)",
     "dlq": "DLQ",
     "notifier": "Notification worker",
@@ -615,37 +688,37 @@
   "descriptions": {
     "cli_cmd": "Web/mobile issuing writes (POST commands)",
     "cli_qry": "Web/mobile issuing reads (GET queries)",
-    "waf": "Edge WAF for the write API",
-    "alb_w": "Application load balancer, command path",
-    "apigw": "REST command API, auth + throttling",
-    "cmd": "Validates + dedups, writes source of truth, emits events",
-    "rds": "Connection pooling for the write DB",
-    "aurora": "Source of truth, strongly consistent",
-    "kafka": "Ordered per-key event backbone, fan-out to projectors",
-    "saga": "Consumes events, issues follow-up commands (acyclic: writes to source of truth)",
-    "proj_read": "Builds the relational read model from events",
-    "proj_srch": "Builds the search index from events",
-    "proj_hot": "Maintains the hot cache projection from events",
-    "rstore": "Relational read model for queries",
-    "es": "Search projection",
-    "redis": "Hot read projection / query cache",
-    "dlq": "Dead-letter queue for failed search projection",
-    "notifier": "Sends user notifications from events",
-    "analytics": "Windowed aggregation of events",
-    "s3_an": "Aggregated analytics output",
-    "cdn": "Edge cache/TLS for the query API",
-    "alb_r": "Application load balancer, query path",
-    "query": "Serves reads: cache then read store on miss"
+    "waf": "AWS WAF (managed) at the edge of the write API",
+    "alb_w": "AWS Application Load Balancer (managed), command path",
+    "apigw": "Amazon API Gateway REST (managed): auth + throttling",
+    "cmd": "ECS on Fargate service, 2 tasks (maxUnits — one per AZ): validates + dedups, writes the source of truth, emits 3 events per command",
+    "rds": "Amazon RDS Proxy (managed) — connection pooling for the write DB",
+    "aurora": "Amazon Aurora PostgreSQL (managed, Multi-AZ writer) — source of truth, strongly consistent",
+    "kafka": "Apache Kafka, self-managed on EC2 (the catalog's stream.kafka pricing identity; Amazon MSK would be the managed alternative). Ordered per-key event backbone, fan-out to projectors",
+    "saga": "ECS on Fargate service, 3 tasks: consumes events, issues follow-up commands (acyclic: writes to source of truth)",
+    "proj_read": "ECS on Fargate service, 3 tasks: builds the relational read model from events",
+    "proj_srch": "ECS on Fargate service, 3 tasks: builds the search index from events",
+    "proj_hot": "ECS on Fargate service, 2 tasks: maintains the hot cache projection from events",
+    "rstore": "Amazon RDS for PostgreSQL (managed, Multi-AZ) — relational read model for queries",
+    "es": "Amazon OpenSearch Service (managed, 3-AZ domain, sourced pricing) — search projection",
+    "redis": "Redis OSS, self-managed on EC2 (the catalog's cache.redis pricing identity; ElastiCache would be the managed alternative). Hot read projection / query cache",
+    "dlq": "Amazon SQS (managed) — dead-letter queue for failed search projection",
+    "notifier": "AWS Lambda (managed serverless, pay-per-use, sourced pricing) — sends user notifications from events",
+    "analytics": "ECS on Fargate service, 3 tasks: windowed aggregation of events",
+    "s3_an": "Amazon S3 (managed object store) — aggregated analytics output",
+    "cdn": "Amazon CloudFront (managed CDN) — edge cache/TLS for the query API",
+    "alb_r": "AWS Application Load Balancer (managed), query path",
+    "query": "ECS on Fargate service, 6 tasks: serves reads — cache first, read store on the 20% miss"
   },
   "groups": [
     {
       "id": "g_write",
       "label": "Write side (commands)",
       "rect": {
-        "x": 40,
-        "y": 40,
-        "w": 360,
-        "h": 240
+        "x": 34,
+        "y": -164,
+        "w": 2772,
+        "h": 368
       },
       "members": [
         "cli_cmd",
@@ -661,10 +734,10 @@
       "id": "g_events",
       "label": "Event backbone",
       "rect": {
-        "x": 40,
-        "y": 40,
-        "w": 360,
-        "h": 240
+        "x": 1634,
+        "y": 216,
+        "w": 532,
+        "h": 172
       },
       "members": [
         "kafka",
@@ -675,10 +748,10 @@
       "id": "g_proj",
       "label": "Projectors & read stores",
       "rect": {
-        "x": 40,
-        "y": 40,
-        "w": 360,
-        "h": 240
+        "x": 1954,
+        "y": 400,
+        "w": 532,
+        "h": 1432
       },
       "members": [
         "proj_read",
@@ -697,10 +770,10 @@
       "id": "g_read",
       "label": "Read side (queries)",
       "rect": {
-        "x": 40,
-        "y": 40,
-        "w": 360,
-        "h": 240
+        "x": 34,
+        "y": 1660,
+        "w": 1172,
+        "h": 172
       },
       "members": [
         "cli_qry",

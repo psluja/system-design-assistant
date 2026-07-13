@@ -10,11 +10,16 @@ import type { AssumptionScenario } from './scenario';
 
 /** A hand-built envelope with one origin at `maxRps` — lets the demand math be tested with NO solver (pure).
  *  `baseRps` is the origin's STATED demand (the requirement floor F6 anchors "real" to); default 2000, matching
- *  `clientSource`. */
-const env = (maxRps: number, node = 'users', key = 'throughput', baseRps = 2000): EnvelopeResult => ({
+ * `clientSource`. The origin key defaults to `assumedRps` (: the universal, scenario-overridable demand
+ *  knob every origin — client or not — is reported under, `content/sda/src/analysis/sweep.ts`'s `originNodes`). */
+const env = (maxRps: number, node = 'users', key = 'assumedRps', baseRps = 2000): EnvelopeResult => ({
   perOrigin: [{ node, key, baseRps, maxRps, basis: 'saturation', firstBreak: undefined }],
 });
 
+// `clientSource` deliberately keeps the LEGACY `{ throughput: 2000 }` spelling (client.source's pre-unification
+// convenience preset) rather than `assumedRps` — proving the compatibility sugar (instantiate's
+// `legacyThroughputAsAssumedRps`, mirrored in `originNodes`) carries a hand-built raw Instance all the way through
+// the derived trio / refresh / merge / reset machinery, exactly as an un-migrated document or test would.
 const clientSource: Instance[] = [{ id: 'users', type: 'client.source', config: { throughput: 2000 } }];
 const inputOf = (instances: Instance[], wires: Wire[], envelope: EnvelopeResult): DeriveInput => ({ instances, wires, catalog: allManifests, envelope });
 
@@ -25,19 +30,19 @@ describe('derived trio — demand is a fraction of the envelope (never invented)
   it('sizes pessimistic / real / optimistic to 110% / 60% / 30% of the per-origin maximum, badged derived', () => {
     const t = deriveDefaultScenarios(inputOf(clientSource, [], env(5000)));
     expect(t.scenarios.map((s) => s.id)).toEqual(['pessimistic', 'real', 'optimistic']);
-    expect(ov(world(t, 'pessimistic'), 'users', 'throughput')).toMatchObject({ value: 5500, provenance: 'derived' }); // 5000 × 1.10
-    expect(ov(world(t, 'real'), 'users', 'throughput')).toMatchObject({ value: 3000, provenance: 'derived' }); // 5000 × 0.60
-    expect(ov(world(t, 'optimistic'), 'users', 'throughput')).toMatchObject({ value: 1500, provenance: 'derived' }); // 5000 × 0.30
+    expect(ov(world(t, 'pessimistic'), 'users', 'assumedRps')).toMatchObject({ value: 5500, provenance: 'derived' }); // 5000 × 1.10
+    expect(ov(world(t, 'real'), 'users', 'assumedRps')).toMatchObject({ value: 3000, provenance: 'derived' }); // 5000 × 0.60
+    expect(ov(world(t, 'optimistic'), 'users', 'assumedRps')).toMatchObject({ value: 1500, provenance: 'derived' }); // 5000 × 0.30
   });
 
   it('demand orders pessimistic > real > optimistic for any envelope maximum (a property)', () => {
     // A well-provisioned design (stated demand 100 well below capacity), so the pure-fraction path holds — the
     // requirement floor never binds and each world is exactly its fraction of the envelope maximum.
     for (const max of [700, 1234, 5000, 99999]) {
-      const t = deriveDefaultScenarios(inputOf(clientSource, [], env(max, 'users', 'throughput', 100)));
-      const p = ov(world(t, 'pessimistic'), 'users', 'throughput')!.value;
-      const r = ov(world(t, 'real'), 'users', 'throughput')!.value;
-      const o = ov(world(t, 'optimistic'), 'users', 'throughput')!.value;
+      const t = deriveDefaultScenarios(inputOf(clientSource, [], env(max, 'users', 'assumedRps', 100)));
+      const p = ov(world(t, 'pessimistic'), 'users', 'assumedRps')!.value;
+      const r = ov(world(t, 'real'), 'users', 'assumedRps')!.value;
+      const o = ov(world(t, 'optimistic'), 'users', 'assumedRps')!.value;
       expect(p).toBeGreaterThan(r);
       expect(r).toBeGreaterThan(o);
       expect(p).toBe(Math.round(max * DERIVED_DEMAND_FRACTIONS.pessimistic));
@@ -49,10 +54,10 @@ describe('derived trio — demand is a fraction of the envelope (never invented)
     // the envelope would size "real" to 420 — under-loading below the stated demand so every world rides green,
     // hiding that the real requirement (2000) overflows the design. The floor anchor lifts "real" to ≥ 2000, so the
     // trio loads the design at its own requirement (and it shows RED there), while staying strictly ordered.
-    const t = deriveDefaultScenarios(inputOf(clientSource, [], env(700, 'users', 'throughput', 2000)));
-    const p = ov(world(t, 'pessimistic'), 'users', 'throughput')!.value;
-    const r = ov(world(t, 'real'), 'users', 'throughput')!.value;
-    const o = ov(world(t, 'optimistic'), 'users', 'throughput')!.value;
+    const t = deriveDefaultScenarios(inputOf(clientSource, [], env(700, 'users', 'assumedRps', 2000)));
+    const p = ov(world(t, 'pessimistic'), 'users', 'assumedRps')!.value;
+    const r = ov(world(t, 'real'), 'users', 'assumedRps')!.value;
+    const o = ov(world(t, 'optimistic'), 'users', 'assumedRps')!.value;
     expect(r).toBeGreaterThanOrEqual(2000); // never below the stated requirement (the F6 fix)
     expect(p).toBeGreaterThan(r); // still strictly ordered worst → real
     expect(r).toBeGreaterThan(o);
@@ -62,13 +67,14 @@ describe('derived trio — demand is a fraction of the envelope (never invented)
   it('F6: ample capacity keeps the pure envelope fraction — the floor does not bind when 0.6·max ≥ the demand', () => {
     // Capacity edge 5000, stated demand 2000: 0.6·5000 = 3000 ≥ 2000, so "real" stays the capacity fraction (3000),
     // NOT lifted — the requirement floor only binds an under-provisioned design (the documented precedence).
-    const t = deriveDefaultScenarios(inputOf(clientSource, [], env(5000, 'users', 'throughput', 2000)));
-    expect(ov(world(t, 'real'), 'users', 'throughput')!.value).toBe(3000); // 5000 × 0.60, unchanged
+    const t = deriveDefaultScenarios(inputOf(clientSource, [], env(5000, 'users', 'assumedRps', 2000)));
+    expect(ov(world(t, 'real'), 'users', 'assumedRps')!.value).toBe(3000); // 5000 × 0.60, unchanged
   });
 
   it('an un-overridable origin (a service throughput) yields no demand override — no silent no-op', () => {
-    // The envelope names a NON-origin coordinate (a service's throughput). A scenario cannot override it, so the
-    // trio must NOT create it (it would be a silent no-op). With no other derivable coordinate ⇒ empty-with-reason.
+    // The envelope names a NON-origin coordinate (a service's throughput — a COMPUTED capacity, never a demand
+    // key). A scenario cannot override it, so the trio must NOT create it (it would be a silent no-op).
+    // With no other derivable coordinate ⇒ empty-with-reason.
     const svc: Instance[] = [{ id: 'svc', type: 'compute.service' }];
     const t = deriveDefaultScenarios(inputOf(svc, [], env(4000, 'svc', 'throughput')));
     expect(t.scenarios).toHaveLength(0);
@@ -112,7 +118,7 @@ describe('derived trio — the three-state lifecycle (live → frozen → re-tra
   it('refresh re-tracks derived values on a moved envelope, and NEVER overwrites a frozen (architect) value', () => {
     const before = deriveDefaultScenarios(inputOf(clientSource, [], env(5000))).scenarios;
     // Simulate: the architect FROZE the real world's demand (a manual edit → architect), left pessimistic derived.
-    const frozenReal: AssumptionScenario = { id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'throughput', value: 9999, provenance: 'architect' }] };
+    const frozenReal: AssumptionScenario = { id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'assumedRps', value: 9999, provenance: 'architect' }] };
     const derivedPess = world({ scenarios: before }, 'pessimistic');
 
     // The design changes ⇒ the envelope moves to 6000. Re-derive and reconcile.
@@ -120,8 +126,8 @@ describe('derived trio — the three-state lifecycle (live → frozen → re-tra
     const next = refreshDerivedScenarios([frozenReal, derivedPess], fresh);
 
     // frozen value is untouched; the derived value re-tracks the moved envelope (6000 × 1.10 = 6600).
-    expect(ov(next.find((s) => s.id === 'real')!, 'users', 'throughput')).toMatchObject({ value: 9999, provenance: 'architect' });
-    expect(ov(next.find((s) => s.id === 'pessimistic')!, 'users', 'throughput')!.value).toBe(6600);
+    expect(ov(next.find((s) => s.id === 'real')!, 'users', 'assumedRps')).toMatchObject({ value: 9999, provenance: 'architect' });
+    expect(ov(next.find((s) => s.id === 'pessimistic')!, 'users', 'assumedRps')!.value).toBe(6600);
   });
 
   it('refresh is idempotent — an unchanged scenario is returned by reference (no needless emit)', () => {
@@ -131,12 +137,12 @@ describe('derived trio — the three-state lifecycle (live → frozen → re-tra
   });
 
   it('mergeDerivedTrio preserves a frozen edit while refreshing the rest on a re-derive', () => {
-    const frozen: AssumptionScenario[] = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'throughput', value: 9999, provenance: 'architect' }] }];
+    const frozen: AssumptionScenario[] = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'assumedRps', value: 9999, provenance: 'architect' }] }];
     const fresh = deriveDefaultScenarios(inputOf(clientSource, [], env(6000))).scenarios;
     const merged = mergeDerivedTrio(frozen, fresh);
     // the real world keeps the architect's 9999 (not the fresh 3600); pessimistic/optimistic come fresh + derived
-    expect(ov(merged.find((s) => s.id === 'real')!, 'users', 'throughput')).toMatchObject({ value: 9999, provenance: 'architect' });
-    expect(ov(merged.find((s) => s.id === 'pessimistic')!, 'users', 'throughput')).toMatchObject({ value: 6600, provenance: 'derived' });
+    expect(ov(merged.find((s) => s.id === 'real')!, 'users', 'assumedRps')).toMatchObject({ value: 9999, provenance: 'architect' });
+    expect(ov(merged.find((s) => s.id === 'pessimistic')!, 'users', 'assumedRps')).toMatchObject({ value: 6600, provenance: 'derived' });
   });
 });
 
@@ -147,14 +153,14 @@ describe('resetScenario — the non-preserving wipe', () => {
 
   it('resets a DERIVED-TRIO world to its freshly-derived values, DROPPING a frozen edit', () => {
     // The architect froze `real` at 9999; reset re-tracks the fresh envelope (3600), frozen gone.
-    const existing: AssumptionScenario[] = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'throughput', value: 9999, provenance: 'architect' }] }];
+    const existing: AssumptionScenario[] = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'assumedRps', value: 9999, provenance: 'architect' }] }];
     const reset = resetScenario(existing, fresh, 'real');
     expect(reset).toBeDefined();
-    expect(ov(reset!, 'users', 'throughput')).toMatchObject({ value: 3600, provenance: 'derived' });
+    expect(ov(reset!, 'users', 'assumedRps')).toMatchObject({ value: 3600, provenance: 'derived' });
   });
 
   it('CLEARS a custom world (not in the fresh trio) to base — empty overrides', () => {
-    const existing: AssumptionScenario[] = [{ id: 'peak', name: 'Black Friday', overrides: [{ node: 'users', key: 'throughput', value: 12000 }] }];
+    const existing: AssumptionScenario[] = [{ id: 'peak', name: 'Black Friday', overrides: [{ node: 'users', key: 'assumedRps', value: 12000 }] }];
     const reset = resetScenario(existing, fresh, 'peak');
     expect(reset).toEqual({ id: 'peak', name: 'Black Friday', overrides: [] });
   });
@@ -164,7 +170,7 @@ describe('resetScenario — the non-preserving wipe', () => {
   });
 
   it('with NO fresh derivation available, a trio id still clears to base (the honest fallback)', () => {
-    const existing: AssumptionScenario[] = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'throughput', value: 9999, provenance: 'architect' }] }];
+    const existing: AssumptionScenario[] = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'assumedRps', value: 9999, provenance: 'architect' }] }];
     const reset = resetScenario(existing, [], 'real');
     expect(reset).toEqual({ id: 'real', name: 'Real', overrides: [] });
   });

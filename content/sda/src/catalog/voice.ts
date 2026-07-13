@@ -38,7 +38,9 @@ export const voiceManifests: Readonly<Record<string, Manifest>> = withOverflow(w
     type: 'client.browser',
     ports: [{ name: 'out', dir: 'out', speaks: ['https'] }],
     config: [
-      { key: k.throughput, value: 8, unit: 'req/s', est: true }, // 8-agent office, ~1 turn/s each (their sizing note — a real workload assumption, not a public vendor figure)
+      // the demand rides the universal `assumedRps` origin knob (unified — was the `throughput`
+      // convenience preset, which a scenario/named-world could not reach: its GLOBAL role is `computed`).
+      { key: k.assumedRps, value: 8, unit: 'req/s', est: true }, // 8-agent office, ~1 turn/s each (their sizing note — a real workload assumption, not a public vendor figure)
       { key: k.latency, value: 0, unit: 'ms' }, // neutral: a client adds no hop latency of its own
       { key: k.availability, value: 1, unit: 'ratio' }, // neutral: an abstract client is always "up"
     ],

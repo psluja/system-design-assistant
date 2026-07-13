@@ -57,8 +57,8 @@ describe('robust improve — the sizing holds every selected world (assumption-m
     const g = build(d.instances, d.wires);
     // World A stresses flow-1 (c1 high), world B stresses flow-2 (c2 high) — disjoint, so each binds its own tier.
     const worlds: AssumptionScenario[] = [
-      { id: 'stressA', overrides: [{ node: 'c1', key: 'throughput', value: 5000 }] },
-      { id: 'stressB', overrides: [{ node: 'c2', key: 'throughput', value: 5000 }] },
+      { id: 'stressA', overrides: [{ node: 'c1', key: 'assumedRps', value: 5000 }] },
+      { id: 'stressB', overrides: [{ node: 'c2', key: 'assumedRps', value: 5000 }] },
     ];
     const out = await robustRepair({ graph: g, instances: d.instances, wires: d.wires, worlds }, repair, evaluateBatch);
     expect(out.kind).toBe('solved');
@@ -83,8 +83,8 @@ describe('robust improve — the sizing holds every selected world (assumption-m
     const d = { instances: twoFlow().instances.slice(0, 2), wires: [twoFlow().wires[0]!] }; // single flow c1 → a1
     const g = build(d.instances, d.wires);
     const worlds: AssumptionScenario[] = [
-      { id: 'low', overrides: [{ node: 'c1', key: 'throughput', value: 1000 }] },
-      { id: 'high', overrides: [{ node: 'c1', key: 'throughput', value: 5000 }] },
+      { id: 'low', overrides: [{ node: 'c1', key: 'assumedRps', value: 1000 }] },
+      { id: 'high', overrides: [{ node: 'c1', key: 'assumedRps', value: 5000 }] },
     ];
     const out = await robustOptimize(
       { graph: g, instances: d.instances, wires: d.wires, worlds },

@@ -85,13 +85,19 @@ const QUEUE_BAND: ManifestBand = { key: k.backlog, band: { shape: 'minTargetMax'
  */
 export const commonManifests: Readonly<Record<string, Manifest>> = withOverflow(withOrigin({
   // ---- load source ----
-  // `client.web`'s throughput-as-workload is a CONVENIENCE PRESET over the universal origin mechanism: a client
-  // is just a node dedicated to originating traffic — any node can now originate too by declaring `assumedRps`.
+  // `client.web`'s demand is declared via the UNIVERSAL `assumedRps` origin knob (: unified — a client is
+  // just a node dedicated to originating traffic; any node can originate the same way). Historically this rode on
+  // `throughput` (a "convenience preset" over the mechanism); that made a client's demand scenario-BLIND (a named
+  // world / the derived trio only override role=fact-assumption keys, and `throughput`'s GLOBAL role is `computed`
+  // — correct for every capacity, wrong for this preset). `assumedRps` IS a fact-assumption, so no special-casing
+  // is needed anywhere downstream. A pre-unification `{ throughput: X }` instance override still loads and works —
+  // `instantiate`'s compatibility sugar reads it as this same knob (content/sda/src/vocabulary/manifest.ts), and a
+  // saved document is migrated to this form on load (app/core document.ts).
   'client.web': {
     type: 'client.web',
     ports: [{ name: 'out', dir: 'out', speaks: ['https', 'http'] }],
     config: [
-      { key: k.throughput, value: 5000, unit: 'req/s', est: true }, // the workload the architect is expected to declare/tune — a credible illustrative starting rate, not a vendor fact
+      { key: k.assumedRps, value: 5000, unit: 'req/s', est: true }, // the workload the architect is expected to declare/tune — a credible illustrative starting rate, not a vendor fact
       { key: k.latency, value: 0, unit: 'ms' }, // neutral: a client adds no hop latency of its own
       { key: k.availability, value: 1, unit: 'ratio' }, // neutral: an abstract client is always "up"
       ...RETRY_POLICY_CONFIG, // a browser/client is a caller: timeout + retries (default 0 = off)

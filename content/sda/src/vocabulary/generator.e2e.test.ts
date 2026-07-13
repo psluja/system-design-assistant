@@ -184,10 +184,11 @@ describe('the DES projection threads the cycles — and stays silent for a flat 
 });
 
 describe('a generator on a CLIENT beats the throughput-as-workload preset (the peak-at-source fix)', () => {
-  // `client.web`'s `throughput: 5000` (common.ts) is a WORKLOAD PRESET, not a served capacity. A `generate`
-  // transform on its out port is the AUTHORITATIVE originated rate — it must OVERRIDE the preset, or peaks above
-  // 5000 are silently capped at the source (the owner's "nie czuję peaków" bug). `compute.service` here is the
-  // downstream sink with ample capacity (500 / (20/1000) = 25 000 req/s) so the client's emission is what limits.
+  // `client.web`'s declared demand — `assumedRps: 5000` (common.ts, : unified onto the universal origin
+  // knob) — is a WORKLOAD PRESET, not a served capacity. A `generate` transform on its out port is the
+  // AUTHORITATIVE originated rate — it must OVERRIDE the preset, or peaks above 5000 are silently capped at the
+  // source (the owner's "nie czuję peaków" bug). `compute.service` here is the downstream sink with ample capacity
+  // (500 / (20/1000) = 25 000 req/s) so the client's emission is what limits.
   const svcHi: Instance = { id: 'svc', type: 'compute.service' };
 
   function clientGen(level: number, cycles?: Cycle[]): { instances: Instance[]; wires: Wire[] } {
@@ -227,9 +228,12 @@ describe('a generator on a CLIENT beats the throughput-as-workload preset (the p
     expect(r.value.value(NodeId('svc'), keys.throughput)).toBe(6000);
   });
 
-  it('SACRED byte-identity: a client with NO generator emits its throughput preset UNCHANGED (no origin fold)', () => {
-    // No generator, no assumedRps ⇒ foldOrigin is false: the throughput CONFIG flows exactly as today. Pin BOTH
-    // the emitted value AND that the cell stays a raw INPUT preset (not rewritten into a derived origin relation).
+  it('SACRED byte-identity: a client with NO generator still emits its declared preset UNCHANGED (5000)', () => {
+    // client.web's preset is now DECLARED via assumedRps directly (default 5000, common.ts) rather than
+    // a separate `throughput` config — so even a bare client (no generator, no override) ALWAYS has assumedRps > 0
+    // and therefore ALWAYS folds (foldOrigin true): its `throughput` is the DERIVED relation `self(assumedRps)`,
+    // never a raw input cell (that was the pre-unification shape, when assumedRps defaulted to 0 and `throughput`
+    // carried the preset instead). The NUMBER is what stays sacred: the emitted rate is still exactly 5000.
     const bare: Instance[] = [{ id: 'cli', type: 'client.web' }, svcHi];
     const wires: Wire[] = [{ from: ['cli', 'out'], to: ['svc', 'in'] }];
     const g = instantiate(allManifests, bare, wires);
@@ -238,7 +242,7 @@ describe('a generator on a CLIENT beats the throughput-as-workload preset (the p
     if (!r.ok) throw new Error(r.error.join('; '));
     expect(r.value.value(NodeId('cli'), keys.throughput)).toBe(5000); // the default preset (common.ts), unchanged
     const thrCell = g.value.nodes.get(NodeId('cli'))?.cells.find((c) => String(c.key) === String(keys.throughput));
-    expect(thrCell?.kind).toBe('input'); // still the raw preset input — no fold rewrote it into a relation
+    expect(thrCell?.kind).toBe('derived'); // the origin-emission relation — assumedRps is never 0 by default now
   });
 });
 

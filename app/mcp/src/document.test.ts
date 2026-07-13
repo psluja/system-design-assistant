@@ -102,8 +102,10 @@ describe('generate_doc MCP tool — the deliverable from the live verified model
       slos: [{ node: 'app', key: 'overflow', cmp: '<=', value: 0 }],
     });
     // Declare two named worlds — a comfortable one and a stress one past the edge (a1 overflows at 5,000 req/s).
-    s.dispatch({ kind: 'declareScenario', decl: { id: 'real', name: 'Real', overrides: [{ node: 'client', key: 'throughput', value: 500, provenance: 'derived' }] } });
-    s.dispatch({ kind: 'declareScenario', decl: { id: 'stress', name: 'Stress', overrides: [{ node: 'client', key: 'throughput', value: 5000, provenance: 'derived' }] } });
+    // the world overrides the UNIFIED `assumedRps` knob (the client's base config above keeps the LEGACY
+    // `throughput` spelling — proving the compatibility sugar and the new scenario mechanism compose cleanly).
+    s.dispatch({ kind: 'declareScenario', decl: { id: 'real', name: 'Real', overrides: [{ node: 'client', key: 'assumedRps', value: 500, provenance: 'derived' }] } });
+    s.dispatch({ kind: 'declareScenario', decl: { id: 'stress', name: 'Stress', overrides: [{ node: 'client', key: 'assumedRps', value: 5000, provenance: 'derived' }] } });
     // buildDocTools WITH the solver binding computes the worlds (sync Evaluate capability); WITHOUT it, the section
     // is omitted (no-filler) — proving the DATA-in gate.
     const withSolver = run(buildDocTools(s, bindSolvers(registry)), 'generate_doc');

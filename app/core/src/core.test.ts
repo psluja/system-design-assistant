@@ -480,28 +480,31 @@ describe('command core (Studio) — the MCP-first foundation', () => {
   });
 
   // ── assumption model R2 — the derived-trio lifecycle + the active-world lens ──
+  // a source client's demand is the UNIFIED `assumedRps` knob (its historical `throughput`-as-workload
+  // preset is gone), so scenario overrides target `assumedRps` directly — the same key every demand-facing surface
+  // (the Inspector's "Generated load" field, the derived trio, a named world) now shares.
   const trioDesign = (): Studio => {
     const s = new Studio(registry, commonManifests);
-    must(s.dispatch({ kind: 'addComponent', id: 'users', type: 'client.web' })); // a source client: throughput = demand
-    must(s.dispatch({ kind: 'setConfig', node: 'users', key: 'throughput', value: 2000 }));
+    must(s.dispatch({ kind: 'addComponent', id: 'users', type: 'client.web' })); // a source client: assumedRps = demand
+    must(s.dispatch({ kind: 'setConfig', node: 'users', key: 'assumedRps', value: 2000 }));
     return s;
   };
 
-  it("a source client's throughput is overridable demand (design-aware); a service throughput is refused", () => {
+  it("a source client's assumedRps is overridable demand; a service throughput is refused (not an origin)", () => {
     const s = trioDesign();
-    must(s.dispatch({ kind: 'declareScenario', decl: { id: 'real', overrides: [{ node: 'users', key: 'throughput', value: 3000 }] } }));
+    must(s.dispatch({ kind: 'declareScenario', decl: { id: 'real', overrides: [{ node: 'users', key: 'assumedRps', value: 3000 }] } }));
     must(s.dispatch({ kind: 'addComponent', id: 'svc', type: 'compute.service' }));
     const bad = s.dispatch({ kind: 'setScenarioOverride', scenario: 'real', node: 'svc', key: 'throughput', value: 10 });
     expect(bad.ok).toBe(false);
-    if (!bad.ok) expect(bad.error).toContain('not an origin');
+    if (!bad.ok) expect(bad.error).toContain('assumedRps');
   });
 
   it('a manual edit FREEZES a derived value (derived → architect); CLEAR UN-freezes it (architect → derived)', () => {
     const s = trioDesign();
     // a DERIVED override, exactly as the trio would create it
-    must(s.dispatch({ kind: 'declareScenario', decl: { id: 'real', overrides: [{ node: 'users', key: 'throughput', value: 1200, provenance: 'derived' }] } }));
+    must(s.dispatch({ kind: 'declareScenario', decl: { id: 'real', overrides: [{ node: 'users', key: 'assumedRps', value: 1200, provenance: 'derived' }] } }));
     // manual edit over the live-derived value freezes it
-    must(s.dispatch({ kind: 'setScenarioOverride', scenario: 'real', node: 'users', key: 'throughput', value: 5000 }));
+    must(s.dispatch({ kind: 'setScenarioOverride', scenario: 'real', node: 'users', key: 'assumedRps', value: 5000 }));
     expect(s.project().scenarios[0]!.overrides[0]).toMatchObject({ value: 5000, provenance: 'architect' });
     // the provenance field is additive WITHIN schema 7 (optional): it round-trips through serialize/deserialize with
     // no migration, and the schema stays 7 (the decision — an optional-additive field does not bump the schema).
@@ -511,16 +514,16 @@ describe('command core (Studio) — the MCP-first foundation', () => {
     expect(back.value.scenarios[0]!.overrides[0]).toMatchObject({ value: 5000, provenance: 'architect' });
 
     // clear un-freezes (does NOT remove) — back to derived, ready to re-track the envelope
-    must(s.dispatch({ kind: 'clearScenarioOverride', scenario: 'real', node: 'users', key: 'throughput' }));
+    must(s.dispatch({ kind: 'clearScenarioOverride', scenario: 'real', node: 'users', key: 'assumedRps' }));
     expect(s.project().scenarios[0]!.overrides[0]).toMatchObject({ provenance: 'derived' });
   });
 
   it('clearing a hand-authored (custom) override REMOVES it — a custom scenario falls back to base', () => {
     const s = trioDesign();
     must(s.dispatch({ kind: 'declareScenario', decl: { id: 'custom', overrides: [] } }));
-    must(s.dispatch({ kind: 'setScenarioOverride', scenario: 'custom', node: 'users', key: 'throughput', value: 1500 }));
+    must(s.dispatch({ kind: 'setScenarioOverride', scenario: 'custom', node: 'users', key: 'assumedRps', value: 1500 }));
     expect(s.project().scenarios[0]!.overrides[0]!.provenance).toBeUndefined(); // hand-authored
-    must(s.dispatch({ kind: 'clearScenarioOverride', scenario: 'custom', node: 'users', key: 'throughput' }));
+    must(s.dispatch({ kind: 'clearScenarioOverride', scenario: 'custom', node: 'users', key: 'assumedRps' }));
     expect(s.project().scenarios[0]!.overrides).toEqual([]); // removed, not un-frozen
   });
 
@@ -547,10 +550,10 @@ describe('command core (Studio) — the MCP-first foundation', () => {
   it('reconcileDerivedScenarios re-tracks derived values, preserves frozen ones, is idempotent + non-undoable', () => {
     const s = trioDesign();
     must(s.dispatch({ kind: 'declareScenario', decl: { id: 'real', name: 'Real', overrides: [
-      { node: 'users', key: 'throughput', value: 1000, provenance: 'derived' },
+      { node: 'users', key: 'assumedRps', value: 1000, provenance: 'derived' },
     ] } }));
     // the ambient loop hands a freshly-derived trio (the envelope moved ⇒ a new derived value 3600)
-    const fresh = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'throughput', value: 3600, provenance: 'derived' as const }] }];
+    const fresh = [{ id: 'real', name: 'Real', overrides: [{ node: 'users', key: 'assumedRps', value: 3600, provenance: 'derived' as const }] }];
     expect(s.reconcileDerivedScenarios(fresh)).toBe(true);
     expect(s.project().scenarios[0]!.overrides[0]!.value).toBe(3600); // re-tracked
     expect(s.reconcileDerivedScenarios(fresh)).toBe(false); // idempotent ⇒ no change, no emit

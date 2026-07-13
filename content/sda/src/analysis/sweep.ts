@@ -15,7 +15,7 @@ import type { Key, Registry } from '@sda/engine-core';
 import { NodeId } from '@sda/engine-core';
 import { evaluate } from '@sda/engine-solve';
 import { keys } from '../vocabulary/registry';
-import { generatorLevelOf, instantiate, type Instance, type Manifest, type Wire } from '../vocabulary/manifest';
+import { generatorLevelOf, instantiate, legacyThroughputAsAssumedRps, type Instance, type Manifest, type Wire } from '../vocabulary/manifest';
 import { nodeQueues, realCumulativeLatency } from './queueing';
 import { requestFlows, type ValueFn } from './system';
 import type { DocSweepPoint } from '../doc/doc-model';
@@ -70,27 +70,36 @@ export function effectiveConfig(inst: Instance, catalog: Readonly<Record<string,
 }
 
 /**
- * Find the design's traffic ORIGINS and the load-bearing config key on each — the knobs the sweep scales. A
- * `client.*` node originates via its `throughput` preset; ANY node originates via `assumedRps > 0`. A node that is
- * both (a client with an explicit assumedRps) is scaled on `assumedRps` (the universal mechanism the engine folds). We
- * only take origins whose load is > 0 — a zeroed knob is not a workload to sweep.
+ * Find the design's traffic ORIGINS and the load-bearing config key on each — the knobs the sweep scales. ANY node
+ * originates via `assumedRps > 0` — the universal mechanism the engine folds (catalog client.* manifests declare
+ * their demand as `assumedRps` directly). We only take origins whose load is > 0 — a zeroed knob is not a
+ * workload to sweep.
  */
 export function originNodes(instances: readonly Instance[], catalog: Readonly<Record<string, Manifest>>): OriginNode[] {
   const origins: OriginNode[] = [];
   for (const inst of instances) {
+    const m = catalog[inst.type];
     // A GENERATOR port is the primitive origin declaration; `assumedRps` is its sugar. The
-    // precedence mirrors `instantiate` exactly (explicit instance config > generator total > manifest default),
-    // and the scaled knob stays `assumedRps` either way — an explicit instance config WINS over the generator
-    // total at instantiate, so `scaledInstances` writing that config scales a generator-declared origin identically.
+    // precedence mirrors `instantiate` exactly (explicit instance config > legacy `throughput` sugar >
+    // generator total > manifest default), and the scaled knob stays `assumedRps` either way — an explicit instance
+    // config WINS over the generator total at instantiate, so `scaledInstances` writing that config scales a
+    // generator-declared origin identically.
     const declared = inst.config?.[String(keys.assumedRps)];
-    const generated = declared === undefined ? generatorLevelOf(inst, catalog[inst.type]) : 0;
-    const origin = declared ?? (generated > 0 ? generated : effectiveConfig(inst, catalog, keys.assumedRps) ?? 0);
+    // COMPATIBILITY SUGAR: a PURE SOURCE's legacy `{ throughput: X }` instance override (every
+    // pre-unification export/test/hand-authored document) is read as ITS assumedRps override — the SAME mapping
+    // `instantiate` applies at the graph-build seam (`legacyThroughputAsAssumedRps`), so the envelope/sweep report
+    // the value the engine actually uses, never the stale manifest default.
+    const legacy = declared === undefined ? legacyThroughputAsAssumedRps(inst, m) : undefined;
+    const generated = declared === undefined && legacy === undefined ? generatorLevelOf(inst, m) : 0;
+    const origin = declared ?? legacy ?? (generated > 0 ? generated : effectiveConfig(inst, catalog, keys.assumedRps) ?? 0);
     if (origin > 0) {
       origins.push({ id: inst.id, key: keys.assumedRps, baseValue: origin });
       continue;
     }
-    // A client is a dedicated source: its `throughput` config IS its offered workload (the convenience preset over
-    // the universal origin mechanism). Only a client — a general node's `throughput` is its CAPACITY, not its load.
+    // A CUSTOM client-type component whose manifest declares no `assumedRps` at all (every built-in now does, via
+    // `withOrigin` + its own declared default — moved the catalog's own preset onto `assumedRps`): fall
+    // back to the "client" naming convention's `throughput` MANIFEST DEFAULT, the pre-unification convenience
+    // preset. Only a client — a general node's `throughput` is its CAPACITY, not its load.
     if (inst.type.startsWith('client')) {
       const tput = effectiveConfig(inst, catalog, keys.throughput) ?? 0;
       if (tput > 0) origins.push({ id: inst.id, key: keys.throughput, baseValue: tput });

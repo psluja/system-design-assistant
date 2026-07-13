@@ -1,5 +1,5 @@
 import { type Band, type Result, err, ok } from '@sda/engine-core';
-import { allManifests, classDeclProblems, keys, scenarioProblems, type AssumptionScenario, type GuaranteeSlo, type Instance, type LagSlo, type Manifest, type ManifestBand, type RequestClassDecl, type SystemPromise, type Wire } from '@sda/content';
+import { allManifests, classDeclProblems, keys, receivesWork, scenarioProblems, type AssumptionScenario, type GuaranteeSlo, type Instance, type LagSlo, type Manifest, type ManifestBand, type RequestClassDecl, type SystemPromise, type Wire } from '@sda/content';
 
 /**
  * The project Document — the serializable single source of truth. It holds the placed
@@ -175,14 +175,21 @@ export function deserialize(json: string): Result<ProjectDoc, string> {
   // kept FOREVER (client-persistence — "the export file is the real backup"): every export ever written keeps
   // opening. This function is the ONE code surface (besides its test) permitted to name the legacy keys — the rename
   // guard asserts they appear nowhere else.
-  const { instances: renamed, scenarios } = migrateDemandKey(d.instances as Instance[], (Array.isArray(d.scenarios) ? d.scenarios : []) as AssumptionScenario[]);
+  const { instances: renamed, scenarios: demandKeyScenarios } = migrateDemandKey(d.instances as Instance[], (Array.isArray(d.scenarios) ? d.scenarios : []) as AssumptionScenario[]);
   const componentsForPorts = components; // project-embedded custom manifests win over the shared catalog below
+  // THE CHAIN'S FIFTH LINK: a PURE SOURCE's `throughput`-as-workload convenience preset (client.*'s
+  // historical demand knob) folds onto the universal `assumedRps` origin knob — see `migrateClientThroughputToAssumedRps`
+  // below for the full rationale. Runs AFTER the legacy-key rename (so a demand value already flowed onto
+  // `assumedRps`/`throughput` under its final name) and BEFORE the generator fold (so a client's demand stays a
+  // plain, directly-editable config knob — never swept into a generator transform; see that migration's own
+  // `receivesWork` gate for why a dedicated source is excluded from it).
+  const { instances: unifiedDemand, scenarios } = migrateClientThroughputToAssumedRps(renamed, demandKeyScenarios, componentsForPorts);
   // THE CHAIN'S FOURTH LINK: a SOURCE node's `assumedRps` config is SUGAR for a generator —
   // compile it to `generate(level)` on the node's primary out port, so every historical export re-serialises in
   // the canonical schema-8 form while evaluating IDENTICALLY (the generator physics is a superset of the origin
   // fold — property-pinned in @sda/content generator.e2e.test.ts). Runs AFTER the key rename so all legacy names
   // (`originRps` / `demandRps` / `assumedRps`) flow through one migration. Lossless, idempotent, kept forever.
-  const instances = migrateOriginToGenerator(renamed, d.wires as Wire[], componentsForPorts);
+  const instances = migrateOriginToGenerator(unifiedDemand, d.wires as Wire[], componentsForPorts);
   // Guarantee requirements are ADDITIVE like groups/components: an older document (or a minimal hand-written one)
   // simply has none. Plain strings ⇒ no Map revival needed. Kept as data even if a (source, terminal) later dangles
   // (the verdict layer reports that honestly as `unknown`), never dropped on load.
@@ -212,8 +219,9 @@ export function deserialize(json: string): Result<ProjectDoc, string> {
   // STALE node/key override is NOT a load error — it is a soft lens, reported-and-skipped at evaluate time (§4.2).
   // (`scenarios` was migrated + defaulted above alongside `instances`, so the legacy demand key is already forward.)
   if (scenarios.length > 0) {
-    // Design-aware (instances + wires): overridability of a source client's throughput depends on it being a source
-    // (no catalog needed — the boundary is structural, so load and the commands agree). See `isScenarioOverridable`.
+    // The role boundary is a single mechanical check on the key's registry role (isFactAssumption) — 
+    // retired the earlier node-context special case (a source client's demand is `assumedRps` directly, already
+    // migrated forward above, so it needs no exception here). See `isScenarioOverridable`.
     const problems = scenarioProblems(scenarios, instances, d.wires as Wire[]);
     if (problems.length > 0) return err(`scenarios: ${problems.join('; ')}`);
   }
@@ -334,6 +342,73 @@ function renameDemandKey<T>(rec: Readonly<Record<string, T>> | undefined): Reado
  * key string), so they need no migration. Kept FOREVER (client-persistence): every historical backup keeps loading
  * and evaluates identically.
  */
+// ─── CLIENT-THROUGHPUT-AS-DEMAND MIGRATION (throughput → assumedRps, the chain's FIFTH link �) ──────────
+// A PURE SOURCE's demand (a `client.*` node's "convenience preset") historically rode on `config.throughput` —
+// a SECOND demand mechanism alongside the universal `assumedRps`, and the one the SCENARIO engine could not reach:
+// a named world / the derived trio overrides ONLY role=`fact-assumption` inputs (assumption-model §2/§4.1), while
+// `throughput`'s GLOBAL role is `computed` (a served/emitted result on every OTHER node). Folding it onto
+// `assumedRps` on load puts a source's declared demand under the ONE key every demand-facing surface reads —
+// scenarios, the derived trio, the Inspector's "Generated load" knob, the generator sugar chain (the FOURTH link,
+// below) — so a re-saved document is in the unified form. Wherever a value is keyed by a registry key: an
+// instance's `config` + uncertainty `ranges` (the `migrateDemandKey` discipline), and a SCENARIO override's `key`
+// (so a saved named world that overrode a client's declared demand keeps loading AND keeps moving something —
+// post-unification `throughput` is never a live fixed cell on a dedicated source, so a stale key would silently
+// stop working). NARROW + honest: a node is a candidate ONLY when its manifest does NOT receive work (no `in`/`bi`
+// port — mirrors `instantiate`'s `throughputIsCapacity` gate exactly, so load-time migration and the runtime
+// compatibility sugar draw the SAME line); a RELAY's `throughput` is a real capacity ceiling, untouched. An
+// instance ALREADY declaring `assumedRps` keeps it (the newer, more specific knob wins — the legacy value is
+// simply dropped, never overwriting an explicit override). An UNKNOWN type (no manifest in the project's
+// components nor the shared catalog) is left alone — there is no port to check `receivesWork` against, and
+// guessing would risk silently reinterpreting a real capacity as demand. Idempotent and lossless, kept FOREVER.
+function isDedicatedSource(type: string, components: readonly Manifest[]): boolean {
+  const byType = new Map(components.map((c) => [c.type, c]));
+  const manifest = byType.get(type) ?? allManifests[type];
+  return manifest !== undefined && !receivesWork(manifest);
+}
+
+/** Move a value from `from` onto `to` in a key→value record, KEEPING `to` if already present (never silently
+ *  overwritten) and dropping `from`. Returns the SAME reference when there is nothing to migrate — idempotent, so
+ *  an already-canonical file re-serialises byte-for-byte (no needless churn). */
+function renameOnto<T>(rec: Readonly<Record<string, T>> | undefined, from: string, to: string): Readonly<Record<string, T>> | undefined {
+  if (rec === undefined || !(from in rec)) return rec;
+  const out: Record<string, T> = {};
+  let assigned = Object.prototype.hasOwnProperty.call(rec, to);
+  for (const [k, v] of Object.entries(rec)) {
+    if (k === from) {
+      if (!assigned) { out[to] = v; assigned = true; }
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function migrateClientThroughputToAssumedRps(
+  instances: readonly Instance[],
+  scenarios: readonly AssumptionScenario[],
+  components: readonly Manifest[],
+): { instances: Instance[]; scenarios: AssumptionScenario[] } {
+  const THROUGHPUT = String(keys.throughput);
+  const ORIGIN = String(keys.assumedRps);
+  const migratedInstances = instances.map((inst) => {
+    if (!isDedicatedSource(inst.type, components)) return inst;
+    const config = renameOnto(inst.config, THROUGHPUT, ORIGIN);
+    const ranges = renameOnto(inst.ranges, THROUGHPUT, ORIGIN);
+    if (config === inst.config && ranges === inst.ranges) return inst;
+    return { ...inst, ...(config !== undefined ? { config } : {}), ...(ranges !== undefined ? { ranges } : {}) };
+  });
+  // A dedicated source's scenario override survives under the SAME key rename — even one that names a node with no
+  // `config.throughput` override at all (the override was riding the manifest's OWN default), so it must be caught
+  // independently of the per-instance rename above.
+  const dedicatedSourceIds = new Set(instances.filter((i) => isDedicatedSource(i.type, components)).map((i) => i.id));
+  const migratedScenarios = scenarios.map((s) =>
+    (s.overrides ?? []).some((o) => o.key === THROUGHPUT && dedicatedSourceIds.has(o.node))
+      ? { ...s, overrides: s.overrides.map((o) => (o.key === THROUGHPUT && dedicatedSourceIds.has(o.node) ? { ...o, key: ORIGIN } : o)) }
+      : s,
+  );
+  return { instances: migratedInstances, scenarios: migratedScenarios };
+}
+
 // ─── ORIGIN-TO-GENERATOR MIGRATION (assumedRps → generate, the chain's FOURTH link — doc: load-curves §3) ────────
 // A node-level `assumedRps` config is SUGAR for a generator port function: on load, a SOURCE node (no inbound
 // wire) declaring `assumedRps > 0` gains `generate(level)` on its PRIMARY out port (the manifest's first out/bi
@@ -345,6 +420,12 @@ function renameDemandKey<T>(rec: Readonly<Record<string, T>> | undefined): Reado
 //     (origin counted in overflow, NOT emitted) differ from a generator's (emitted), so migrating it would
 //     change numbers; the sugar remains supported and the architect upgrades by setting a generator explicitly;
 //   • an UNKNOWN type (no manifest in the project's components nor the shared catalog) has no port to name;
+// • a DEDICATED SOURCE (no `in`/`bi` port: `client.*` or any manifest whose whole job is to
+//     originate) keeps its `assumedRps` as a plain, directly-editable "Generated load" knob (the Inspector's
+//     node-context-aware label, app/presenter/src/node-detail.ts) — never generator-folded. This is the SAME line
+// `instantiate`'s `throughputIsCapacity` already draws; it also keeps this migration a FIXPOINT once 
+//     client-throughput sugar (above) has written `assumedRps` on such a node — the value must never oscillate
+//     between "a config knob" and "a generator" across repeated save/load cycles;
 //   • a node whose primary out port ALREADY carries a transform keeps it (a generate there already declares the
 //     origin — the config would only fight it; any other transform occupies the slot);
 //   • `assumedRps: 0` (an explicit inert origin) stays as-is — dropping it would be a silent edit for nothing.
@@ -358,8 +439,10 @@ function migrateOriginToGenerator(instances: readonly Instance[], wires: readonl
     const level = inst.config?.[ORIGIN];
     if (level === undefined || !(level > 0) || hasInbound.has(inst.id)) return inst;
     const manifest = byType.get(inst.type) ?? allManifests[inst.type];
-    const port = manifest?.ports.find((p) => p.dir === 'out' || p.dir === 'bi');
-    if (port === undefined) return inst; // unknown type / no out port — keep the (still legal) sugar, honestly
+    if (manifest === undefined) return inst; // unknown type — no port to name, keep the (still legal) sugar, honestly
+    if (!receivesWork(manifest)) return inst; // a dedicated source — stays a plain config knob (see the doc block above)
+    const port = manifest.ports.find((p) => p.dir === 'out' || p.dir === 'bi');
+    if (port === undefined) return inst; // no out port — keep the (still legal) sugar, honestly
     if (inst.transforms?.[port.name] !== undefined || port.transform !== undefined) return inst; // the slot is taken
     const config = { ...inst.config };
     delete config[ORIGIN];

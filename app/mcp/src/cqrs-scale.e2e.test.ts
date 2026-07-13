@@ -18,9 +18,12 @@ import { bindSolvers } from './composition';
 // throw / a structural decline are NEVER labelled a time limit.
 
 // A FROZEN copy of the committed 23-node design, checked in beside this test (a byte snapshot of
-// `git show HEAD:examples/cqrs-production-large.sda.json` at the time this regression was written). The live
-// `examples/…` file is the OWNER'S working canvas — editing its bands there (WIP) must never redden this suite,
-// which asserts facts about a SPECIFIC design (cost 20,980 < 30,000, no-change repair). Reading a frozen fixture
+// `git show HEAD:examples/cqrs-production-large.sda.json` at the time this regression was written; refreshed
+// 2026-07-13 to the schema-11 design — the PREVIOUS frozen copy was a schema-7 SUBSET missing the cli_qry ≤80,
+// alb_w ≤200, apigw ≤200, cmd ≤200 latency ceilings and the compute.fargate/search.opensearch/compute.lambda
+// catalog identities, so it silently under-tested the real committed design). The live `examples/…` file is the
+// OWNER'S working canvas — editing its bands there (WIP) must never redden this suite, which asserts facts about
+// a SPECIFIC design (rstore.cost 20,830.94 < the 30,000 ceiling, no-change repair). Reading a frozen fixture
 // decouples the regression from the owner's live edits; refresh the fixture deliberately if the committed design
 // changes (re-run the `git show` above into this file). Path is resolved off the test module so it is portable.
 const CQRS_FILE = new URL('./fixtures/cqrs-production-large.frozen.sda.json', import.meta.url);
@@ -46,7 +49,7 @@ describe('CQRS dogfood: backward search converges on the committed 23-node desig
     const r = await tool(s, bindSolvers(registry), 'repair').run({});
     const ms = Math.round(performance.now() - t0);
     expect(r.ok, `repair must converge, got: ${r.text}`).toBe(true);
-    // The committed design meets every SLO (cost 20,980 < the 30,000 ceiling), so the minimal repair is no change.
+    // The committed design meets every SLO (rstore.cost 20,830.94 < the 30,000 ceiling), so the minimal repair is no change.
     expect(r.text).toContain('already within SLOs');
     expect(ms, `repair took ${ms}ms — must stay interactive-adjacent`).toBeLessThan(2000);
   });
@@ -69,6 +72,37 @@ describe('CQRS dogfood: backward search converges on the committed 23-node desig
     // sized robust fix — either way it must NOT be a mislabelled timeout.
     expect(r.text).not.toContain('within the time limit');
     expect(r.ok, `worlds:'all' repair should converge, got: ${r.text}`).toBe(true);
+  });
+});
+
+// The INCUMBENT path (docs: honest escalation /) on the SAME committed file — the differential
+// half of the F1 regression. `bindSolvers(registry, 'incumbent')` shells out to the real MiniZinc/COIN-BC binary
+// (CI installs it — see .github/workflows/ci.yml and .github/CONTRIBUTING.md "The native-MiniZinc caveat"; a
+// local install without `$MINIZINC`/`minizinc` on PATH fails with ENOENT by the SAME convention every other
+// incumbent-touching suite uses, e.g. engine/solver-contract/src/harness/oracle.test.ts — no skip-if-absent). This
+// does NOT reach `worlds:'all'` — that mode needs `evaluateBatch`, which only the native adapter implements
+// (composition.test.ts: "the incumbent has no batch") — so it is out of scope for a pure-incumbent binding.
+describe('the incumbent MiniZinc/COIN-BC reference solver agrees on the committed 23-node design', () => {
+  it('incumbent repair converges to the SAME no-change verdict as native (differential agreement)', async () => {
+    const s = loadCqrs();
+    const t0 = performance.now();
+    const r = await tool(s, bindSolvers(registry, 'incumbent'), 'repair').run({});
+    const ms = Math.round(performance.now() - t0);
+    expect(r.ok, `incumbent repair must converge, got: ${r.text}`).toBe(true);
+    expect(r.text).toContain('already within SLOs');
+    expect(r.text).not.toContain('within the time limit');
+    expect(ms, `incumbent repair took ${ms}ms`).toBeLessThan(15000);
+  });
+
+  it('incumbent optimize(rstore.cost, min) converges to a sized solution (agrees with native)', async () => {
+    const s = loadCqrs();
+    const t0 = performance.now();
+    const r = await tool(s, bindSolvers(registry, 'incumbent'), 'optimize').run({ node: 'rstore', key: String(keys.cost), direction: 'min' });
+    const ms = Math.round(performance.now() - t0);
+    expect(r.ok, `incumbent optimize must converge, got: ${r.text}`).toBe(true);
+    const assignments = JSON.parse(r.text) as Array<{ node: string; key: string; value: number }>;
+    expect(assignments.length).toBeGreaterThan(0);
+    expect(ms, `incumbent optimize took ${ms}ms`).toBeLessThan(15000);
   });
 });
 

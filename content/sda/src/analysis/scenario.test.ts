@@ -108,9 +108,11 @@ describe('named worlds — a world IS the contract Scenario (the keystone proper
 });
 
 describe('named worlds — the role boundary is enforced mechanically', () => {
-  // Design-aware: overridability of a client's throughput depends on it being a SOURCE (no inbound wire).
   const noDesign: { instances: Instance[]; wires: Wire[] } = { instances: [], wires: [] };
-  const clientSource: Instance[] = [{ id: 'users', type: 'client.source', config: { throughput: 2000 } }, { id: 'svc', type: 'compute.service' }];
+  // a source client's declared demand is `assumedRps` DIRECTLY (the unified knob — its historical
+  // `throughput`-as-workload convenience preset is gone), so overridability needs no node-context special case —
+  // `instances`/`wires` are threaded through only for call-site stability.
+  const clientSource: Instance[] = [{ id: 'users', type: 'client.source', config: { assumedRps: 2000 } }, { id: 'svc', type: 'compute.service' }];
   const clientWired: Wire[] = [{ from: ['users', 'out'], to: ['svc', 'in'] }];
 
   it('overrideRoleProblem: a fact-assumption passes; a limit / computed / promise is refused, naming its role', () => {
@@ -122,13 +124,18 @@ describe('named worlds — the role boundary is enforced mechanically', () => {
     expect(overrideRoleProblem('a', 'nonsense', noDesign.instances, noDesign.wires)).toContain('not a known quantity');
   });
 
-  it("a SOURCE client's throughput IS overridable demand; a non-origin's throughput is refused (points at the origin)", () => {
-    // `users` is a client with no inbound wire — its throughput is its offered demand (doc §2), so it passes.
-    expect(overrideRoleProblem('users', 'throughput', clientSource, clientWired)).toBeNull();
-    expect(isScenarioOverridable('users', 'throughput', clientSource, clientWired)).toBe(true);
-    // `svc` (a compute service) throughput is a COMPUTED capacity, not demand — refused, naming it is not an origin.
+  it("a SOURCE client's assumedRps IS overridable demand; its (retired) throughput preset is refused (points at assumedRps)", () => {
+    // `users` is a client with no inbound wire — its DECLARED DEMAND is `assumedRps` (doc §2), so it passes.
+    expect(overrideRoleProblem('users', 'assumedRps', clientSource, clientWired)).toBeNull();
+    expect(isScenarioOverridable('users', 'assumedRps', clientSource, clientWired)).toBe(true);
+    // `throughput` is NEVER a demand key any more — even ON a source, it is the served/emitted result
+    // (the derived origin-emission relation `self(assumedRps)`), so overriding it is refused, pointing at assumedRps.
+    const pClient = overrideRoleProblem('users', 'throughput', clientSource, clientWired);
+    expect(pClient).toContain('assumedRps');
+    expect(isScenarioOverridable('users', 'throughput', clientSource, clientWired)).toBe(false);
+    // `svc` (a compute service) throughput is likewise a COMPUTED capacity, not demand — refused.
     const p = overrideRoleProblem('svc', 'throughput', clientSource, clientWired);
-    expect(p).toContain('not an origin');
+    expect(p).toContain('assumedRps');
     expect(isScenarioOverridable('svc', 'throughput', clientSource, clientWired)).toBe(false);
   });
 
@@ -137,8 +144,11 @@ describe('named worlds — the role boundary is enforced mechanically', () => {
     expect(scenarioProblems([{ id: 'bad', overrides: [{ node: 'a', key: 'replicas', value: 3 }] }], noDesign.instances, noDesign.wires)[0]).toContain('resource limit');
     expect(scenarioProblems([{ id: '', overrides: [] }], noDesign.instances, noDesign.wires)[0]).toContain('no id');
     expect(scenarioProblems([{ id: 'x', overrides: [] }, { id: 'x', overrides: [] }], noDesign.instances, noDesign.wires).some((p) => p.includes('duplicate'))).toBe(true);
-    // a source client's throughput override is accepted design-aware (the finale's shape)
-    expect(scenarioProblems([{ id: 'w', overrides: [{ node: 'users', key: 'throughput', value: 3000 }] }], clientSource, clientWired)).toEqual([]);
+    // a source client's assumedRps override is accepted (the unified demand knob)
+    expect(scenarioProblems([{ id: 'w', overrides: [{ node: 'users', key: 'assumedRps', value: 3000 }] }], clientSource, clientWired)).toEqual([]);
+    // its RETIRED `throughput` spelling is now refused (a pre-unification document is migrated forward on load —
+    // app/core document.ts — before this validator ever sees it; a raw, un-migrated instance is refused honestly).
+    expect(scenarioProblems([{ id: 'w2', overrides: [{ node: 'users', key: 'throughput', value: 3000 }] }], clientSource, clientWired)[0]).toContain('assumedRps');
   });
 
   it('hasScenarios is the no-filler gate', () => {

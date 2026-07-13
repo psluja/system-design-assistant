@@ -228,13 +228,13 @@ describe('uncertainty — tornado attributes the spread with the right SIGN and 
 });
 
 describe('uncertainty — the cloud CENTERS on the ACTIVE world (assumption-model doc §6)', () => {
-  // A purely demand-driven pay-per-use design: a client (NO compute cost) offers `throughput` to a pay-per-use sink,
-  // so whole-design cost = demand × unitCost. The demand is the source client's throughput a world overrides; the
-  // sink's `unitCost` is ranged, so Monte Carlo has spread. Centering on a demand-raising world must shift the whole
-  // cost cloud — "a range is a cloud AROUND A POINT", and the point is the active world.
+  // A purely demand-driven pay-per-use design: a client (NO compute cost) offers `assumedRps` (: the
+  // unified demand knob) to a pay-per-use sink, so whole-design cost = demand × unitCost. The demand is the source
+  // client's assumedRps a world overrides; the sink's `unitCost` is ranged, so Monte Carlo has spread. Centering on
+  // a demand-raising world must shift the whole cost cloud — "a range is a cloud AROUND A POINT", the active world.
   const design = (): { instances: Instance[]; wires: Wire[] } => ({
     instances: [
-      { id: 'c', type: 'client.web', config: { throughput: 500 } },
+      { id: 'c', type: 'client.web', config: { assumedRps: 500 } },
       { id: 'sink', type: 'storage.object', config: { throughput: 100000000, unitCost: 0.1 }, ranges: { unitCost: { lo: 0.08, hi: 0.12 } } },
     ],
     wires: [{ from: ['c', 'out'], to: ['sink', 'in'] }],
@@ -254,7 +254,7 @@ describe('uncertainty — the cloud CENTERS on the ACTIVE world (assumption-mode
 
   it('a demand-raising world SHIFTS the distribution centers (mean cost tracks the world override)', async () => {
     const base = await runWith(); // the cloud centered at demand = 500
-    const high = await runWith({ id: 'high', overrides: [{ node: 'c', key: 'throughput', value: 2000 }] }); // ×4 demand
+    const high = await runWith({ id: 'high', overrides: [{ node: 'c', key: 'assumedRps', value: 2000 }] }); // ×4 demand
     const baseCost = metric(base, 'cost');
     const highCost = metric(high, 'cost');
     // cost = demand × unitCost, so ×4 the demand ⇒ ~×4 the mean cost, and the whole cloud shifts up with it.

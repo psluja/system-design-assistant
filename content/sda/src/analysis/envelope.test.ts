@@ -63,7 +63,7 @@ describe('capacity envelope — analytic anchors', () => {
     expect(env.perOrigin).toHaveLength(1);
     const o = env.perOrigin[0]!;
     expect(o.node).toBe('client');
-    expect(o.key).toBe('throughput');
+    expect(o.key).toBe('assumedRps'); // : the unified demand knob (client.web's declared demand rides it directly)
     expect(o.maxRps).toBe(2000); // the hand-computed capacity
     expect(o.basis).toBe('saturation');
     expect(o.firstBreak).toEqual({ node: 'svc1', key: String(keys.overflow) });

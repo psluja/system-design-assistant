@@ -126,6 +126,9 @@ describe('MCP optimize {scope:"system"} — the whole-design total-cost objectiv
 describe('MCP robust improve across worlds (assumption-model §8) — opt-in, base-mode untouched', () => {
   // client(100) → app(concurrency 1 ⇒ cap ~1,000) with an overflow SLO. Two named worlds override the demand: a
   // comfortable one and a stress one past the edge. Robust repair must size app to hold BOTH (the stress world binds).
+  // The BASE config deliberately keeps the LEGACY `throughput` spelling (client.web's pre-unification preset) —
+  // proving the compatibility sugar carries it through the robust-improve path; the WORLDS override the
+  // unified `assumedRps` knob directly (the only key a scenario can actually move, post-unification).
   const seedWorlds = (): Studio => {
     const s = new Studio(registry, commonManifests);
     s.dispatch({ kind: 'addComponent', id: 'client', type: 'client.web' });
@@ -135,8 +138,8 @@ describe('MCP robust improve across worlds (assumption-model §8) — opt-in, ba
     s.dispatch({ kind: 'setConfig', node: 'app', key: 'perRequestDuration', value: 1 });
     s.dispatch({ kind: 'connect', from: ['client', 'out'], to: ['app', 'in'] });
     s.dispatch({ kind: 'setSLO', node: 'app', key: keys.overflow, band: { shape: 'minTargetMax', max: 0 } });
-    s.dispatch({ kind: 'declareScenario', decl: { id: 'real', name: 'Real', overrides: [{ node: 'client', key: 'throughput', value: 500 }] } });
-    s.dispatch({ kind: 'declareScenario', decl: { id: 'stress', name: 'Stress', overrides: [{ node: 'client', key: 'throughput', value: 5000 }] } });
+    s.dispatch({ kind: 'declareScenario', decl: { id: 'real', name: 'Real', overrides: [{ node: 'client', key: 'assumedRps', value: 500 }] } });
+    s.dispatch({ kind: 'declareScenario', decl: { id: 'stress', name: 'Stress', overrides: [{ node: 'client', key: 'assumedRps', value: 5000 }] } });
     return s;
   };
   const runRepair = (s: Studio, args: Record<string, unknown>) => {

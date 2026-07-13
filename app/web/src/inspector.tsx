@@ -271,12 +271,14 @@ export function InspectorPanel({
               limits: 'Ceilings and sizing THIS design commits to — concurrency, replicas, quotas, deployment mode. Changing one is a different design, not a different world; capacity is derived from them.',
             };
             return (['assumptions', 'limits'] as const).map((gid) => {
-              // HIDDEN knobs (e.g. `assumedRps`) are suppressed from the rendered list — the shared `isHiddenKnob`
-              // (presenter) is the ONE decision both shells consult, so an 'Assumed traffic' row never surfaces here.
-              // `knobGroupFor` is NODE-CONTEXT-AWARE: a pure source's `throughput` config (client.web's
-              // declared demand) lands in `assumptions`, never `limits`, even though the key's GLOBAL registry role
-              // is `computed` — every other knob keeps its ordinary global grouping.
-              const knobs = cfgs.filter((c) => !isHiddenKnob(String(c.key)) && knobGroupFor(selMan, String(c.key)) === gid);
+              // HIDDEN knobs are suppressed from the rendered list — the shared `isHiddenKnob` (presenter) is the ONE
+              // decision both shells consult, NODE-CONTEXT-AWARE: `assumedRps` is hidden on a node that
+              // RECEIVES work (generator machinery) but SHOWN on a dedicated source (client.web's declared demand,
+              // its ONLY mechanism since the unification), so an 'Assumed traffic' row never surfaces on a relay
+              // while a source's "Generated load" field does. `knobGroupFor` is likewise NODE-CONTEXT-AWARE
+              //: a dedicated source's `assumedRps` lands in `assumptions`, even though the key's GLOBAL
+              // registry role classification is what every other knob keeps unconditionally.
+              const knobs = cfgs.filter((c) => !isHiddenKnob(selMan, String(c.key)) && knobGroupFor(selMan, String(c.key)) === gid);
               const withComp = gid === 'limits' && showComposition;
               if (knobs.length === 0 && !withComp) return null; // no-filler: an empty group is not shown
               return (

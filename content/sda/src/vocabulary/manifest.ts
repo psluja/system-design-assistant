@@ -221,6 +221,30 @@ export function generatorLevelOf(inst: Instance, m: Manifest | undefined): numbe
   return generatorsOf(inst, m).reduce((s, g) => s + g.level, 0);
 }
 
+/** Does `m` RECEIVE work (an `in`/`bi` port)? Inlined here (not imported from `catalog/behaviors.ts`, which
+ *  exports the identical predicate as `receivesWork`) so `vocabulary/manifest.ts` never depends on `catalog` — the
+ *  anti-dependency-hell layering (vocabulary is upstream of catalog, never the reverse). */
+function nodeReceivesWork(m: Manifest): boolean {
+  return m.ports.some((p) => p.dir === 'in' || p.dir === 'bi');
+}
+
+/**
+ * COMPATIBILITY SUGAR: the universal traffic-origin knob is `assumedRps` (a fact-assumption a scenario/
+ * named-world/derived-trio can reach); the historical `client.*` "throughput-as-workload" convenience preset rode
+ * on `throughput` instead (whose GLOBAL registry role is `computed`, so it was never truly scenario-overridable —
+ * the inconsistency this task fixes). Every catalog client manifest now declares its demand as `assumedRps`
+ * directly, so a PURE SOURCE (no in/bi port) that still carries a legacy `{ throughput: X }` INSTANCE override —
+ * every pre-unification export, hand-authored document, or test — is read as ITS assumedRps override: the ONE
+ * mapping both `instantiate` (below) and the capacity-envelope/sweep origin detection
+ * (`content/sda/src/analysis/sweep.ts`'s `originNodes`) share, so they can never disagree on an origin's effective
+ * base value. Returns `undefined` when the node receives work (there `throughput` is a genuine served capacity,
+ * never a demand preset) or the instance sets no such override.
+ */
+export function legacyThroughputAsAssumedRps(inst: Instance, m: Manifest | undefined): number | undefined {
+  if (m === undefined || nodeReceivesWork(m)) return undefined;
+  return inst.config?.[String(keys.throughput)];
+}
+
 /** The per-instance CLASS CONTEXT. Present ONLY when the design declares request
  *  classes — its presence is the "classes declared" signal. It carries the reconciled per-node total origin rate
  *  (Σ over classes of each class's origin at the node, from `originByNode`). Under classes the engine injects each
@@ -282,13 +306,32 @@ export function instantiate(
     if (m === undefined) continue; // unreachable — guarded above; keeps the narrowing local
 
     const reconciledOrigin = classCtx?.originByNode.get(inst.id); // the classes' total origin at THIS node, or undefined
+    // Is the node's `throughput` a genuine CAPACITY, or a WORKLOAD PRESET? A node that RECEIVES work (an in/bi
+    // port) serves requests, so its `throughput` is a capacity that must bound the emission (relay-and-generate:
+    // served = min(capacity, inflow + level)). A PURE SOURCE (a `client.*` — no input port) has no capacity there
+    // at all: it originates traffic, it does not serve it (and `withOverflow` gives it no overflow band for the
+    // same reason). Computed FIRST (unlike `assumedRps` below, it needs no origin value) because the 
+    // compatibility sugar right after it reads it.
+    const throughputIsCapacity = m.ports.some((p) => p.dir === 'in' || p.dir === 'bi');
+    // COMPATIBILITY SUGAR: the universal origin mechanism's declared demand is `assumedRps`; catalog
+    // client.* manifests declare it directly (their historical `throughput`-as-workload convenience preset is
+    // gone). An INSTANCE still setting the legacy `{ throughput: X }` override on a PURE SOURCE — every
+    // pre-unification export, hand-authored document, or test — is read as ITS assumedRps override, so nothing
+    // pre-existing needs migrating by hand (a SAVED document is additionally migrated to the canonical form on
+    // load, app/core document.ts's `migrateClientThroughputToAssumedRps`). An explicit `assumedRps` override on
+    // the SAME instance wins (the newer, more specific knob) — see the precedence chain below. NEVER fires when
+    // the node receives work: there `throughput` is a genuine served capacity, never a demand preset. Shared with
+    // `sweep.ts`'s `originNodes` via the exported `legacyThroughputAsAssumedRps`, so the two can never disagree.
+    const legacyThroughputOrigin = legacyThroughputAsAssumedRps(inst, m);
     // GENERATORS: `generate` on the instance's out/bi ports is the primitive traffic-origin
     // declaration; a node-level `assumedRps` is sugar for one. The RECONCILED class-blind level is the generators'
     // total — supplied on the `assumedRps` input cell, the ONE address worlds / Monte-Carlo / the envelope already
     // manipulate. An explicit instance `assumedRps` config WINS over the generator total (it is how the sweep and
-    // the envelope scale an origin by rewriting config — and how a hand-edited document stays unambiguous).
+    // the envelope scale an origin by rewriting config — and how a hand-edited document stays unambiguous); the
+    // legacy `throughput` sugar sits at the SAME precedence as an explicit `assumedRps` (it IS one, just
+    // spelled the old way), so it wins over the generator total too.
     const generatorTotal = generatorLevelOf(inst, m);
-    const assumedRps = inst.config?.[ORIGIN] ?? (generatorTotal > 0 ? generatorTotal : undefined) ?? (m.config ?? []).find((c) => c.key === keys.assumedRps)?.value ?? 0;
+    const assumedRps = inst.config?.[ORIGIN] ?? legacyThroughputOrigin ?? (generatorTotal > 0 ? generatorTotal : undefined) ?? (m.config ?? []).find((c) => c.key === keys.assumedRps)?.value ?? 0;
     const isSource = !hasInbound.has(inst.id);
     // A node that declares origin traffic emits it (capped by its own capacity), through the SAME `assumedRps`
     // cell in both forms. At a SOURCE the throughput becomes `min(capacity, assumedRps)` — byte-for-byte the
@@ -301,15 +344,6 @@ export function instantiate(
     const foldOrigin = assumedRps > 0 && !classesDeclared && (isSource || generatorTotal > 0);
     const throughputRel = (m.relations ?? []).find((r) => r.key === keys.throughput);
     const throughputCfg = (m.config ?? []).find((c) => c.key === keys.throughput);
-    // Is the node's `throughput` a genuine CAPACITY, or a WORKLOAD PRESET? A node that RECEIVES work (an in/bi
-    // port) serves requests, so its `throughput` is a capacity that must bound the emission (relay-and-generate:
-    // served = min(capacity, inflow + level)). A PURE SOURCE (a `client.*` — no input port) declares `throughput`
-    // as its throughput-AS-WORKLOAD preset (common.ts), NOT a served capacity: it originates traffic, it does not
-    // serve it (and `withOverflow` gives it no overflow band for the same reason). So an ORIGIN that overrides the
-    // preset — a generator on its out port, or an explicit `assumedRps` — is the AUTHORITATIVE emission and must
-    // NOT be clamped by the preset. Without this, a generator/spike on a client is silently capped at the preset
-    // (the owner's "peaks are not felt at the source" bug: generate(10000) on client.web emitted only 5000).
-    const throughputIsCapacity = m.ports.some((p) => p.dir === 'in' || p.dir === 'bi');
     const offered = isSource ? 'self(assumedRps)' : 'inflow(throughput) + self(assumedRps)'; // a source's inflow is 0 — kept off the expr so a migrated source compiles byte-identically
     const originThroughputExpr: string | null = !foldOrigin
       ? null
@@ -337,7 +371,10 @@ export function instantiate(
       // the roll-up keep seeing the true class-blind offered, exactly as the sugar did.
       const overrideOrigin = classesDeclared && c.key === keys.assumedRps ? reconciledOrigin : undefined;
       const generatorOrigin = c.key === keys.assumedRps && generatorTotal > 0 ? generatorTotal : undefined;
-      const value = overrideOrigin ?? inst.config?.[c.key] ?? generatorOrigin ?? c.value;
+      // the legacy `throughput` sugar reads as THIS cell's value when nothing more specific overrides it
+      // (an explicit `assumedRps` instance config still wins via the term ahead of it in the chain).
+      const legacyOrigin = c.key === keys.assumedRps ? legacyThroughputOrigin : undefined;
+      const value = overrideOrigin ?? inst.config?.[c.key] ?? legacyOrigin ?? generatorOrigin ?? c.value;
       cells.push({ kind: 'input', key: c.key, value: { kind: 'fixed', quantity: { value, unit: Unit(c.unit) } } });
     }
     // Instance config for a key the manifest does NOT declare (e.g. a per-node behaviour knob like
@@ -347,6 +384,10 @@ export function instantiate(
     const declared = new Set<string>((m.config ?? []).map((c) => String(c.key)));
     for (const [key, value] of Object.entries(inst.config ?? {})) {
       if (declared.has(key)) continue;
+      // a legacy `throughput` override on a PURE SOURCE was already consumed above as its assumedRps
+      // sugar — never also materialise it as a second, dangling raw cell (it would collide with the derived
+      // origin-emission relation this same node gets below, which already claims the `throughput` key).
+      if (legacyThroughputOrigin !== undefined && key === String(keys.throughput)) continue;
       cells.push({ kind: 'input', key: Key(key), value: { kind: 'fixed', quantity: { value, unit: Unit('1') } } });
     }
     // A class ORIGIN on a component whose manifest never declared `assumedRps` (a hand-authored custom component;

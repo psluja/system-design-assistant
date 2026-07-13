@@ -115,8 +115,9 @@ describe('AI-via-MCP: the uncertainty workflow on the OPEN file (import → set_
     const r1 = await call('import_design', { path: 'open.sda.json' });
     expect(r1.ok, r1.text).toBe(true);
 
-    // 2 — declare the soft input as a ± range (a traffic figure that is really 800–1,500).
-    const r2 = await call('set_range', { node: 'client', key: 'throughput', lo: 800, hi: 1500 });
+    // 2 — declare the soft input as a ± range (a traffic figure that is really 800–1,500). : `import_design`
+    // already migrated the client's legacy `throughput` preset onto the unified `assumedRps` knob on load.
+    const r2 = await call('set_range', { node: 'client', key: 'assumedRps', lo: 800, hi: 1500 });
     expect(r2.ok, r2.text).toBe(true);
 
     // 3 — run Monte Carlo: the conclusions come back as distributions (+ the tornado of what drives them).

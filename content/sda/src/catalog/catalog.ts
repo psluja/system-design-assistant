@@ -27,15 +27,19 @@ const VM_AVAILABILITY = availabilityByDeployment(0.995, 0.9999, 0.9999, EC2_SLA_
 // claims of truth — real, sourced limits per concrete service come later. Each is pure data.
 
 export const manifests: Readonly<Record<string, Manifest>> = withOverflow(withOrigin({
-  // A load source: offers demand, no added latency/cost, always up. `throughput` here is a CONVENIENCE PRESET
-  // over the universal traffic-origin mechanism — a client is just a node whose whole job is to originate. ANY
-  // node can now do the same by declaring `assumedRps` (folded into its emitted throughput at a source; see
-  // manifest.ts `instantiate` and behaviors.ts `withOrigin`), so a client-less design (DB-to-DB migration) works.
+  // A load source: offers demand, no added latency/cost, always up. Its demand rides the universal `assumedRps`
+  // origin knob (: unified) — a client is just a node whose whole job is to originate; ANY node can
+  // originate the same way (folded into its emitted throughput at a source; see manifest.ts `instantiate` and
+  // behaviors.ts `withOrigin`), so a client-less design (DB-to-DB migration) works. Declaring the demand as
+  // `assumedRps` (not `throughput`, the old convenience preset) means a scenario/named-world/derived-trio can
+  // reach it directly — `assumedRps` is a fact-assumption; `throughput`'s GLOBAL role is `computed`, so it was
+  // never truly scenario-overridable. A pre-unification `{ throughput: X }` override still loads (instantiate's
+  // compatibility sugar + the app/core document migration).
   'client.source': {
     type: 'client.source',
     ports: [{ name: 'out', dir: 'out', speaks: ['https', 'http'] }],
     config: [
-      { key: k.throughput, value: 1000, unit: 'req/s', est: true }, // the workload the architect is expected to declare/tune — a credible illustrative starting rate, not a vendor fact
+      { key: k.assumedRps, value: 1000, unit: 'req/s', est: true }, // the workload the architect is expected to declare/tune — a credible illustrative starting rate, not a vendor fact
       { key: k.latency, value: 0, unit: 'ms' }, // neutral: a client adds no hop latency of its own
       { key: k.availability, value: 1, unit: 'ratio' }, // neutral: an abstract client is always "up"
       ...RETRY_POLICY_CONFIG, // a client is a caller: it can declare a timeout + retries (default 0 = off)

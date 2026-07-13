@@ -127,7 +127,12 @@ const arbCommands: fc.Arbitrary<Command[]> = fc
     const wireKeys: Array<{ from: readonly [string, string]; to: readonly [string, string] }> = []; // the wires laid down, for wire-level mutations
 
     cmds.push({ kind: 'addComponent', id: 'n0', type: srcType, x: 0, y: 0 });
-    cmds.push({ kind: 'setConfig', node: 'n0', key: keys.throughput, value: load });
+    // `n0` is always a SOURCE_TYPES member (a dedicated source, no in/bi port) — its offered load is the
+    // universal `assumedRps` knob (the catalog's historical `throughput`-as-workload preset is gone), so a
+    // pre-unification `throughput` override — a LEGACY spelling `document.ts`'s `migrateClientThroughputToAssumedRps`
+    // migration folds onto `assumedRps` on load — would make the round-trip non-identity BY DESIGN (the migration is
+    // meaning-preserving, LAW 2, but not byte-identical, LAW 1). Use the canonical key so LAW 1 tests today's form.
+    cmds.push({ kind: 'setConfig', node: 'n0', key: keys.assumedRps, value: load });
 
     receivers.forEach((rec, k) => {
       const i = k + 1;
@@ -159,7 +164,11 @@ const arbCommands: fc.Arbitrary<Command[]> = fc
       }
       const node = ids[ex.node % ids.length]!;
       if (ex.tag === 'label') cmds.push({ kind: 'setLabel', id: node, label: ex.text });
-      else if (ex.tag === 'config') cmds.push({ kind: 'setConfig', node, key: keys.throughput, value: ex.value });
+      // `node` is `n0` (the unique SOURCE_TYPES member, no in/bi port) or a RECEIVER_TYPES member (has
+      // one) — mirror that with the same key split as the initial load above, so a config mutation on the source
+      // never re-triggers the legacy-throughput migration and breaks LAW 1's byte-identity for a reason unrelated
+      // to what this property actually tests.
+      else if (ex.tag === 'config') cmds.push({ kind: 'setConfig', node, key: node === 'n0' ? keys.assumedRps : keys.throughput, value: ex.value });
       else if (ex.tag === 'slo') cmds.push({ kind: 'setSLO', node, key: keys.latency, band: { shape: 'minTargetMax', max: ex.max } });
       else if (ex.tag === 'transform') {
         // Pick a REAL port of the node (any direction) so the override references an existing port name.

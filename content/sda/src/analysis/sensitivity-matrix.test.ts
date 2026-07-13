@@ -154,6 +154,25 @@ const chain = (over: Record<string, Record<string, number>> = {}): { instances: 
   ],
 });
 
+/** The SAME chain as `chain()`, but the client's demand is declared via the CANONICAL `assumedRps` key directly —
+ * never the legacy `throughput` compatibility sugar `chain()` exercises. Proves the unified knob moves
+ *  the SAME downstream metrics on a DEDICATED SOURCE, closing the gap the matrix otherwise leaves: `assumedRps` was
+ *  tested only through a non-client origin (`gen`, the row below) or the sugar-mapped legacy spelling (the row
+ *  above) — never the client's own canonical demand key. */
+const assumedRpsChain = (over: Record<string, Record<string, number>> = {}): { instances: Instance[]; wires: Wire[] } => ({
+  instances: [
+    { id: 'client', type: 'client.source', config: { assumedRps: 800, ...over.client } },
+    { id: 'gw', type: 'gateway.api', config: { ...over.gw } },
+    { id: 'compute', type: 'compute.faas', config: { concurrency: 100, perRequestDuration: 50, ...over.compute } },
+    { id: 'db', type: 'db.postgres', config: { ...over.db } },
+  ],
+  wires: [
+    { from: ['client', 'out'], to: ['gw', 'in'] },
+    { from: ['gw', 'out'], to: ['compute', 'in'] },
+    { from: ['compute', 'out'], to: ['db', 'in'] },
+  ],
+});
+
 /** A pooled proxy in front of the db: client → service → rds-proxy → aurora. Exercises the connection-pool knobs
  *  (connectionPool / connectionHeldMs) and their poolOverflow, plus aurora's deploymentMode. */
 const pooledChain = (over: Record<string, Record<string, number>> = {}): { instances: Instance[]; wires: Wire[] } => ({
@@ -294,6 +313,15 @@ const MATRIX: readonly Row[] = [
     observe: 'compute', // the serverless tier carries served throughput AND concurrencyNeeded (Little's law)
     // more offered load ⇒ more served throughput; the serverless tier needs more concurrency (Little's law); the
     // mean per-hop latency and the tier's own availability do not move on the scalar pass.
+    expect: { throughput: '+', concurrencyNeeded: '+', latency: '0', availability: '0' },
+  },
+  {
+    knob: 'client.assumedRps (: the unified demand knob, declared directly — no legacy sugar)',
+    key: keys.assumedRps,
+    node: 'client',
+    delta: 400, // 800 → 1200 — the SAME bump as the row above, proving both spellings move identically
+    ...assumedRpsChain(),
+    observe: 'compute',
     expect: { throughput: '+', concurrencyNeeded: '+', latency: '0', availability: '0' },
   },
   {

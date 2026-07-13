@@ -71,23 +71,16 @@ export function hasScenarios(scenarios: readonly AssumptionScenario[] | undefine
   return scenarios !== undefined && scenarios.length > 0;
 }
 
-/** Is `(node, key)` a SOURCE CLIENT's throughput — the demand a client offers? A `client.*` node with no inbound
- *  wire is a pure traffic source; its `throughput` config IS its offered workload (the universal generalisation of
- *  a client's throughput-as-workload, doc §2), so a scenario may override it as a demand belief — even though
- *  `throughput` is a COMPUTED capacity on every other node. Detected STRUCTURALLY (type prefix + no inbound wire),
- *  so no catalog is needed and `deserialize` (which has no catalog) and the commands agree on the boundary. */
-function isSourceClientThroughput(node: string, key: string, instances: readonly Instance[], wires: readonly Wire[]): boolean {
-  if (key !== String(keys.throughput)) return false;
-  const inst = instances.find((i) => i.id === node);
-  if (inst === undefined || !inst.type.startsWith('client')) return false;
-  return !wires.some((w) => w.to[0] === node); // a source: nothing flows INTO it
-}
-
-/** May a scenario override `(node, key)`? True for a role=`fact-assumption` input (the assumption space, doc §2) OR
- *  a source client's throughput (its offered demand). The ONE overridability gate every surface reads — the derived
- *  trio, the commands and the load validator all draw the boundary the same way, so it can never drift. */
-export function isScenarioOverridable(node: string, key: string, instances: readonly Instance[], wires: readonly Wire[]): boolean {
-  return isFactAssumption(key) || isSourceClientThroughput(node, key, instances, wires);
+/** May a scenario override `(node, key)`? True for a role=`fact-assumption` input (the assumption space, doc §2) —
+ *  the ONE overridability gate every surface reads (the derived trio, the commands and the load validator), so it
+ * can never drift. : a source client's declared demand is `assumedRps` directly (already fact-assumption,
+ *  role-classified once and for all — content/sda/src/vocabulary/registry.ts) — the catalog's historical
+ *  `throughput`-as-workload convenience preset is gone, so this needs NO node-context special case (the second
+ *  context-aware exception variant (b) would have added; the owner ruled variant (a), one mechanism). `instances`/
+ *  `wires` are kept on the signature for call-site stability (every caller already threads them through) though
+ *  this reading of the boundary no longer needs them. */
+export function isScenarioOverridable(_node: string, key: string, _instances: readonly Instance[], _wires: readonly Wire[]): boolean {
+  return isFactAssumption(key);
 }
 
 /**
@@ -96,10 +89,11 @@ export function isScenarioOverridable(node: string, key: string, instances: read
  * message that names the fix, never silently loaded. Two HARD rules are enforced (the rest — a stale node/key — is a
  * SOFT lens, reported-and-skipped at evaluate time per doc §4.2, not a load error):
  *   1. a scenario needs a non-empty, unique id;
- *   2. every override targets an OVERRIDABLE quantity (a fact-assumption input, or a source client's throughput —
- *      {@link isScenarioOverridable}). A limit / computed / promise override is refused, NAMING the key's actual role
- *      and the right surface, because such an override would silently do nothing (the tool must not lie).
- * Design-aware (`instances` + `wires`): overridability of a client's throughput depends on it being a source.
+ *   2. every override targets an OVERRIDABLE quantity (a fact-assumption input — {@link isScenarioOverridable}). A
+ *      limit / computed / promise override is refused, NAMING the key's actual role and the right surface, because
+ *      such an override would silently do nothing (the tool must not lie).
+ * A pre-unification document with a scenario override still keyed `throughput` on a client node is migrated
+ * forward to `assumedRps` on load (app/core document.ts) BEFORE this validator ever sees it.
  */
 export function scenarioProblems(scenarios: readonly AssumptionScenario[], instances: readonly Instance[], wires: readonly Wire[]): string[] {
   const problems: string[] = [];
@@ -121,13 +115,15 @@ export function scenarioProblems(scenarios: readonly AssumptionScenario[], insta
 
 /** Why an override on `(node, key)` is illegal (its role forbids it), or null when it is overridable
  *  ({@link isScenarioOverridable}). The guided message names the actual role and the surface that DOES own that
- *  quantity — the MCP/error contract. Design-aware so a source client's throughput passes while a service's
- *  throughput (a computed capacity, not demand) is refused with a message that points at the origin instead. */
+ *  quantity — the MCP/error contract. `node` is kept on the signature for the message text and call-site stability. */
 export function overrideRoleProblem(node: string, key: string, instances: readonly Instance[], wires: readonly Wire[]): string | null {
   if (isScenarioOverridable(node, key, instances, wires)) return null;
   const role = roleOf(key as Key);
+  // `throughput` is NEVER a demand key any more — a traffic origin's offered load is `assumedRps`
+  // (a fact-assumption); `throughput` is always the served/emitted result, so it stays a computed OUTPUT even at a
+  // source (the derived origin-emission relation `self(assumedRps)` — content/sda/src/vocabulary/manifest.ts).
   if (key === String(keys.throughput))
-    return `"${key}" is a computed capacity here — a scenario overrides offered DEMAND only at a traffic origin (a source client, or a node with assumedRps). "${node}" is not an origin, so a throughput override would silently do nothing`;
+    return `"${key}" is a computed result here (the served/emitted flow) — a scenario overrides offered DEMAND at its declared source instead: set "assumedRps" on "${node}" (a client preset or any traffic origin)`;
   if (role === undefined) return `"${key}" is not a known quantity — a scenario overrides a fact-assumption input (offered load, a service time, a payload size)`;
   const where =
     role === 'resource-limit'
