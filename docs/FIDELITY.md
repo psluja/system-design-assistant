@@ -14,7 +14,7 @@ The headline is a **vector**, not one blended number: mixing a latency residual 
 - **Modeling behaviors (8), by evidence nature:** **2 measured-capacity** (validated vs measured systems) · **3 theory-dynamics** (closed-form + DES anchored) · **3 sourced-algebra** (current vs cited quota/price/SLA) — the white-space is the RIGHT evidence per nature, not gaps (breakdown below).
 - **Engine capabilities (14 total):** 2 validated · 9 verified (analytic anchor only) · 3 sourced (deterministic algebra over a cited quota/price/SLA) · 0 with **no anchor at all**.
 - **Corpus:** 12 architectures.
-- **Documented gaps:** 5 permanent structural limits + 4 addressable verification gaps.
+- **Documented gaps:** 6 permanent structural limits + 4 addressable verification gaps.
 
 > **The honest reading:** of the 8 modeling behaviors, only the 2 **measured-capacity** families can be — and are — validated against real measured systems (~2%). The other 6 are NOT gaps: **theory-dynamics** anchored to a closed form + the DES, and **sourced-algebra** correct against a cited quota / price / SLA — the RIGHT evidence for their nature, not a missing measurement. The two most-used solver capabilities (`evaluate`, `evaluateBatch`) are oracle-graded (`verified`). What the corpus can still broaden is the measured-capacity families; this report shows exactly which white-space is real.
 
@@ -63,6 +63,7 @@ _Evidence attribution: a family’s listed systems are those whose fit declares 
 
 _Partial anchors (honest caveats):_
 - **Retry storms** — analytic-closed-form: exponential patience only — the production case (a deterministic maxQueueWaitMs timeout) is validated qualitatively, no closed form (doc §2.4)
+- **Latency composition** — differential: MEANS only — parallel/scatter-gather takes the max of branch MEANS, never the mean of the max; the order-statistics inflation of a synchronous fan-out join is a permanent structural limit of this analytic twin (§9), covered only by the DES
 
 ## Metrics × regimes
 
@@ -137,6 +138,7 @@ What SDA deliberately does NOT model. These never turn green; where a design gen
 - **Network-partition dynamics** — Availability is a steady-state series/parallel product, not a partition-and-heal simulation. Split-brain, failover storms and partial-partition behaviour are not modeled.
 - **Cache-eviction internals** — A cache is a hit ratio that scales effective service time; LRU/LFU/ARC eviction dynamics, working-set shifts and cold-cache stampedes are not simulated. The hit ratio is an input, not an emergent property.
 - **Two in-series resources as a true tandem** — Where a tier binds on the MIN of two stations (DB vs framework CPU) SDA takes the binding minimum, not a full tandem-network interaction — adequate for capacity, not a model of coupled queueing.
+- **Synchronous fan-out tail inflation (order statistics)** — The analytic response composer (content/sda/src/analysis/queueing.ts responseLatency) folds a node's synchronous children by their MEANS only — parallel/scatter-gather takes the max of branch means, sequential a mean-weighted sum — never the mean of the max. A join over N synchronous branches has E[max] > max(E[]) (order statistics; The Tail at Scale), a real percentile inflation the fast analytic twin cannot see. The rate side is not the gap: a fan-out already multiplies offered load to every branch correctly (edgeMultiplicity — the fan-out routing fixes). The DES already models the tail faithfully — a forked request's response frame settles only when its LAST live synchronous child completes (engine/sim/src/des.ts: `frame.pending += syncKids - 1; if (frame.pending === 0) settle(frame)`), so its own percentile reservoir carries the true join-on-last inflation; this is a gap in the cheap analytic estimate, not in the DES. It stays a structural limit, not a bug, because closing it needs a measured end-to-end-vs-per-branch latency point for a real scatter-gather design to calibrate against — no such corpus entry exists yet (named on the calibration watch-list as the open latency-composition recipe for the future first-party bench harness).
 
 ## How this is generated
 

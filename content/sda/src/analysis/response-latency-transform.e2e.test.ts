@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildGraph, EdgeId, NodeId, PortId, type Edge, type Node, type Port } from '@sda/engine-core';
+import { buildGraph, EdgeId, NodeId, PortId, type Edge, type Graph, type Node, type Port } from '@sda/engine-core';
 import { evaluate } from '@sda/engine-solve';
 import { simulate } from '@sda/engine-sim';
 import { instantiate, allManifests, registry, keys, nodeQueues, responseLatency, toQueueingNetwork, type Instance, type NodeQueue, type Wire } from '../index';
@@ -139,5 +139,69 @@ describe('responseLatency — wire-transform weighted sequential composition', (
 
     const analytic = responseLatency(g.value, value, q).get('svc') as number;
     expect(analytic).toBeCloseTo(expectedPlainSum, 6);
+  });
+
+  // ── (d) THE h=1-EXACT BOUNDARY (AC #4/#5): a 100%-hit cache pays NOTHING for a backend that is otherwise
+  //     fully saturated — the weight-0 guard's actual reason to exist (0 × ∞ would else be NaN). NOTE: a wire ratio
+  //     of LITERALLY 0 is unrepresentable via `instantiate`/`buildGraph` — engine/core's `validTransform`
+  //     (graph.ts) requires every ratio/prob/batch value > 0 (see graph.test.ts's "rejects ... ratio value 0"), so
+  //     h=1 (zero miss traffic) can never be a design a human/AI enters through the catalog. This test therefore
+  //     builds a legally-instantiated graph, then PATCHES the already-built edge object's transform to value 0
+  //     directly (pure data, no re-validation) to exercise the exact boundary `combine`'s guard defends — the
+  //     defensive code the doc comment on `responseLatency` promises, even though real content cannot reach it. ──
+  it('a 100%-hit cache (edge weight 0, h=1 exactly) contributes NOTHING even if the backend is fully saturated', () => {
+    const instancesFullHit: Instance[] = [
+      { id: 'client', type: 'client.web', config: { throughput: CLIENT_RPS } },
+      { id: 'svc', type: 'compute.service' },
+      { id: 'cache', type: 'cache.redis' },
+      { id: 'db', type: 'db.postgres', config: { concurrency: 11 } }, // capacity ~220 req/s — see the saturation override below
+    ];
+    const wiresFullHit: Wire[] = [
+      { from: ['client', 'out'], to: ['svc', 'in'] },
+      { from: ['svc', 'cache'], to: ['cache', 'in'] }, // no transform ⇒ weight 1
+      { from: ['svc', 'db'], to: ['db', 'in'], transform: { kind: 'ratio', value: MISS_RATIO } }, // placeholder legal value; patched to 0 below
+    ];
+    const g = instantiate(allManifests, instancesFullHit, wiresFullHit);
+    if (!g.ok) throw new Error(JSON.stringify(g.error));
+    const ev = evaluate(g.value, registry);
+    if (!ev.ok) throw new Error(ev.error.join('; '));
+    const value = (id: string, k: typeof keys.throughput) => ev.value.value(NodeId(id), k);
+
+    // Patch the built graph's svc→db edge to weight EXACTLY 0 — h=1, no miss traffic at all. Only the edge's
+    // `transform` changes; the topology (nodes/ports) is untouched, so svc's/cache's own stations (which don't
+    // depend on db's inbound transform) stay exactly what a real instantiate() would have produced.
+    const patchedEdges = new Map(g.value.edges);
+    for (const [id, e] of patchedEdges) {
+      if (String(g.value.ports.get(e.to)?.node) === 'db') patchedEdges.set(id, { ...e, transform: { kind: 'ratio', value: 0 } });
+    }
+    const zeroWeightGraph: Graph = { nodes: g.value.nodes, ports: g.value.ports, edges: patchedEdges };
+
+    const q = nodeQueues(zeroWeightGraph, value);
+    // THE CAPACITY-SIDE VIEW of h=1: db's real offered load is genuinely 0 (offeredLoadOf resolves the SAME patched
+    // edge) — the same "nothing reaches it" fact the response-side weight (edgeMultiplicity) encodes as weight 0.
+    const dbNatural = q.get('db');
+    expect(dbNatural?.offered).toBe(0);
+
+    // nodeQueues' own formula can NEVER derive an infinite sojourn from a 0-rps edge (offered <= 0 short-circuits
+    // to the bare service time — a node that receives nothing does not queue, by design). So to exercise the guard
+    // at its actual boundary we inject the saturated state db would show if it were ALSO hit by other real traffic
+    // this design does not model — offered at/above its own capacity, sojourn genuinely Infinity.
+    const dbSaturated: NodeQueue = { ...(dbNatural as NodeQueue), offered: (dbNatural?.capacity ?? 0) + 1, rho: Infinity, sojournMs: Number.POSITIVE_INFINITY };
+    expect(dbSaturated.offered).toBeGreaterThanOrEqual(dbSaturated.capacity); // the saturation precondition, spelled out
+    const qWithSaturatedDb = new Map(q);
+    qWithSaturatedDb.set('db', dbSaturated);
+
+    const analytic = responseLatency(zeroWeightGraph, value, qWithSaturatedDb).get('svc') as number;
+
+    // Independently derived (never by re-reading responseLatency's own db branch, and never touching db's own
+    // value): with db's weight 0, svc's response is its own sojourn plus ONLY the cache's (weight 1) — db's ∞ must
+    // contribute exactly 0, not NaN.
+    const svcOwn = q.get('svc')?.sojournMs as number;
+    const cacheOwn = q.get('cache')?.sojournMs as number;
+    expect(Number.isFinite(svcOwn) && Number.isFinite(cacheOwn)).toBe(true);
+    const expected = svcOwn + cacheOwn;
+
+    expect(Number.isFinite(analytic), `expected a finite response, got ${analytic}`).toBe(true);
+    expect(analytic).toBeCloseTo(expected, 6);
   });
 });
