@@ -104,6 +104,25 @@ function predictShare(entry: CalibrationEntry, model: LoadedModel, gt: GroundTru
   return (100 * num) / den;
 }
 
+/**
+ * A tier's caller-facing MEAN request→response latency (ms) at a STATED offered load — the exact analytic queueing
+ * value the canvas renders (`responseLatency`: the operation-entry node's own M/M/c sojourn plus its synchronous
+ * downstream, composed by `latencyComposition`), read at `gt.probeLoadRps` (the load at which the benchmark measured
+ * the latency). Fit-loop-fast and deterministic: one evaluate + nodeQueues + responseLatency, no DES — the SAME cost
+ * as {@link predictShare}. Scores a MEAN, never a percentile; the seeded DES corroborates the tail at the same load
+ * OUTSIDE the fit loop (see {@link desCorroboration}). Returns NaN if the design cannot evaluate or the node saturates.
+ */
+function predictMeanLatency(entry: CalibrationEntry, model: LoadedModel, gt: GroundTruth, regime: Regime, values: TunableValues): number {
+  const load = gt.probeLoadRps ?? entry.workloadSweep.points[0] ?? 1000;
+  const ev = evaluateApplied(model, entry, regime, values, load);
+  if ('error' in ev) return NaN;
+  if (gt.latencyNode === undefined) return NaN;
+  const queues = nodeQueues(ev.graph, ev.value);
+  const resp = responseLatency(ev.graph, ev.value, queues);
+  const ms = resp.get(gt.latencyNode);
+  return ms === undefined || !Number.isFinite(ms) ? NaN : ms;
+}
+
 /** Predict the metric of one ground-truth point (dispatch on its kind). Returns NaN if the design cannot evaluate. */
 export function predictMetric(entry: CalibrationEntry, model: LoadedModel, gt: GroundTruth, regime: Regime, values: TunableValues): number {
   switch (gt.metric) {
@@ -111,6 +130,8 @@ export function predictMetric(entry: CalibrationEntry, model: LoadedModel, gt: G
       return predictCeiling(entry, model, gt, regime, values);
     case 'latencySharePct':
       return predictShare(entry, model, gt, regime, values);
+    case 'meanLatencyMsAtLoad':
+      return predictMeanLatency(entry, model, gt, regime, values);
   }
 }
 
@@ -125,19 +146,26 @@ export interface DesTail {
 
 /**
  * Corroborate the fitted design with the discrete-event simulation — the SAME toQueueingNetwork → simulate path
- * the product's `simulate` tool runs, deterministic under seed 7. Held at ~0.85× the fitted ceiling (sub-saturation,
- * so the queue is bounded and the run is fast) to read a stable tail. Best-effort: returns undefined if the design
- * cannot build or the ceiling is not finite (never throws into the report).
+ * the product's `simulate` tool runs, deterministic under seed 7. Best-effort: returns undefined if the design
+ * cannot build (never throws into the report). The load is either an explicit `atLoadRps` — used verbatim, so a
+ * `meanLatencyMsAtLoad` entry's tail is corroborated at the SAME stated load its analytic mean was scored at — or,
+ * absent that, ~0.85× the fitted ceiling (sub-saturation, so the queue is bounded and the run is fast).
  */
-export function desCorroboration(entry: CalibrationEntry, model: LoadedModel, values: TunableValues, ceilingRps: number): DesTail | undefined {
-  if (!Number.isFinite(ceilingRps) || ceilingRps <= 0) return undefined;
-  const load = Math.max(1, Math.round(0.85 * ceilingRps));
+export function desCorroboration(entry: CalibrationEntry, model: LoadedModel, values: TunableValues, ceilingRps: number, atLoadRps?: number): DesTail | undefined {
+  const stated = atLoadRps !== undefined && Number.isFinite(atLoadRps) && atLoadRps > 0;
+  const load = stated
+    ? Math.max(1, Math.round(atLoadRps))
+    : Number.isFinite(ceilingRps) && ceilingRps > 0
+      ? Math.max(1, Math.round(0.85 * ceilingRps))
+      : undefined;
+  if (load === undefined) return undefined;
   const ev = evaluateApplied(model, entry, 'fitted', values, load);
   if ('error' in ev) return undefined;
   try {
     const sim = simulate(toQueueingNetwork(ev.graph), { seed: 7, warmupCompletions: 2000, measureCompletions: 8000 });
     const ms = (q: number): number => sim.sojournPercentile(q) * 1000;
-    return { loadRps: load, p50: ms(0.5), p95: ms(0.95), p99: ms(0.99), note: 'DES seed 7, 2k warmup / 8k measured, at ~0.85x the fitted ceiling' };
+    const basis = stated ? 'at the stated measured load' : 'at ~0.85x the fitted ceiling';
+    return { loadRps: load, p50: ms(0.5), p95: ms(0.95), p99: ms(0.99), note: `DES seed 7, 2k warmup / 8k measured, ${basis}` };
   } catch {
     return undefined;
   }

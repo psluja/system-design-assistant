@@ -304,7 +304,7 @@ export const GRID: readonly GridAnchorCell[] = [
   { metric: 'throughputCeiling', regime: 'at-knee', anchor: A('analytic-closed-form', 'content/sda/src/analysis/queueing.e2e.test.ts', 'ceiling at ρ→1 (corpus-validated by TechEmpower)') },
   { metric: 'throughputCeiling', regime: 'past-saturation', anchor: A('algebra', 'content/sda/src/analysis/overflow.e2e.test.ts', 'overflow algebra past capacity') },
   // p50 / p99 tail
-  { metric: 'tail', regime: 'below-knee', anchor: A('differential', 'engine/sim/src/des.test.ts', 'DES tail corroboration'), note: 'DES corroboration only — no scored p99-vs-QPS curve in the corpus yet' },
+  { metric: 'tail', regime: 'below-knee', anchor: A('differential', 'engine/sim/src/des.test.ts', 'DES tail corroboration'), note: 'scorable on the analytic MEAN sojourn at a stated sub-saturation load (meanLatencyMsAtLoad), NOT a p99 curve; the seeded DES corroborates p50/p95/p99 at the same load. No measured latency-at-load entry in the corpus yet — the cell is scorable but awaits one' },
   { metric: 'tail', regime: 'at-knee', anchor: A('analytic-closed-form', 'engine/sim/src/response.test.ts', 'M/M/c + Burke tandem at the knee') },
   { metric: 'tail', regime: 'past-saturation', anchor: A('analytic-closed-form', 'engine/sim/src/des.test.ts', 'ρ≥1 ⇒ ∞, never a throw — the honest answer') },
   // bottleneck id / latency share
@@ -326,11 +326,14 @@ export const GRID: readonly GridAnchorCell[] = [
 ];
 
 /** How a scored corpus ground-truth metric lands in the grid (doc §4.1). A capacity-ceiling measurement is by
- *  definition taken at ρ→1 (the knee); a low-load latency share is below the knee. Deterministic and stated so
- *  the validation overlay cannot be nudged. */
+ *  definition taken at ρ→1 (the knee); a low-load latency share is below the knee; a mean latency at a stated
+ *  sub-saturation load is a below-knee tail point (scored on the analytic MEAN, the seeded DES corroborating the
+ *  percentiles — so the `tail` row carries a real mean, never a mislabelled p99). Deterministic and stated so the
+ *  validation overlay cannot be nudged. */
 export const CORPUS_METRIC_CELL: Readonly<Record<string, { metric: GridMetric; regime: GridRegime }>> = {
   capacityCeilingRps: { metric: 'throughputCeiling', regime: 'at-knee' },
   latencySharePct: { metric: 'bottleneck', regime: 'below-knee' },
+  meanLatencyMsAtLoad: { metric: 'tail', regime: 'below-knee' },
 };
 
 // ── §2.4 addressable verification gaps (the honest holes that CAN be closed, later waves) ──────────────────────

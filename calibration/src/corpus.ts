@@ -50,12 +50,18 @@ export interface Tunable {
 export const tunableId = (t: Tunable): string => `${t.selector.node ?? t.selector.type ?? '*'}:${t.key}`;
 
 // ── The measured ground truth ─────────────────────────────────────────────────────────────────────────────────
-export type MetricKind = 'capacityCeilingRps' | 'latencySharePct';
+export type MetricKind = 'capacityCeilingRps' | 'latencySharePct' | 'meanLatencyMsAtLoad';
 /**
  * One measured (or honestly-unknown) datapoint. `measured: null` means unpublished/unknown — the harness PREDICTS
- * and REPORTS it but does NOT score it (the tool must not invent a number to grade against). `capacityCeilingRps`
- * needs a sub-saturation `probeLoadRps`; `latencySharePct` needs the `numeratorNode` (the tier whose share is
- * measured) and `denominatorNode` (the operation-entry node whose end-to-end response is the denominator).
+ * and REPORTS it but does NOT score it (the tool must not invent a number to grade against).
+ *  - `capacityCeilingRps` needs a sub-saturation `probeLoadRps` (the extrapolation probe).
+ *  - `latencySharePct` needs the `numeratorNode` (the tier whose share is measured) and `denominatorNode` (the
+ *     operation-entry node whose end-to-end response is the denominator), read at `probeLoadRps`.
+ *  - `meanLatencyMsAtLoad` needs `latencyNode` (the operation-entry node whose end-to-end response latency is the
+ *     measured value) and `probeLoadRps` = the STATED offered load at which the benchmark measured that latency. It
+ *     scores the analytic queueing MEAN (responseLatency: the node's M/M/c sojourn + its synchronous downstream) —
+ *     a MEAN, never a percentile. Fit-loop-fast + deterministic; the seeded DES corroborates the p50/p95/p99 tail at
+ *     the SAME load OUTSIDE the fit loop (report-only, never scored).
  */
 export interface GroundTruth {
   readonly metric: MetricKind;
@@ -66,6 +72,9 @@ export interface GroundTruth {
   readonly probeLoadRps?: number;
   readonly numeratorNode?: string;
   readonly denominatorNode?: string;
+  /** `meanLatencyMsAtLoad` only: the operation-entry node whose end-to-end `responseLatency` is compared against the
+   *  measured mean latency at `probeLoadRps`. */
+  readonly latencyNode?: string;
 }
 
 export interface Source {

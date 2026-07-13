@@ -69,7 +69,8 @@ export function buildReport(entries: readonly LoadedEntry[], includeDes = true):
     }
   }
 
-  // DES corroboration per entry, at ~0.85× a representative fitted ceiling for that entry (best-effort).
+  // DES corroboration per entry. A latency-at-load entry is corroborated at its STATED measured load (so the tail
+  // lands at the same operating point as the scored mean); otherwise at ~0.85× a representative fitted ceiling.
   const des = new Map<string, DesTail>();
   if (includeDes) {
     for (const le of entries) {
@@ -78,7 +79,8 @@ export function buildReport(entries: readonly LoadedEntry[], includeDes = true):
         ceilingGt !== undefined
           ? predictMetric(le.entry, le.model, ceilingGt, 'fitted', full.values)
           : (le.entry.workloadSweep.points[le.entry.workloadSweep.points.length - 1] ?? 0);
-      const tail = desCorroboration(le.entry, le.model, full.values, ceiling);
+      const latencyGt = le.entry.groundTruth.find((g) => g.metric === 'meanLatencyMsAtLoad' && g.measured !== null);
+      const tail = desCorroboration(le.entry, le.model, full.values, ceiling, latencyGt?.probeLoadRps);
       if (tail !== undefined) des.set(le.entry.name, tail);
     }
   }

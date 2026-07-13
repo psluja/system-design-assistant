@@ -78,7 +78,7 @@ The six reported metrics crossed with the three load regimes where a model behav
 | Transient / peak survival | `verified` | `verified` | `UNVALIDATED` |
 
 _Grid notes:_
-- **p50 / p99 tail · below-knee** — DES corroboration only — no scored p99-vs-QPS curve in the corpus yet
+- **p50 / p99 tail · below-knee** — scorable on the analytic MEAN sojourn at a stated sub-saturation load (meanLatencyMsAtLoad), NOT a p99 curve; the seeded DES corroborates p50/p95/p99 at the same load. No measured latency-at-load entry in the corpus yet — the cell is scorable but awaits one
 - **Cost / bill · past-saturation** — no real bill in the corpus — UNVALIDATED
 - **Availability / nines · at-knee** — availability is load-independent — no at-knee cell (n/a)
 - **Availability / nines · past-saturation** — no measured DR / end-to-end availability in the corpus — UNVALIDATED
