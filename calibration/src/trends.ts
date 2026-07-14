@@ -333,14 +333,20 @@ function renderPage(history: readonly HistoryPoint[], skipped: number, badges: r
   :root{--ink:${INK};--ink2:${INK2};--paper:${PAPER};--card:${CARD};--line:${LINE};--accent:${ACCENT};--accent2:${ACCENT2};--good:${GOOD};--bad:${BAD};--grey:${GREY}}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 "Segoe UI",Charter,Georgia,serif}
+  a{color:var(--accent)}
   header{background:linear-gradient(135deg,#0e2f3a,#1c6e7a);color:#fff;padding:40px 24px 32px}
   .w{max-width:960px;margin:0 auto;padding:0 24px}
   h1{font:600 30px/1.2 "Segoe UI",system-ui,sans-serif;margin:0 0 8px}
   .sub{font:15px/1.5 "Segoe UI",sans-serif;opacity:.92;max-width:760px}
+  .links{margin-top:14px;font:14px "Segoe UI",sans-serif}
+  .links a{color:#fff;text-decoration:underline;margin-right:18px}
+  .links a:hover{text-decoration:none}
   .meta{font:12px/1.4 "Segoe UI",sans-serif;opacity:.72;margin-top:14px;text-transform:uppercase;letter-spacing:.1em}
   h2{font:600 21px/1.3 "Segoe UI",system-ui,sans-serif;margin:40px 0 6px;color:#0e3540}
   .cap{font:13.5px/1.5 "Segoe UI",sans-serif;color:var(--ink2);margin:0 0 14px}
   section{margin-bottom:6px}
+  .verdict{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:18px 20px;margin:22px 0 8px}
+  .verdict p{margin:0;font:16px/1.6 "Segoe UI",Charter,Georgia,serif}
   .bignums{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:24px 0}
   .bn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
   .bn-label{font:12px "Segoe UI",sans-serif;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
@@ -368,7 +374,7 @@ function renderPage(history: readonly HistoryPoint[], skipped: number, badges: r
   footer{max-width:960px;margin:0 auto;padding:0 24px 40px;font:12.5px "Segoe UI",sans-serif;color:var(--ink2)}
   @media (prefers-color-scheme: dark){
     body{background:#14171c;color:#e7e5df}
-    .bn,figure,table{background:#1b1f26;border-color:#2c313a}
+    .bn,figure,table,.verdict{background:#1b1f26;border-color:#2c313a}
     th{background:#0b232a}
     td{border-color:#2c313a}
     tr:nth-child(even) td{background:#20242c}
@@ -381,39 +387,49 @@ function renderPage(history: readonly HistoryPoint[], skipped: number, badges: r
 <header>
   <div class="w">
     <h1>SDA — Trust &amp; Fidelity Trends</h1>
-    <div class="sub">Three questions, one glance: how far is SDA from measured reality, how much of the engine does that evidence actually cover, and does every change move both numbers the right way? Read straight from the committed history of <code>docs/FIDELITY.md</code> — never estimated, never re-derived.</div>
+    <div class="sub">SDA (System Design Assistant) is a client-side tool that computes what an architecture will do — capacity, latency, cost — instead of just drawing it. This page is the public scorecard we hold ourselves to: regenerated from the audit history on every change, never hand-written.</div>
+    <div class="links"><a href="./">Try the tool</a><a href="https://github.com/psluja/system-design-assistant">Source &amp; method</a></div>
     <div class="meta">Generated from ${esc(last.shortSha)} · ${esc(last.date.slice(0, 10))}${skipped > 0 ? ` · ${skipped} commit(s) skipped (unparseable headline)` : ''}</div>
   </div>
 </header>
 <div class="w">
 
-<h2>Now</h2>
-<p class="cap">The current headline, each with its delta vs the previous recorded point (not vs the start of history).</p>
+<div class="verdict">
+<p>Today, across ${last.corpusArchitectures} real published benchmark setups, the engine's capacity and latency predictions are on average ${pct1(last.fittedPct)} away from the measured results once calibrated against them, and ${pct1(last.oosPct)} away on architectures it was <em>not</em> calibrated on — that second number is what to expect on a system SDA has never seen. Cost and availability have no measured anchor yet: those values are cited from vendor documentation, not confirmed by measurement, and are flagged UNVALIDATED below. Everything on this page is the evidence.</p>
+</div>
+
+<h2>How we check ourselves</h2>
+<p class="cap">The method behind every number on this page: rebuild the benchmark, then compare.</p>
+<p>SDA's engine predicts things you can check against reality: how many requests per second a datastore sustains, the mean latency at a stated load. We rebuild real, published benchmark setups (YCSB runs on Cassandra, MongoDB Atlas, ScyllaDB, and others) as SDA models and compare the engine's prediction with the number the benchmark actually measured. Only the per-component inputs — service times, capacity ceilings — are calibrated against that evidence; the engine's math itself is never fitted. Every reconstruction, with its cited source, sits in the <a href="https://github.com/psluja/system-design-assistant/tree/main/calibration/corpus">corpus</a>.</p>
+
+<h2>How far we are from reality</h2>
+<p class="cap">Fitted error is what the model achieves once it is calibrated against this corpus — it shows whether the model family can express reality at all. Out-of-sample error hides each architecture from calibration and predicts it anyway: it is the error to expect on your system.</p>
 <div class="bignums">
   ${bigNumber('Fitted error', last.fittedPct, prev?.fittedPct, false, '%')}
   ${bigNumber('Out-of-sample error', last.oosPct, prev?.oosPct, false, '%')}
-  ${bigNumber('Scored points', last.scoredPoints, prev?.scoredPoints, true, '')}
-  ${bigNumber('Corpus architectures', last.corpusArchitectures, prev?.corpusArchitectures, true, '')}
 </div>
+<p class="cap">The same two errors over time. Lower is better; y starts at 0.</p>
+<figure>${chartDistance(history)}<figcaption>Fitted error is what the best-fit tunables achieve against the corpus it was fit on; out-of-sample is the honest generalization check (leave-one-out) — it stays higher because most of these ${last.corpusArchitectures} architectures have mostly-disjoint tunables and cannot yet cross-validate each other. READ THIS CHART TOGETHER WITH THE COVERAGE CHART BELOW: the error is measured against a growing corpus, so a rise that coincides with new architectures is the honest cost of harder, more diverse ground truth (0.6% over 3 easy points is a weaker claim than ${pct1(last.fittedPct)} over ${last.scoredPoints}) — the signal to watch is error rising while coverage stands still.</figcaption></figure>
 
+<h2>What's validated — and what isn't yet</h2>
+<p class="cap">Validated means a measured residual against real benchmark data; verified means an analytic anchor with no residual measurement yet; sourced means a cited vendor number (quota, price, SLA) not yet confirmed by measurement. Nothing here is unlabeled — the badges call out the areas still missing a measured anchor.</p>
 <div class="badges">
   ${badges.map((b) => `<span class="badge">${esc(b)}</span>`).join('\n  ')}
 </div>
-
-<h2>Distance from reality</h2>
-<p class="cap">Fitted error (against the corpus) and out-of-sample error (leave-one-out) over time. Lower is better; y starts at 0.</p>
-<figure>${chartDistance(history)}<figcaption>Fitted error is what the best-fit tunables achieve against the corpus it was fit on; out-of-sample is the honest generalization check (leave-one-out) — it stays higher because most of these ${last.corpusArchitectures} architectures have mostly-disjoint tunables and cannot yet cross-validate each other. READ THIS CHART TOGETHER WITH THE COVERAGE CHART BELOW: the error is measured against a growing corpus, so a rise that coincides with new architectures is the honest cost of harder, more diverse ground truth (0.6% over 3 easy points is a weaker claim than ${pct1(last.fittedPct)} over ${last.scoredPoints}) — the signal to watch is error rising while coverage stands still.</figcaption></figure>
-
-<h2>Measured coverage</h2>
-<p class="cap">Scored ground-truth points and corpus architectures over time. Higher is better; y starts at 0.</p>
-<figure>${chartCoverage(history)}<figcaption>The two series currently coincide exactly — every corpus architecture so far contributes exactly one scored ground-truth point, so the thin foreground line (scored points) tracks the thick backdrop line (corpus architectures) pixel-for-pixel. That is a property of the corpus today, not a guarantee: a future entry could add multiple scored metrics, or none.</figcaption></figure>
-
-<h2>Evidence behind the capabilities</h2>
-<p class="cap">Of the ${last.totalCapabilities} engine capabilities, how many are validated (measured residual), verified (analytic anchor only), sourced (cited quota/price/SLA), or carry no anchor at all — stacked per history point, validated called out in bold.</p>
+<p class="cap">Of the ${last.totalCapabilities} engine capabilities, how many rest on a measured residual, an analytic anchor, a cited vendor number, or nothing at all — stacked per history point, validated called out in bold.</p>
 <figure>${chartEvidence(history)}<figcaption>Validated sits at the 0 baseline in every bar so its height is directly comparable across history. The visible shifts are reclassifications (a family's evidence nature was named more precisely) as much as new evidence — read the per-capability table in <code>docs/FIDELITY.md</code> for which.</figcaption></figure>
 
-<h2>Audit trail</h2>
-<p class="cap">The raw parsed history behind the three charts above, oldest → newest (same order as the x-axis). Every row is one commit that changed <code>docs/FIDELITY.md</code>; every number is a straight regex extraction, never recomputed.</p>
+<h2>It keeps getting checked against harder ground truth</h2>
+<p class="cap">Falling error only counts if this isn't shrinking: a rise that lines up with new, harder architectures joining the corpus is the honest cost of more diverse ground truth, not a regression.</p>
+<div class="bignums">
+  ${bigNumber('Scored points', last.scoredPoints, prev?.scoredPoints, true, '')}
+  ${bigNumber('Corpus architectures', last.corpusArchitectures, prev?.corpusArchitectures, true, '')}
+</div>
+<p class="cap">The same coverage over time. Higher is better; y starts at 0.</p>
+<figure>${chartCoverage(history)}<figcaption>The two series currently coincide exactly — every corpus architecture so far contributes exactly one scored ground-truth point, so the thin foreground line (scored points) tracks the thick backdrop line (corpus architectures) pixel-for-pixel. That is a property of the corpus today, not a guarantee: a future entry could add multiple scored metrics, or none.</figcaption></figure>
+
+<h2>Check for yourself</h2>
+<p class="cap">The raw parsed history behind the charts above, oldest → newest (same order as the x-axis). Every row is one commit that changed <code>docs/FIDELITY.md</code>; every number is a straight regex extraction, never recomputed. For the full per-capability evidence table and the known structural limits, see <a href="https://github.com/psluja/system-design-assistant/blob/main/docs/FIDELITY.md">docs/FIDELITY.md</a>.</p>
 <div class="scroll">
 <table>
 <thead><tr><th>Date</th><th>Commit</th><th>Fitted</th><th>Out-of-sample</th><th>Scored points</th><th>Corpus</th></tr></thead>
