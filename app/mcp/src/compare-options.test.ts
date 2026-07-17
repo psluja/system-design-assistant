@@ -64,6 +64,62 @@ describe('compare_options (clingo enumerate → MiniZinc size → rank) over a S
     expect(chosen.length).toBeGreaterThan(1); // real choices, not "no alternative"
   });
 
+  it('a MULTI-OUTPUT service (db + cache) offers same-family alternatives that exact-name matching missed', async () => {
+    // The owner finding from : the OUT side was limited by port-NAME identity, so a service wired through
+    // SEPARATE `db` and `cache` out ports found few/no alternatives — a candidate had to own those exact names.
+    // The remap wires each dependency onto a compatible port of the candidate by direction + protocol, so the whole
+    // compute family competes: e.g. compute.fargate (a `db` port, but NO `cache` port) is now sized + ranked, its
+    // cache dependency remapped onto its generic `out` port.
+    const s = new Studio(registry, catalog);
+    s.dispatch({ kind: 'addComponent', id: 'client', type: 'client.web' });
+    s.dispatch({ kind: 'setConfig', node: 'client', key: 'throughput', value: 1500 });
+    s.dispatch({ kind: 'addComponent', id: 'svc', type: 'compute.service' });
+    s.dispatch({ kind: 'addComponent', id: 'pg', type: 'db.postgres' });
+    s.dispatch({ kind: 'addComponent', id: 'redis', type: 'cache.redis' });
+    s.dispatch({ kind: 'connect', from: ['client', 'out'], to: ['svc', 'in'] });
+    s.dispatch({ kind: 'connect', from: ['svc', 'db'], to: ['pg', 'in'] });
+    s.dispatch({ kind: 'connect', from: ['svc', 'cache'], to: ['redis', 'in'] });
+
+    const compare = buildSynthTools(s, bindSolvers(registry)).find((t) => t.name === 'compare_options')!;
+    const res = await compare.run({ node: 'svc' });
+    expect(res.ok).toBe(true);
+    const rows = JSON.parse(res.text) as { type: string; overflow: number }[];
+    const chosen = rows.map((r) => r.type);
+    expect(chosen.every((t) => t.startsWith('compute.'))).toBe(true);
+    // compute.fargate lacks a `cache` port entirely — exact-name matching excluded it; the remap makes it a real,
+    // sized, protocol-legal alternative (its cache wire rides its generic `out`).
+    expect(chosen).toContain('compute.fargate');
+    expect(chosen.length).toBeGreaterThan(1); // the multi-output node now has real choices
+    for (const r of rows) expect(r.overflow).toBeLessThanOrEqual(0.01); // every survivor still serves the full load
+  });
+
+  it('applying a multi-output swap (set_type) REMAPS the wires onto the new type and the design stays legal', () => {
+    // End-to-end apply path: compare_options offers compute.fargate; the human/agent applies it with set_type. The
+    // swap must carry the service's `cache` wire onto fargate's `out` (fargate has no `cache` port) — else the wire
+    // dangles and the design fails to build. Locks that the applied swap attaches to the candidate's REAL ports and
+    // the resulting design passes legality (evaluate returns no build error).
+    const s = new Studio(registry, catalog);
+    s.dispatch({ kind: 'addComponent', id: 'client', type: 'client.web' });
+    s.dispatch({ kind: 'setConfig', node: 'client', key: 'throughput', value: 1500 });
+    s.dispatch({ kind: 'addComponent', id: 'svc', type: 'compute.service' });
+    s.dispatch({ kind: 'addComponent', id: 'pg', type: 'db.postgres' });
+    s.dispatch({ kind: 'addComponent', id: 'redis', type: 'cache.redis' });
+    s.dispatch({ kind: 'connect', from: ['client', 'out'], to: ['svc', 'in'] });
+    s.dispatch({ kind: 'connect', from: ['svc', 'db'], to: ['pg', 'in'] });
+    s.dispatch({ kind: 'connect', from: ['svc', 'cache'], to: ['redis', 'in'] });
+    expect(s.evaluate().ok).toBe(true); // legal before the swap
+
+    const swap = s.dispatch({ kind: 'setType', id: 'svc', type: 'compute.fargate' });
+    expect(swap.ok).toBe(true);
+    const wires = s.project().wires;
+    // the cache dependency remapped onto fargate's generic `out`; the db dependency kept its `db` port; `in` unchanged.
+    expect(wires.some((w) => w.from[0] === 'svc' && w.from[1] === 'out' && w.to[0] === 'redis')).toBe(true);
+    expect(wires.some((w) => w.from[0] === 'svc' && w.from[1] === 'cache')).toBe(false); // no dangling `cache` wire
+    expect(wires.some((w) => w.from[0] === 'svc' && w.from[1] === 'db' && w.to[0] === 'pg')).toBe(true);
+    expect(wires.some((w) => w.to[0] === 'svc' && w.to[1] === 'in' && w.from[0] === 'client')).toBe(true);
+    expect(s.evaluate().ok).toBe(true); // the swapped design still builds — no dangling-port error
+  });
+
   it('reports honestly when a node has no connections to derive alternatives from', async () => {
     const s = new Studio(registry, catalog);
     s.dispatch({ kind: 'addComponent', id: 'lonely', type: 'compute.faas' });

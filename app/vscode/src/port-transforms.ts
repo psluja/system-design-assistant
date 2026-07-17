@@ -284,5 +284,13 @@ export function presetGeneratorInput(preset: LoadStagePreset, level: number): st
   return formatGeneratorInput(level, LOAD_STAGES_PRESETS[preset]);
 }
 
+/** The generator RE-EDIT seed (the `editKnob` discipline: edit shows the current value directly, never a picker
+ *  that could silently discard it). A generator already on the port formats to the InputBox seed it must open
+ *  with DIRECTLY, no preset QuickPick interposed; `undefined` means no generator exists yet, so the preset on-ramp
+ *  still applies (INITIAL authoring only). */
+export function generatorReeditSeed(current: Transform | null): string | undefined {
+  return current?.kind === 'generate' ? formatGeneratorInput(current.level, current.cycles) : undefined;
+}
+
 /** The preset names offered in the native picker, in the shipped order (`flat` first — the steady baseline). */
 export const GENERATOR_PRESETS: readonly LoadStagePreset[] = ['flat', 'spike', 'ramp-up', 'diurnal', 'on-off-burst', 'quarterly-report'];

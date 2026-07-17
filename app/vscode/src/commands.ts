@@ -13,7 +13,7 @@ import { runSolve, type SolveRequest } from './solver-host';
 import { runCompare, swapTypeText, type CompareOption } from './compare-host';
 import { isDimensionlessUnit } from './pure';
 import { SLO_REQUIREMENTS, requirementForKey, systemQuantityForKey, systemCostQuantity, sloRowsFor, type SloRequirement } from './slo-requirements';
-import { TRANSFORM_KINDS, transformParamOf, validateTransformValue, portRowsFor, wireRowsFor, formatTransform, parseGeneratorInput, formatGeneratorInput, presetGeneratorInput, GENERATOR_PRESETS, type TransformKind } from './port-transforms';
+import { TRANSFORM_KINDS, transformParamOf, validateTransformValue, portRowsFor, wireRowsFor, formatTransform, parseGeneratorInput, presetGeneratorInput, generatorReeditSeed, GENERATOR_PRESETS, type TransformKind } from './port-transforms';
 import type { LoadStagePreset } from '@sda/content';
 import type { Transform } from '@sda/engine-core';
 import { replaceWholeDocument } from './document-write';
@@ -688,32 +688,40 @@ async function pickTransformKind(allowGenerate: boolean): Promise<TransformKind 
 
 /**
  * Author a GENERATOR on `node`.`port` natively — the native counterpart to the web stages
- * table. First an optional PRESET pick (the on-ramp: `diurnal`, `quarterly-report`, a `spike` that reproduces the
- * deleted probe on one node…) pre-fills the compact syntax; then ONE InputBox where the user tweaks the line, parsed
- * + validated by the SHARED `parseGeneratorInput`/`cyclesProblem` so a guided error names the exact rule. Returns the
- * generate transform, or undefined when any step is cancelled. Seeds from the CURRENT generator so re-editing pre-fills.
+ * table. RE-EDITING an existing generator opens the InputBox DIRECTLY, seeded with its CURRENT shape — the same
+ * discipline `editKnob` uses (edit shows the current value, never a picker that could silently discard it): no
+ * preset QuickPick is interposed. INITIAL authoring (no generator yet on this port) keeps the preset on-ramp — a
+ * QuickPick (`diurnal`, `quarterly-report`, a `spike` that reproduces the deleted probe on one node…) that
+ * pre-fills the compact syntax. Both paths land on the same ONE InputBox, parsed + validated by the SHARED
+ * `parseGeneratorInput`/`cyclesProblem` so a guided error names the exact rule. Returns the generate transform, or
+ * undefined when any step is cancelled.
  */
 async function promptGenerator(node: string, port: string, current: Transform | null): Promise<Transform | undefined> {
-  const currentLevel = current?.kind === 'generate' ? current.level : undefined;
-  const currentSeed = current?.kind === 'generate' ? formatGeneratorInput(current.level, current.cycles) : undefined;
+  const reeditSeed = generatorReeditSeed(current);
+  if (reeditSeed !== undefined) return promptGeneratorLine(node, port, reeditSeed);
 
-  // The preset on-ramp — a QuickPick that pre-fills the line. "Keep current / blank" starts from the existing shape
-  // (or a bare level) so the picker is optional, never forced.
-  const KEEP = current?.kind === 'generate' ? 'Keep the current shape' : 'Start from a level only';
+  // INITIAL authoring (no generator yet): the preset on-ramp — a QuickPick that pre-fills the line, then the same
+  // InputBox to tweak it.
   const presetItems = [
-    { label: KEEP, preset: undefined as LoadStagePreset | undefined },
+    { label: 'Start from a level only', preset: undefined as LoadStagePreset | undefined },
     ...GENERATOR_PRESETS.map((p) => ({ label: `Preset: ${p}`, preset: p })),
   ];
   const presetPick = await vscode.window.showQuickPick(presetItems, {
     title: `Author a traffic generator on ${node}.${port}`,
-    placeHolder: 'Pre-fill from a preset (or keep the current shape), then edit the stages',
+    placeHolder: 'Pre-fill from a preset, then edit the stages',
   });
   if (presetPick === undefined) return undefined; // cancelled
 
-  // The level a preset pre-fill uses: the current baseline if any, else a sensible 200 req/s starter (fully editable).
-  const seedLevel = currentLevel ?? 200;
-  const seed = presetPick.preset !== undefined ? presetGeneratorInput(presetPick.preset, seedLevel) : (currentSeed ?? `level=${seedLevel}`);
+  const seedLevel = 200; // a sensible starter baseline, fully editable — no current generator to read one from
+  const seed = presetPick.preset !== undefined ? presetGeneratorInput(presetPick.preset, seedLevel) : `level=${seedLevel}`;
+  return promptGeneratorLine(node, port, seed);
+}
 
+/** The ONE InputBox step both generator-authoring paths funnel through — re-edit (seeded from the current shape)
+ *  and initial authoring (seeded from a preset or a bare level) — parsed + validated by the SHARED
+ *  `parseGeneratorInput`/`cyclesProblem` so a guided error names the exact rule. Returns the generate transform, or
+ *  undefined when cancelled. */
+async function promptGeneratorLine(node: string, port: string, seed: string): Promise<Transform | undefined> {
   const input = await vscode.window.showInputBox({
     title: `Generator — ${node}.${port}`,
     prompt: 'level=<req/s>; <cycle>: <time×mult>, …  (cumulative times off the ×1 baseline; the last time is the period)',

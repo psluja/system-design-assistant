@@ -1,5 +1,5 @@
 import { type Band, type Key, type Result, type Transform, err, ok } from '@sda/engine-core';
-import { SYSTEM_PROMISE_KEYS, classDeclProblems, isSystemPromiseKey, overrideRoleProblem, scenarioProblems, type AssumptionScenario, type GuaranteeSlo, type Instance, type LagSlo, type Manifest, type ManifestBand, type Range, type RequestClassDecl, type ScenarioOverride, type SystemPromise, type Wire, type WireRef } from '@sda/content';
+import { SYSTEM_PROMISE_KEYS, classDeclProblems, isSystemPromiseKey, overrideRoleProblem, portNeedsOf, protocolCompat, remapPorts, scenarioProblems, type AssumptionScenario, type GuaranteeSlo, type Instance, type LagSlo, type Manifest, type ManifestBand, type Range, type RequestClassDecl, type ScenarioOverride, type SystemPromise, type Wire, type WireRef } from '@sda/content';
 import type { Group, ProjectDoc } from './document';
 
 /** A transform as an event-summary token: the five reshaping kinds read `kind(value)`; a generator reads its
@@ -79,8 +79,10 @@ export interface Applied {
 const sameWireRef = (r: WireRef, from: readonly [string, string], to: readonly [string, string]): boolean =>
   r.from[0] === from[0] && r.from[1] === from[1] && r.to[0] === to[0] && r.to[1] === to[1];
 
-/** Pure reducer: validate the command against the document + known component types, return next state. */
-export function apply(doc: ProjectDoc, cmd: Command, knownTypes: ReadonlySet<string>): Result<Applied, string> {
+/** Pure reducer: validate the command against the document + known component types, return next state. The merged
+ *  `catalog` (built-ins + project-embedded definitions) carries the port shapes `setType` needs to REMAP a swapped
+ *  node's wires onto the new type's real ports; every other command ignores it. */
+export function apply(doc: ProjectDoc, cmd: Command, knownTypes: ReadonlySet<string>, catalog: Readonly<Record<string, Manifest>>): Result<Applied, string> {
   const has = (id: string): boolean => doc.instances.some((i) => i.id === id);
   const replaceInstance = (id: string, next: Instance): readonly Instance[] => doc.instances.map((i) => (i.id === id ? next : i));
 
@@ -331,13 +333,26 @@ export function apply(doc: ProjectDoc, cmd: Command, knownTypes: ReadonlySet<str
     }
 
     case 'setType': {
-      // Swap a node's component type in place: keep id (so wires/groups/labels survive) and its SLO bands,
-      // but DROP capacity config — the new service has its own knobs (re-size with repair/optimize).
+      // Swap a node's component type in place: keep id (so groups/labels survive) and its SLO bands, but DROP
+      // capacity config — the new service has its own knobs (re-size with repair/optimize).
       const inst = doc.instances.find((i) => i.id === cmd.id);
       if (inst === undefined) return err(`node "${cmd.id}" not found`);
       if (!knownTypes.has(cmd.type)) return err(`unknown component type "${cmd.type}"`);
       const next: Instance = { id: inst.id, type: cmd.type, ...(inst.bands !== undefined ? { bands: inst.bands } : {}) };
-      return ok({ doc: { ...doc, instances: replaceInstance(cmd.id, next) }, event: { summary: `${cmd.id} → ${cmd.type}` } });
+      // CARRY THE WIRES onto the new type's compatible ports. Same-family members name
+      // their ports inconsistently (a function's egress is `out`; a service's are `db`/`cache`), so a swap that kept
+      // the old port NAMES would dangle a wire the new type does not own. `remapPorts` matches each wired port to a
+      // compatible port of the new type by DIRECTION + protocol — the SAME remap compare_options uses to OFFER the
+      // swap (port-remap.ts) — so the applied design attaches to real ports and passes legality. When the new type
+      // cannot host the wiring (no compatible port for some wire ⇒ remap is null), the wires are left as authored, so
+      // the honest dangling-wire build error still surfaces at evaluate rather than a silent rewrite that hides it.
+      const map = catalog[cmd.type] !== undefined ? remapPorts(catalog[cmd.type] as Manifest, portNeedsOf(catalog, doc.instances, doc.wires, cmd.id), protocolCompat) : null;
+      const wires = map === null ? doc.wires : doc.wires.map((w) => ({
+        ...w,
+        from: (w.from[0] === cmd.id ? [cmd.id, map[w.from[1]] ?? w.from[1]] : w.from) as readonly [string, string],
+        to: (w.to[0] === cmd.id ? [cmd.id, map[w.to[1]] ?? w.to[1]] : w.to) as readonly [string, string],
+      }));
+      return ok({ doc: { ...doc, instances: replaceInstance(cmd.id, next), wires }, event: { summary: `${cmd.id} → ${cmd.type}` } });
     }
 
     case 'setSLO': {

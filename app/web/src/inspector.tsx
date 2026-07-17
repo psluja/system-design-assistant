@@ -220,6 +220,20 @@ export function InspectorPanel({
                   </div>
                 );
               }
+              // A redundancy TIER (0/1/2), not a free number — same enumerated-select shape as `latencyComposition`
+              // below (a bare numeric field would be a UX lie on an availability-bearing knob).
+              if (ck === 'deploymentMode') {
+                return (
+                  <div className="field" key={`${selInst.id}:${ck}`}>
+                    <label data-tip={keyInfo('deploymentMode').desc}>Deployment mode</label>
+                    <select className="comp-select" value={String(cur)} onChange={(e) => studio.dispatch({ kind: 'setConfig', node: selInst.id, key: ck, value: Number(e.target.value) })}>
+                      <option value="0">Single-AZ</option>
+                      <option value="1">Multi-AZ</option>
+                      <option value="2">Multi-Region</option>
+                    </select>
+                  </div>
+                );
+              }
               // A knob's declared uncertainty RANGE rides on `instance.ranges`,
               // keyed by config key. The ± affordance is COLLAPSED by default (a bare "±"); once a range is set the
               // button shows the compact ±(lo–hi) indicator beside the point value — together they read `130 ±(100–180)`.

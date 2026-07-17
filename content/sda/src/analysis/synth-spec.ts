@@ -1,8 +1,8 @@
 import { Key, type Band } from '@sda/engine-core';
-import { portsConnect } from '@sda/engine-solve';
 import { keys } from '../vocabulary/registry';
 import { protocolCompat } from '../vocabulary/protocols';
 import type { Instance, Manifest, ManifestBand, Wire } from '../vocabulary/manifest';
+import { portNeedsOf, remapPorts } from './port-remap';
 import type { SynthSlot, SynthSpec } from './synthesize';
 
 // synth-spec — the DOMAIN spec-builders: turn a live design (a node to reconsider) or a
@@ -38,45 +38,41 @@ export function specForNode(
   const self = instances.find((i) => i.id === node);
   if (self === undefined) return { ok: false, error: `no node "${node}" in the design` };
 
-  const typeOf = (id: string): string => instances.find((i) => i.id === id)?.type ?? '';
-  const needIn = new Map<string, string>(); // node's in-port NAME → protocol it must accept (from the producer)
-  const needOut = new Map<string, string>(); // node's out-port NAME → protocol it must produce (for the consumer)
-  for (const w of wires) {
-    if (w.to[0] === node) { const p = portProtocol(catalog, typeOf(w.from[0]), w.from[1]); if (p !== undefined) needIn.set(w.to[1], p); }
-    if (w.from[0] === node) { const p = portProtocol(catalog, typeOf(w.to[0]), w.to[1]); if (p !== undefined) needOut.set(w.from[1], p); }
-  }
-  if (needIn.size === 0 && needOut.size === 0) return { ok: false, error: `node "${node}" has no connections — wire it first so its alternatives follow from the topology` };
+  // The node's wired ports, each with the peer protocol-set(s) it must legally reach (derived from the fixed
+  // neighbours on the far ends). These are what a candidate must be able to CARRY — by direction + protocol, not by
+  // port name, since same-family members name their ports inconsistently (a function's egress is `out`; a service's
+  // are `db`/`cache`).
+  const needs = portNeedsOf(catalog, instances, wires, node);
+  if (needs.length === 0) return { ok: false, error: `node "${node}" has no connections — wire it first so its alternatives follow from the topology` };
 
-  // A candidate fits if, for each wire the node carries, it has a SAME-NAMED port (the spec reuses the wire's
-  // port names) whose protocol is COMPATIBLE with the neighbour — accept-set for an in-port, speak-set for an
-  // out-port (the same rule the legality layer uses), NOT an exact-protocol match. So a Lambda (in: http, but
-  // accepts sqs) is a valid alternative to a Fargate worker fed by an SQS queue.
-  const fits = (m: Manifest): boolean => {
-    const has = (name: string, proto: string, dir: 'in' | 'out'): boolean =>
-      m.ports.some((p) => {
-        if (p.name !== name || (dir === 'in' ? !isIn(p.dir) : !isOut(p.dir))) return false;
-        return dir === 'in'
-          ? portsConnect([proto], p.accepts ?? [], protocolCompat) // candidate IN accepts the producer's protocol
-          : portsConnect(p.speaks ?? [], [proto], protocolCompat); // candidate OUT can emit to the consumer
-      });
-    for (const [name, proto] of needIn) if (!has(name, proto, 'in')) return false;
-    for (const [name, proto] of needOut) if (!has(name, proto, 'out')) return false;
-    return true;
-  };
-  // Like-for-like: candidates share the node's FAMILY (the type-id prefix — `compute.*`, `db.*`, …) AND drop
-  // into its exact wiring. The family keeps the comparison meaningful (a proxy is not a "compute alternative")
-  // while staying domain-agnostic: it generalises to every family, with no engine-side knowledge of any of them.
+  // A candidate fits when its ports can host EVERY wired port — each mapped by DIRECTION + protocol compatibility
+  // (`portsConnect`, the same rule the legality layer uses) to a compatible candidate port, remapping the wire onto
+  // that port. So a Lambda (in: http but accepts sqs; a single generic `out`) is a valid alternative to a Fargate
+  // worker on an SQS queue, and to a service that talks to a db AND a cache (its `db`/`cache` wires remap onto the
+  // Lambda's `out`). `remapPorts` returns the per-candidate name map (or null when a wire has no compatible port);
+  // it is the SAME remap the command core applies on a swap (port-remap.ts), so OFFER and APPLY can never disagree.
+  // Like-for-like: candidates share the node's FAMILY (the type-id prefix — `compute.*`, `db.*`, …). The family keeps
+  // the comparison meaningful (a proxy is not a "compute alternative") while staying domain-agnostic.
   const family = familyOf(self.type);
-  const types = Object.keys(catalog).filter((t) => familyOf(t) === family && fits(catalog[t] as Manifest)).sort();
+  const types: string[] = [];
+  const portMap: Record<string, Record<string, string>> = {};
+  for (const t of Object.keys(catalog).sort()) {
+    if (familyOf(t) !== family) continue;
+    const map = remapPorts(catalog[t] as Manifest, needs, protocolCompat);
+    if (map === null) continue; // no compatible port for some wire — not a drop-in
+    types.push(t);
+    portMap[t] = map;
+  }
 
+  const receivesLoad = needs.some((n) => n.dir === 'in');
   const ownBands = (self.bands ?? []).filter((b) => b.key !== keys.overflow);
-  const bands: ManifestBand[] = needIn.size > 0 ? [...ownBands, { key: keys.overflow, band: { shape: 'minTargetMax', max: 0 } }] : [...ownBands];
+  const bands: ManifestBand[] = receivesLoad ? [...ownBands, { key: keys.overflow, band: { shape: 'minTargetMax', max: 0 } }] : [...ownBands];
 
   return {
     ok: true,
     value: {
       fixed: instances.filter((i) => i.id !== node),
-      slots: [{ id: node, node, types, ...(bands.length > 0 ? { bands } : {}) }],
+      slots: [{ id: node, node, types, portMap, ...(bands.length > 0 ? { bands } : {}) }],
       adjacencies: [],
       wires: [...wires],
       objective,

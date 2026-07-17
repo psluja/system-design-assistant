@@ -226,6 +226,7 @@ export { formatMs, formatMsDigits } from './doc/format-ms';
 export { buildLoadSweep, originNodes, SWEEP_FACTORS, type LoadSweepInput, type OriginNode } from './analysis/sweep';
 export { synthesize, type SynthSpec, type SynthSlot, type SynthDeps, type RankedDesign } from './analysis/synthesize';
 export { familyOf, specForNode, specFromSlots, ARCHETYPES, type SlotReq, type SloReq } from './analysis/synth-spec';
+export { portNeedsOf, remapPorts, type PortNeed } from './analysis/port-remap';
 export {
   generatorLevelOf,
   generatorsOf,

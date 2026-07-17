@@ -35,6 +35,13 @@ export interface SynthSlot {
   readonly node: string;
   readonly types: readonly string[];
   readonly bands?: readonly ManifestBand[];
+  /** Per-candidate wire REMAP: `candidateType → (originalWirePort → candidatePort)`. A
+   *  candidate need not own the wire template's exact port NAMES — the spec-builder matched each wired port to a
+   *  compatible port of the candidate by direction + protocol (port-remap.ts), and this carries that mapping so the
+   *  wires attach to the candidate's REAL ports at instantiate time. Absent (or absent for a chosen type) ⇒ the wire
+   *  keeps its port name unchanged (name-identical matching — the trivial case), so a spec without a remap is
+   *  evaluated byte-for-byte as before. */
+  readonly portMap?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 export interface SynthSpec {
@@ -105,6 +112,17 @@ export async function synthesize(
   deps: SynthDeps,
 ): Promise<RankedDesign[]> {
   const slotById = new Map(spec.slots.map((s) => [s.id, s]));
+  const slotByNode = new Map(spec.slots.map((s) => [s.node, s]));
+  // Rewrite a wire ENDPOINT onto the chosen candidate's real port: a slot node's wire may reference the wiring
+  // TEMPLATE's port name, which the chosen type need not own (a service's `cache` wire onto a Lambda's `out`). The
+  // slot's `portMap` carries the direction+protocol remap the spec-builder computed per candidate; a fixed node, an
+  // absent map, or an unmapped port ⇒ the port is unchanged (name-identical matching), so a remap-free spec compiles
+  // byte-for-byte as before.
+  const remapPort = (sel: Readonly<Record<string, string>>, nodeId: string, port: string): string => {
+    const slot = slotByNode.get(nodeId);
+    if (slot === undefined) return port;
+    return slot.portMap?.[sel[slot.id] as string]?.[port] ?? port;
+  };
 
   const compatible: Array<[string, string]> = [];
   for (const [sa, sb] of spec.adjacencies) {
@@ -152,7 +170,14 @@ export async function synthesize(
       type: sel[s.id] as string,
       ...(s.bands !== undefined ? { bands: s.bands } : {}),
     }));
-    const g = instantiate(manifests, [...spec.fixed, ...slotInstances], spec.wires);
+    // Attach every wire to the chosen candidates' REAL ports (per-slot remap), so a candidate whose port names differ
+    // from the template still instantiates — instead of a dangling edge the build would reject and the candidate drop.
+    const wires: Wire[] = spec.wires.map((w) => ({
+      ...w,
+      from: [w.from[0], remapPort(sel, w.from[0], w.from[1])] as readonly [string, string],
+      to: [w.to[0], remapPort(sel, w.to[0], w.to[1])] as readonly [string, string],
+    }));
+    const g = instantiate(manifests, [...spec.fixed, ...slotInstances], wires);
     if (!g.ok) continue;
 
     const knobs = deps.tunables?.(g.value) ?? [];

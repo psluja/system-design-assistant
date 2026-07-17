@@ -1,5 +1,5 @@
 import { serialize, deserialize, apply, type Command, type ProjectDoc } from '@sda/core';
-import { quantizeKnob, type GuaranteeSlo, type ManifestBand, type Range, type SystemPromise } from '@sda/content';
+import { quantizeKnob, type GuaranteeSlo, type Manifest, type ManifestBand, type Range, type SystemPromise } from '@sda/content';
 import { parseRangeInput } from '@sda/presenter';
 import { Key, type Band, type Transform } from '@sda/engine-core';
 import { escapeRegExp, idPairPattern } from './pure';
@@ -81,12 +81,14 @@ export function clearScenarioOverrideText(text: string, scenario: string, node: 
 
 /** Apply ONE @sda/core command to the document text through the pure `apply` reducer, re-serializing on success —
  *  the losslessness + zero-drift path the scenario edits share (the command IS the single source of the semantics).
- *  `knownTypes` is derived from the document; the scenario reducers do not consult it, so it is only a safe default. */
+ *  `knownTypes` and `catalog` are derived from the document; the scenario reducers this routes (setScenarioOverride /
+ *  clearScenarioOverride) consult neither, so both are only safe, self-consistent defaults. */
 function applyCommandText(text: string, cmd: Command): EditResult {
   const parsed = deserialize(text);
   if (!parsed.ok) return { ok: false, error: `the design is not valid JSON: ${parsed.error}` };
   const knownTypes = new Set(parsed.value.instances.map((i) => i.type));
-  const r = apply(parsed.value, cmd, knownTypes);
+  const catalog: Readonly<Record<string, Manifest>> = Object.fromEntries(parsed.value.components.map((m) => [m.type, m]));
+  const r = apply(parsed.value, cmd, knownTypes, catalog);
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, text: serialize(r.value.doc) };
 }

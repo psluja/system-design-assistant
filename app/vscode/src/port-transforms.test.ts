@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LOAD_STAGES_PRESETS, derivedMean, derivedPeak } from '@sda/content';
 import { cyclesProblem } from '@sda/engine-core';
-import { formatGeneratorInput, parseGeneratorInput, presetGeneratorInput } from './port-transforms';
+import type { Transform } from '@sda/engine-core';
+import { formatGeneratorInput, parseGeneratorInput, presetGeneratorInput, generatorReeditSeed } from './port-transforms';
 
 // The native GENERATOR authoring syntax (load-stages R3 §11) — the compact stages line the VS Code InputBox parses,
 // the native twin of the web table. Pure, vscode-free (the `slo-requirements` division), so it is unit-tested here.
@@ -98,6 +99,23 @@ describe('formatGeneratorInput — the re-edit seed round-trips the SHAPE', () =
       expect(derivedPeak(200, r.cycles)).toBeCloseTo(derivedPeak(200, cycles), 6);
       expect(derivedMean(200, r.cycles)).toBeCloseTo(derivedMean(200, cycles), 4);
     }
+  });
+});
+
+describe('generatorReeditSeed — re-edit seeds the InputBox with the CURRENT shape, never a preset', () => {
+  it('an existing generator formats to the seed the InputBox opens with directly', () => {
+    const current: Transform = { kind: 'generate', level: 35, cycles: [{ periodS: 20, stages: [{ durationS: 20, multiplier: 3 }] }] };
+    expect(generatorReeditSeed(current)).toBe(formatGeneratorInput(current.level, current.cycles));
+  });
+
+  it('a flat (no-cycles) existing generator seeds to just its level', () => {
+    const current: Transform = { kind: 'generate', level: 35 };
+    expect(generatorReeditSeed(current)).toBe('level=35');
+  });
+
+  it('no generator yet (null, or a different transform kind) yields undefined — the preset on-ramp still applies', () => {
+    expect(generatorReeditSeed(null)).toBeUndefined();
+    expect(generatorReeditSeed({ kind: 'ratio', value: 2 })).toBeUndefined();
   });
 });
 

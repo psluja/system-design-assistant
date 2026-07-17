@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Studio } from '@sda/core';
-import { registry, allManifests, quantizeKnob } from '@sda/content';
+import { registry, allManifests, quantizeKnob, TARGET_UTILIZATION } from '@sda/content';
 import { buildTools, type AnyTool } from './tools';
 import { buildSearchTools } from './search';
 import { bindSolvers } from './composition';
@@ -14,26 +14,39 @@ const catalog = allManifests;
 
 const SNS = {
   type: 'topic.sns',
-  ports: [{ name: 'in', dir: 'in', accepts: ['sns'] }, { name: 'out', dir: 'out', speaks: ['sns'] }],
+  // accepts 'https'/'http' too (PUBLISH_SOURCES, port-roles.ts) — cmd's generic 'out' port reaches SNS over
+  // those, same accepts list the never-skipped cqrs.e2e.test.ts / cqrs-cheap.e2e.test.ts already use.
+  ports: [{ name: 'in', dir: 'in', accepts: ['sns', 'https', 'http'] }, { name: 'out', dir: 'out', speaks: ['sns'] }],
   config: [{ key: 'throughput', value: 30000, unit: 'msg/s' }, { key: 'latency', value: 10, unit: 'ms' }, { key: 'availability', value: 0.9999, unit: 'ratio' }, { key: 'durability', value: 0.999999999, unit: 'ratio' }, { key: 'unitCost', value: 1.3, unit: 'USD/(msg/s)·month' }],
   relations: [{ key: 'cost', reads: ['throughput', 'unitCost'], expr: 'inflow(throughput) * self(unitCost)' }, { key: 'overflow', reads: ['throughput'], expr: 'max(0, inflow(throughput) - self(throughput))' }],
   bands: [{ key: 'overflow', band: { shape: 'minTargetMax', max: 0 } }],
 };
 
 describe('CQRS — interactive architect ⇄ tool session (timed)', () => {
-  // SKIPPED: this scenario's premise ("optimize sizes the Lambda indexer's concurrency DOWN to save
-  // cost") became domain-invalid when the cost model went accurate (functional-loop). compute.faas is
-  // pay-per-use, so RESERVED CONCURRENCY IS FREE (you pay per invocation, not per slot), and the projections
-  // store (search.elasticsearch) now has a constant provisioned cost — so optimize(proj.cost, min) is a no-op
-  // and never sizes the indexer, breaking the whole cascade (MOVE 2→3→4). Needs a redesign around a cost move
-  // that IS meaningful under the current models. The optimize-sizes-a-tunable behaviour stays covered by
-  // search.test.ts (repair, headroom-aware) and cqrs-cheap.e2e.
-  it.skip('rough moves → optimal numbers, each verified in well under a second', async () => {
+  // — the re-baseline.
+  // The file was skipped on the premise "Lambda is pay-per-use, so optimize-for-cost can't
+  // (and shouldn't) size its concurrency down" — that does NOT hold against the live catalog: compute.faas prices
+  // reserved concurrency via costPer(concurrency) (catalog.ts: "cost scales with provisioned concurrency — so
+  // 'run backwards' has a real trade-off to optimize"), the same capacity-must-cost-money rule every priced
+  // component obeys (behaviors.ts: "a free capacity dial would let the backward-solver 'meet the SLO' for $0 and
+  // make every cost figure a fiction"). So sizing the Lambda down for cost IS domain-true today, confirmed below
+  // against the native solver. The ACTUAL bug that broke this file was unrelated to costing: the test's own inline
+  // SNS component's `in` port accepted only `['sns']`, one short of the `sns`/`https`/`http` PUBLISH_SOURCES set
+  // (port-roles.ts) that `cmd`'s generic `out` port speaks — an illegal wire, so `apply_design` applied NOTHING
+  // (atomic) and every later move read an empty design. Fixed to the same accepts list the sibling, never-skipped
+  // cqrs.e2e.test.ts / cqrs-cheap.e2e.test.ts already carry. MOVE 2/4 now optimize scope:"system" (the F8
+  // whole-design total, search.test.ts) instead of one node's cumulative path, so every cost-bearing tier (the
+  // app pool, Postgres, the Lambda) right-sizes together rather than only whichever tier sits upstream of one
+  // chosen node — and search.elasticsearch's floor (part of the ORIGINAL diagnosis that WAS correct) is asserted
+  // explicitly below: its provisioned cost never has anywhere to shrink to.
+  it('rough moves → optimal numbers, each verified in well under a second', async () => {
     const s = new Studio(registry, catalog);
     const tools = buildTools(s);
     const opt = buildSearchTools(s, bindSolvers(registry)).find((t) => t.name === 'optimize')!;
     const call = (set: AnyTool[] | AnyTool, name: string, a: Record<string, unknown> = {}) =>
       (Array.isArray(set) ? set.find((t) => t.name === name)! : set).run(a);
+    const configOf = (id: string): Record<string, number> =>
+      (JSON.parse((call(tools, 'get_project') as { text: string }).text).instances.find((i: { id: string }) => i.id === id) as { config: Record<string, number> }).config;
 
     let calls = 0;
     const log: string[] = [];
@@ -44,8 +57,12 @@ describe('CQRS — interactive architect ⇄ tool session (timed)', () => {
       log.push(`  ${label}: ${Math.round(performance.now() - t0)} ms, ${calls - c0} tool call(s)`);
     };
     const verdicts = () => (JSON.parse((call(tools, 'evaluate') as { text: string }).text) as { verdicts: Array<{ scope: string; key: string; status: string }> }).verdicts;
+    // scope:"system" (the F8 whole-design total, search.test.ts) — the objective sums EVERY node's own cost
+    // contribution, so cmd/pg/indexer (each priced by their own costPer(concurrency)) right-size TOGETHER; a
+    // single node's cumulative path would leave whichever of them sits off that path untouched (or worse, free
+    // to drift, since a knob the objective never reads is left at an arbitrary witness value).
     const applyOptimize = async (): Promise<boolean> => {
-      const r = (await call([opt], 'optimize', { node: 'proj', key: 'cost', direction: 'min' })) as { ok: boolean; text: string };
+      const r = (await call([opt], 'optimize', { key: 'cost', direction: 'min', scope: 'system' })) as { ok: boolean; text: string };
       calls += 1;
       if (!r.ok) return false;
       for (const a of JSON.parse(r.text) as Array<{ node: string; key: string; value: number }>) {
@@ -84,11 +101,27 @@ describe('CQRS — interactive architect ⇄ tool session (timed)', () => {
     const idxCap0 = Number(JSON.parse((call(tools, 'get_project') as { text: string }).text).instances.length); // touch state
     expect(idxCap0).toBe(11);
 
-    // MOVE 2 — "make it cost-minimal." The Lambda indexer defaults to concurrency 100 (20× what 100 rps needs);
-    // optimize sizes it down. Fast now: the free knobs are pruned, so the MIP is tiny.
+    // MOVE 2 — "make it cost-minimal." Three tiers on the request path each price their OWN capacity dial via
+    // costPer(concurrency): cmd (compute.service), pg (db.postgres — the same connection-bound shape as
+    // search.test.ts's `repair` case), and indexer (compute.faas — Lambda's RESERVED concurrency IS priced here,
+    // not pay-per-use; see the describe-block note). Each defaults 7-100× oversized for 100 rps; one optimize
+    // call sizes every one of them down to the ρ ≤ 80% headroom floor (search.test.ts's TARGET_UTILIZATION).
     await move('2 "make it minimal" → optimize + apply', async () => void (await applyOptimize()));
-    const concAfterOpt = JSON.parse((call(tools, 'get_project') as { text: string }).text).instances.find((i: { id: string }) => i.id === 'indexer').config.concurrency as number;
-    expect(concAfterOpt).toBe(5); // sized to serve exactly 100 rps (5 × 20)
+    // cmd (compute.service): capacity = concurrency × (1000 / perRequestDuration) = concurrency × (1000/20ms) =
+    // concurrency × 50 req/s. pg (db.postgres) AND indexer (compute.faas) both default perRequestDuration = 50ms
+    // here = concurrency × 20 req/s. Headroom: offered ≤ TARGET_UTILIZATION × capacity ⇒ concurrency ≥
+    // offered / TARGET_UTILIZATION / rate, whole-unit knob ⇒ ceil (quantizeKnob's own rounding rule).
+    const CMD_RATE = 1000 / 20; // req/s per compute.service worker
+    const CONN_RATE = 1000 / 50; // req/s per db.postgres connection == per compute.faas concurrency unit (same 50 ms here)
+    const cmdConcurrencyAt = (rps: number): number => Math.ceil(rps / TARGET_UTILIZATION / CMD_RATE);
+    const connConcurrencyAt = (rps: number): number => Math.ceil(rps / TARGET_UTILIZATION / CONN_RATE);
+    expect(configOf('cmd').concurrency).toBe(cmdConcurrencyAt(100)); // = ceil(100/0.8/50) = 3
+    expect(configOf('pg').concurrency).toBe(connConcurrencyAt(100)); // = ceil(100/0.8/20) = 7
+    expect(configOf('indexer').concurrency).toBe(connConcurrencyAt(100)); // = ceil(100/0.8/20) = 7 — the Lambda sizes down too: its cost is genuinely priced (costPer), so this is domain-true, not the old free-knob premise
+    // search.elasticsearch: provisionedCost = self(throughput) × unitCost — a genuine floor at its declared 5,000
+    // query/s ceiling (raise-only; cost-minimizing never wants to raise it). NEVER moves — the one part of the
+    // original skip-note diagnosis that was actually correct.
+    expect(configOf('proj').throughput).toBe(5000);
 
     // MOVE 3 — "scale commands to 500 rps — where does it break first?" One config change; the engine pinpoints
     // the new bottleneck instantly.
@@ -100,11 +133,10 @@ describe('CQRS — interactive architect ⇄ tool session (timed)', () => {
       calls += 1;
       firstBreak = vs.filter((v) => v.status === 'violation').map((v) => `${v.scope}.${v.key}`).join(', ');
     });
-    expect(firstBreak).toContain('indexer'); // the down-sized Lambda is the first to overflow at 5×
+    expect(firstBreak).toContain('cmd.overflow'); // cmd's rightsized pool caps at 3×50 = 150 rps ≪ 500 rps offered — the root cause every downstream verdict cites
 
-    // MOVE 4 — "fix it, cheapest." Re-optimize on the SCALED, QUEUED design. The backward search solves it
-    // directly: minimizing cost drives the indexer Lambda back UP to exactly the concurrency that drains the
-    // index queue at 500 rps — 25 (= 500 / 20-per-concurrency). One optimize call, no manual sizing.
+    // MOVE 4 — "fix it, cheapest." Re-optimize on the SCALED design: the SAME system-scope objective drives every
+    // downsized tier back UP to exactly the concurrency the new 500 rps needs. One optimize call, no manual sizing.
     let violationsAfter = -1;
     await move('4 "fix it" → re-optimize + apply + evaluate', async () => {
       const solved = await applyOptimize();
@@ -112,14 +144,16 @@ describe('CQRS — interactive architect ⇄ tool session (timed)', () => {
       violationsAfter = verdicts().filter((v) => v.status === 'violation').length;
       calls += 1;
     });
-    const concAt500 = JSON.parse((call(tools, 'get_project') as { text: string }).text).instances.find((i: { id: string }) => i.id === 'indexer').config.concurrency as number;
+    const concAt500 = { cmd: configOf('cmd').concurrency, pg: configOf('pg').concurrency, indexer: configOf('indexer').concurrency };
 
     /* eslint-disable no-console */
     console.log(`\nInteractive CQRS session — ${calls} tool calls, ${Math.round(performance.now() - wall0)} ms total:\n${log.join('\n')}`);
-    console.log(`  → indexer Lambda: 100 → 5 (minimal @100 rps); at 500 rps it overflowed (engine named: ${firstBreak}); re-optimized → ${concAt500}. Now ${violationsAfter} violations.\n`);
+    console.log(`  → cmd/pg/indexer rightsized 500/100/100 → 3/7/7 @100 rps; at 500 rps ${firstBreak.split(', ')[0]} overflowed; re-optimized → ${concAt500.cmd}/${concAt500.pg}/${concAt500.indexer}. Now ${violationsAfter} violations.\n`);
     /* eslint-enable no-console */
 
     expect(violationsAfter).toBe(0); // verified again after the fix
-    expect(concAt500).toBe(25); // optimize sized it to serve exactly 500 rps
+    expect(concAt500.cmd).toBe(cmdConcurrencyAt(500)); // = ceil(500/0.8/50) = 13
+    expect(concAt500.pg).toBe(connConcurrencyAt(500)); // = ceil(500/0.8/20) = 32
+    expect(concAt500.indexer).toBe(connConcurrencyAt(500)); // = ceil(500/0.8/20) = 32
   }, 20_000);
 });

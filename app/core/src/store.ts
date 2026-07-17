@@ -112,7 +112,7 @@ export class Studio {
 
   /** Apply a command; on success it becomes undoable. Returns the change summary or an error. */
   dispatch(cmd: Command): Result<string, string> {
-    const r = apply(this.doc, cmd, this.knownTypes());
+    const r = apply(this.doc, cmd, this.knownTypes(), this.mergedCatalog());
     if (!r.ok) return r;
     this.undoStack.push(this.doc);
     this.redoStack.length = 0;
@@ -132,7 +132,7 @@ export class Studio {
     let next = this.doc;
     const summaries: string[] = [];
     for (const cmd of cmds) {
-      const r = apply(next, cmd, this.knownTypes());
+      const r = apply(next, cmd, this.knownTypes(), this.mergedCatalog());
       if (!r.ok) return r; // nothing committed yet — the live document is unchanged
       next = r.value.doc;
       summaries.push(r.value.event.summary);
