@@ -22,7 +22,7 @@
     "@sda/mcp": "workspace:*",
     "@sda/presenter": "workspace:*",
     "@sda/solver-contract": "workspace:*",
-    "@xyflow/react": "^12.3.5",
+    "@xyflow/react": "^12.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
