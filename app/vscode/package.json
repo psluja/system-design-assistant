@@ -191,7 +191,7 @@
     "@sda/mcp": "workspace:*",
     "@sda/presenter": "workspace:*",
     "@sda/solver-contract": "workspace:*",
-    "@xyflow/react": "^12.3.5",
+    "@xyflow/react": "^12.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -203,7 +203,7 @@
     "@vitejs/plugin-react": "^4.3.3",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.2.1",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.28.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
