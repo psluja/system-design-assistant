@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@sda/content": "workspace:*",
     "@sda/core": "workspace:*",
     "@sda/engine-core": "workspace:*",
