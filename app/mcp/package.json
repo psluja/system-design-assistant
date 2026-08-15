@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@sda/content": "workspace:*",
     "@sda/core": "workspace:*",
     "@sda/engine-core": "workspace:*",
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "clingo-wasm": "^0.3.2",
+    "clingo-wasm": "^0.6.0",
     "fast-check": "^3.23.1",
     "typescript": "^5.6.3"
   }

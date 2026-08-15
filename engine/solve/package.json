@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@sda/engine-core": "workspace:*",
-    "clingo-wasm": "^0.3.2",
+    "clingo-wasm": "^0.6.0",
     "datascript": "^1.7.3"
   },
   "devDependencies": {
