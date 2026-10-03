@@ -16,15 +16,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "ws": "^8.18.0"
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@sda/content": "workspace:*",
     "@sda/core": "workspace:*",
     "@sda/mcp": "workspace:*",
     "@types/node": "^22.10.0",
-    "@types/ws": "^8.5.13",
+    "@types/ws": "^8.18.2",
     "typescript": "^5.6.3"
   }
 }
